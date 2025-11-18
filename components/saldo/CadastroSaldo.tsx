@@ -25,6 +25,21 @@ export const CadastroSaldo: React.FC = () => {
 
     const [submitError, setSubmitError] = useState<string | null>(null);
 
+    const monthNames = [
+        { value: '01', label: 'Janeiro' },
+        { value: '02', label: 'Fevereiro' },
+        { value: '03', label: 'Março' },
+        { value: '04', label: 'Abril' },
+        { value: '05', label: 'Maio' },
+        { value: '06', label: 'Junho' },
+        { value: '07', label: 'Julho' },
+        { value: '08', label: 'Agosto' },
+        { value: '09', label: 'Setembro' },
+        { value: '10', label: 'Outubro' },
+        { value: '11', label: 'Novembro' },
+        { value: '12', label: 'Dezembro' },
+    ];
+
     useEffect(() => {
         setData(getAppData());
     }, []);
@@ -44,8 +59,21 @@ export const CadastroSaldo: React.FC = () => {
     }, [store, year, month]);
 
     const handleCurrencyInput = (setter: React.Dispatch<React.SetStateAction<number>>, e: React.ChangeEvent<HTMLInputElement>) => {
-        const rawValue = e.target.value.replace(/\D/g, '');
-        const floatValue = rawValue ? parseInt(rawValue, 10) / 100 : 0;
+        const rawValue = e.target.value;
+        // Check if the input contains a minus sign to handle negatives
+        const isNegative = rawValue.includes('-');
+        
+        // Remove all non-digit characters
+        const cleanValue = rawValue.replace(/\D/g, '');
+        
+        // Convert to float
+        let floatValue = cleanValue ? parseInt(cleanValue, 10) / 100 : 0;
+        
+        // Apply negative sign if detected
+        if (isNegative) {
+            floatValue = floatValue * -1;
+        }
+        
         setter(floatValue);
     };
 
@@ -83,8 +111,8 @@ export const CadastroSaldo: React.FC = () => {
             });
 
             alert('Saldo cadastrado com sucesso!');
-            // Reset only money values, keep store/date for convenience or reset all?
-            // Usually better to reset inputs for next entry.
+            
+            // Reset values
             setCaixaEconomica(0);
             setCofre(0);
             setLoteria(0);
@@ -96,7 +124,7 @@ export const CadastroSaldo: React.FC = () => {
         }
     };
 
-    const inputClass = "w-full p-3 border border-gray-300 rounded bg-white focus:ring-2 focus:ring-heroBlack outline-none font-mono text-right";
+    const inputClass = "w-full p-3 border border-gray-300 rounded bg-white focus:ring-2 focus:ring-heroBlack outline-none font-mono text-right text-lg text-gray-700";
 
     return (
         <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-lg border border-gray-200 max-w-5xl mx-auto animate-fadeIn">
@@ -123,7 +151,7 @@ export const CadastroSaldo: React.FC = () => {
                         type="number" 
                         value={year} 
                         onChange={(e) => setYear(parseInt(e.target.value))}
-                        className="w-full p-3 border border-gray-300 rounded bg-white focus:ring-2 focus:ring-heroBlack outline-none text-center"
+                        className="w-full p-3 border border-gray-300 rounded bg-white focus:ring-2 focus:ring-heroBlack outline-none text-center font-medium"
                     />
                 </div>
                 <div>
@@ -131,42 +159,43 @@ export const CadastroSaldo: React.FC = () => {
                     <select 
                         value={month} 
                         onChange={(e) => setMonth(e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded bg-white focus:ring-2 focus:ring-heroBlack outline-none text-center"
+                        className="w-full p-3 border border-gray-300 rounded bg-white focus:ring-2 focus:ring-heroBlack outline-none text-center font-medium"
                     >
-                        {Array.from({length: 12}, (_, i) => {
-                            const m = String(i + 1).padStart(2, '0');
-                            return <option key={m} value={m}>{m}</option>;
-                        })}
+                        {monthNames.map((m) => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                        ))}
                     </select>
                 </div>
             </div>
 
             {/* Inputs Section */}
-            <h3 className="text-lg font-bold text-gray-600 mb-4">Valores por Conta (R$)</h3>
+            <h3 className="text-lg font-bold text-gray-600 mb-4 border-b pb-1">Valores por Conta (R$)</h3>
+            <p className="text-xs text-gray-400 mb-4 italic">* Para valores negativos, digite o sinal de menos (-).</p>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1">Caixa Econômica</label>
-                    <input type="text" value={formatCurrency(caixaEconomica)} onChange={(e) => handleCurrencyInput(setCaixaEconomica, e)} className={inputClass} />
+                    <input type="text" value={formatCurrency(caixaEconomica)} onChange={(e) => handleCurrencyInput(setCaixaEconomica, e)} className={`${inputClass} ${caixaEconomica < 0 ? 'text-red-600' : ''}`} />
                 </div>
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1">Cofre</label>
-                    <input type="text" value={formatCurrency(cofre)} onChange={(e) => handleCurrencyInput(setCofre, e)} className={inputClass} />
+                    <input type="text" value={formatCurrency(cofre)} onChange={(e) => handleCurrencyInput(setCofre, e)} className={`${inputClass} ${cofre < 0 ? 'text-red-600' : ''}`} />
                 </div>
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1">Loteria</label>
-                    <input type="text" value={formatCurrency(loteria)} onChange={(e) => handleCurrencyInput(setLoteria, e)} className={inputClass} />
+                    <input type="text" value={formatCurrency(loteria)} onChange={(e) => handleCurrencyInput(setLoteria, e)} className={`${inputClass} ${loteria < 0 ? 'text-red-600' : ''}`} />
                 </div>
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1">PagBank H</label>
-                    <input type="text" value={formatCurrency(pagbankH)} onChange={(e) => handleCurrencyInput(setPagbankH, e)} className={inputClass} />
+                    <input type="text" value={formatCurrency(pagbankH)} onChange={(e) => handleCurrencyInput(setPagbankH, e)} className={`${inputClass} ${pagbankH < 0 ? 'text-red-600' : ''}`} />
                 </div>
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1">PagBank D</label>
-                    <input type="text" value={formatCurrency(pagbankD)} onChange={(e) => handleCurrencyInput(setPagbankD, e)} className={inputClass} />
+                    <input type="text" value={formatCurrency(pagbankD)} onChange={(e) => handleCurrencyInput(setPagbankD, e)} className={`${inputClass} ${pagbankD < 0 ? 'text-red-600' : ''}`} />
                 </div>
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1">Investimentos</label>
-                    <input type="text" value={formatCurrency(investimentos)} onChange={(e) => handleCurrencyInput(setInvestimentos, e)} className={inputClass} />
+                    <input type="text" value={formatCurrency(investimentos)} onChange={(e) => handleCurrencyInput(setInvestimentos, e)} className={`${inputClass} ${investimentos < 0 ? 'text-red-600' : ''}`} />
                 </div>
             </div>
 
@@ -181,7 +210,9 @@ export const CadastroSaldo: React.FC = () => {
 
                 <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
                     <span className="text-xs font-bold text-blue-600 uppercase block mb-1">Saldo Deste Mês (Soma)</span>
-                    <div className="text-2xl font-black text-blue-800">{formatCurrency(currentTotal)}</div>
+                    <div className={`text-2xl font-black ${currentTotal < 0 ? 'text-red-800' : 'text-blue-800'}`}>
+                        {formatCurrency(currentTotal)}
+                    </div>
                 </div>
 
                 <div className={`p-4 rounded-lg border ${variation >= 0 ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>

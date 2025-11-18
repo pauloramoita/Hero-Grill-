@@ -19,6 +19,21 @@ export const ConsultaSaldo: React.FC = () => {
     
     const [editingBalance, setEditingBalance] = useState<AccountBalance | null>(null);
 
+    const monthNames = [
+        { value: '01', label: 'Janeiro' },
+        { value: '02', label: 'Fevereiro' },
+        { value: '03', label: 'Março' },
+        { value: '04', label: 'Abril' },
+        { value: '05', label: 'Maio' },
+        { value: '06', label: 'Junho' },
+        { value: '07', label: 'Julho' },
+        { value: '08', label: 'Agosto' },
+        { value: '09', label: 'Setembro' },
+        { value: '10', label: 'Outubro' },
+        { value: '11', label: 'Novembro' },
+        { value: '12', label: 'Dezembro' },
+    ];
+
     useEffect(() => {
         loadData();
     }, []);
@@ -44,18 +59,13 @@ export const ConsultaSaldo: React.FC = () => {
             // Since it's sorted, we check if previous index exists and matches store
             if (i > 0 && rawBalances[i-1].store === current.store) {
                 const prev = rawBalances[i-1];
-                // Strictly check if it is the immediate previous month/year logic?
-                // Or just the previous record found? 
-                // User requirement: "Total: É sempre a subtração do Saldo do mês atual com o Saldo do mês passado"
-                // Let's assume the list is contiguous. If there is a gap (e.g. Jan -> Mar), the variation will be Mar - Jan.
                 variation = current.totalBalance - prev.totalBalance;
             }
 
             processed.push({ ...current, variation });
         }
 
-        // Reverse for display (Newest first usually better for tables) but keep grouping?
-        // Let's display newest first.
+        // Reverse for display (Newest first)
         setBalances(processed.reverse());
     };
 
@@ -84,6 +94,8 @@ export const ConsultaSaldo: React.FC = () => {
 
     const years = (Array.from(new Set(balances.map(b => b.year))) as number[]).sort((a, b) => b - a);
 
+    const getMonthName = (m: string) => monthNames.find(mn => mn.value === m)?.label || m;
+
     return (
         <div className="space-y-6">
             {/* Filters */}
@@ -106,10 +118,9 @@ export const ConsultaSaldo: React.FC = () => {
                     <label className="block text-xs font-bold text-gray-600 mb-1">Mês</label>
                     <select value={monthFilter} onChange={e => setMonthFilter(e.target.value)} className="w-full border p-2 rounded">
                         <option value="">Todos os Meses</option>
-                        {Array.from({length: 12}, (_, i) => {
-                            const m = String(i + 1).padStart(2, '0');
-                            return <option key={m} value={m}>{m}</option>;
-                        })}
+                        {monthNames.map((m) => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                        ))}
                     </select>
                 </div>
             </div>
@@ -129,13 +140,13 @@ export const ConsultaSaldo: React.FC = () => {
                     <tbody className="bg-white divide-y divide-gray-200">
                         {filteredBalances.map((b) => (
                             <tr key={b.id} className="hover:bg-gray-50">
-                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">
-                                    {b.month}/{b.year}
+                                <td className="px-4 py-3 text-sm text-gray-900 font-medium capitalize">
+                                    {getMonthName(b.month)} / {b.year}
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-600">
                                     {b.store}
                                 </td>
-                                <td className="px-4 py-3 text-sm text-right font-mono font-bold text-blue-800 bg-blue-50">
+                                <td className={`px-4 py-3 text-sm text-right font-mono font-bold bg-blue-50 ${b.totalBalance < 0 ? 'text-red-800' : 'text-blue-800'}`}>
                                     {formatCurrency(b.totalBalance)}
                                 </td>
                                 <td className={`px-4 py-3 text-sm text-right font-mono font-bold ${b.variation > 0 ? 'text-green-600' : b.variation < 0 ? 'text-red-600' : 'text-gray-500'}`}>

@@ -21,6 +21,21 @@ export const RelatorioSaldo: React.FC = () => {
     // Available Years
     const [years, setYears] = useState<string[]>([]);
 
+    const monthNames = [
+        { value: '01', label: 'Janeiro' },
+        { value: '02', label: 'Fevereiro' },
+        { value: '03', label: 'Março' },
+        { value: '04', label: 'Abril' },
+        { value: '05', label: 'Maio' },
+        { value: '06', label: 'Junho' },
+        { value: '07', label: 'Julho' },
+        { value: '08', label: 'Agosto' },
+        { value: '09', label: 'Setembro' },
+        { value: '10', label: 'Outubro' },
+        { value: '11', label: 'Novembro' },
+        { value: '12', label: 'Dezembro' },
+    ];
+
     useEffect(() => {
         setAppData(getAppData());
         const raw = getAccountBalances();
@@ -46,11 +61,14 @@ export const RelatorioSaldo: React.FC = () => {
             if (i > 0 && rawBalances[i-1].store === current.store) {
                 variation = current.totalBalance - rawBalances[i-1].totalBalance;
             }
+            
+            // Find label name
+            const mName = monthNames.find(m => m.value === current.month)?.label || current.month;
 
             processed.push({ 
                 ...current, 
                 variation,
-                monthLabel: `${current.month}/${current.year}`
+                monthLabel: `${mName.substring(0,3)}/${current.year}`
             });
         }
 
@@ -102,10 +120,9 @@ export const RelatorioSaldo: React.FC = () => {
                         <label className="block text-xs font-bold text-gray-600 mb-1">Mês</label>
                         <select value={monthFilter} onChange={e => setMonthFilter(e.target.value)} className="w-full border p-2 rounded">
                             <option value="">Todos os Meses</option>
-                            {Array.from({length: 12}, (_, i) => {
-                                const m = String(i + 1).padStart(2, '0');
-                                return <option key={m} value={m}>{m}</option>;
-                            })}
+                            {monthNames.map((m) => (
+                                <option key={m.value} value={m.value}>{m.label}</option>
+                            ))}
                         </select>
                     </div>
                 </div>
@@ -133,9 +150,9 @@ export const RelatorioSaldo: React.FC = () => {
                             <tbody className="divide-y divide-gray-200">
                                 {filteredData.map((item, idx) => (
                                     <tr key={idx}>
-                                        <td className="px-6 py-2 text-sm font-medium">{item.monthLabel}</td>
+                                        <td className="px-6 py-2 text-sm font-medium capitalize">{item.monthLabel}</td>
                                         <td className="px-6 py-2 text-sm text-gray-600">{item.store}</td>
-                                        <td className="px-6 py-2 text-sm text-right font-mono">{formatCurrency(item.totalBalance)}</td>
+                                        <td className={`px-6 py-2 text-sm text-right font-mono ${item.totalBalance < 0 ? 'text-red-800 font-bold' : ''}`}>{formatCurrency(item.totalBalance)}</td>
                                         <td className={`px-6 py-2 text-sm text-right font-bold ${item.variation >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                             {formatCurrency(item.variation)}
                                         </td>

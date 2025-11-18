@@ -29,8 +29,21 @@ export const EditSaldoModal: React.FC<EditSaldoModalProps> = ({ balance, onClose
     }, []);
 
     const handleCurrencyInput = (setter: React.Dispatch<React.SetStateAction<number>>, e: React.ChangeEvent<HTMLInputElement>) => {
-        const rawValue = e.target.value.replace(/\D/g, '');
-        const floatValue = rawValue ? parseInt(rawValue, 10) / 100 : 0;
+        const rawValue = e.target.value;
+        // Check if the input contains a minus sign to handle negatives
+        const isNegative = rawValue.includes('-');
+        
+        // Remove all non-digit characters
+        const cleanValue = rawValue.replace(/\D/g, '');
+        
+        // Convert to float
+        let floatValue = cleanValue ? parseInt(cleanValue, 10) / 100 : 0;
+        
+        // Apply negative sign if detected
+        if (isNegative) {
+            floatValue = floatValue * -1;
+        }
+        
         setter(floatValue);
     };
 
@@ -57,6 +70,13 @@ export const EditSaldoModal: React.FC<EditSaldoModalProps> = ({ balance, onClose
     };
 
     const inputClass = "w-full p-2 border border-gray-300 rounded outline-none text-right font-mono";
+    const getTextColor = (val: number) => val < 0 ? 'text-red-600' : 'text-gray-800';
+
+    const monthNames: Record<string, string> = {
+        '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril',
+        '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto',
+        '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro'
+    };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
@@ -77,34 +97,34 @@ export const EditSaldoModal: React.FC<EditSaldoModalProps> = ({ balance, onClose
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-500">Período</label>
-                            <div className="font-bold">{month}/{year}</div>
+                            <div className="font-bold">{monthNames[month] || month}/{year}</div>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">Caixa Econômica</label>
-                            <input type="text" value={formatCurrency(caixaEconomica)} onChange={(e) => handleCurrencyInput(setCaixaEconomica, e)} className={inputClass} />
+                            <input type="text" value={formatCurrency(caixaEconomica)} onChange={(e) => handleCurrencyInput(setCaixaEconomica, e)} className={`${inputClass} ${getTextColor(caixaEconomica)}`} />
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">Cofre</label>
-                            <input type="text" value={formatCurrency(cofre)} onChange={(e) => handleCurrencyInput(setCofre, e)} className={inputClass} />
+                            <input type="text" value={formatCurrency(cofre)} onChange={(e) => handleCurrencyInput(setCofre, e)} className={`${inputClass} ${getTextColor(cofre)}`} />
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">Loteria</label>
-                            <input type="text" value={formatCurrency(loteria)} onChange={(e) => handleCurrencyInput(setLoteria, e)} className={inputClass} />
+                            <input type="text" value={formatCurrency(loteria)} onChange={(e) => handleCurrencyInput(setLoteria, e)} className={`${inputClass} ${getTextColor(loteria)}`} />
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">PagBank H</label>
-                            <input type="text" value={formatCurrency(pagbankH)} onChange={(e) => handleCurrencyInput(setPagbankH, e)} className={inputClass} />
+                            <input type="text" value={formatCurrency(pagbankH)} onChange={(e) => handleCurrencyInput(setPagbankH, e)} className={`${inputClass} ${getTextColor(pagbankH)}`} />
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">PagBank D</label>
-                            <input type="text" value={formatCurrency(pagbankD)} onChange={(e) => handleCurrencyInput(setPagbankD, e)} className={inputClass} />
+                            <input type="text" value={formatCurrency(pagbankD)} onChange={(e) => handleCurrencyInput(setPagbankD, e)} className={`${inputClass} ${getTextColor(pagbankD)}`} />
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">Investimentos</label>
-                            <input type="text" value={formatCurrency(investimentos)} onChange={(e) => handleCurrencyInput(setInvestimentos, e)} className={inputClass} />
+                            <input type="text" value={formatCurrency(investimentos)} onChange={(e) => handleCurrencyInput(setInvestimentos, e)} className={`${inputClass} ${getTextColor(investimentos)}`} />
                         </div>
                     </div>
 
