@@ -8,8 +8,13 @@ export default defineConfig({
     target: 'esnext',
     outDir: 'dist',
     sourcemap: false,
-    chunkSizeWarningLimit: 3000,
-    emptyOutDir: true
+    chunkSizeWarningLimit: 3000, // Increased limit to avoid warnings for vendor chunks
+    emptyOutDir: true,
+    rollupOptions: {
+        output: {
+            manualChunks: undefined
+        }
+    }
   },
   base: '/'
 })
