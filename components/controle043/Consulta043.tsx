@@ -1,13 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { getTransactions043, getAppData, formatCurrency, formatDateBr, getMonthLocalISO, getTodayLocalISO, deleteTransaction043 } from '../../services/storageService';
+import { getTransactions043, getAppData, formatCurrency, formatDateBr, getMonthLocalISO, getTodayLocalISO, deleteTransaction043, updateTransaction043 } from '../../services/storageService';
 import { AppData, Transaction043 } from '../../types';
-import { Search, Trash2, TrendingUp, TrendingDown } from 'lucide-react';
+import { Search, Trash2, TrendingUp, TrendingDown, Edit } from 'lucide-react';
+import { EditTransactionModal } from './EditTransactionModal';
 
 export const Consulta043: React.FC = () => {
     const [transactions, setTransactions] = useState<Transaction043[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<Transaction043[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+
+    // Edit State
+    const [editingTransaction, setEditingTransaction] = useState<Transaction043 | null>(null);
 
     // Filter States
     const [viewMode, setViewMode] = useState<'DETAILED' | 'SYNTHETIC'>('DETAILED');
@@ -56,6 +60,16 @@ export const Consulta043: React.FC = () => {
             deleteTransaction043(id);
             setTransactions(prev => prev.filter(t => t.id !== id));
         }
+    };
+
+    const handleEditClick = (transaction: Transaction043) => {
+        setEditingTransaction(transaction);
+    };
+
+    const handleEditSave = (updatedTransaction: Transaction043) => {
+        updateTransaction043(updatedTransaction);
+        setTransactions(prev => prev.map(t => t.id === updatedTransaction.id ? updatedTransaction : t));
+        setEditingTransaction(null);
     };
 
     // Calculate Totals
@@ -185,7 +199,14 @@ export const Consulta043: React.FC = () => {
                                     <td className="px-6 py-4 text-sm text-right font-mono font-bold text-gray-800">
                                         {formatCurrency(t.value)}
                                     </td>
-                                    <td className="px-6 py-4 text-center">
+                                    <td className="px-6 py-4 text-center whitespace-nowrap">
+                                        <button 
+                                            onClick={() => handleEditClick(t)} 
+                                            className="text-gray-600 hover:text-gray-900 p-1 mr-2" 
+                                            title="Editar"
+                                        >
+                                            <Edit size={18} />
+                                        </button>
                                         <button 
                                             onClick={() => handleDelete(t.id)}
                                             className="text-red-400 hover:text-red-600 p-1"
@@ -210,6 +231,15 @@ export const Consulta043: React.FC = () => {
                      <h3 className="text-xl font-bold text-gray-800">Resumo Sintético</h3>
                      <p className="text-gray-500">Os totais calculados acima representam o consolidado do período selecionado.</p>
                 </div>
+            )}
+
+            {/* Edit Modal */}
+            {editingTransaction && (
+                <EditTransactionModal 
+                    transaction={editingTransaction} 
+                    onClose={() => setEditingTransaction(null)} 
+                    onSave={handleEditSave} 
+                />
             )}
         </div>
     );

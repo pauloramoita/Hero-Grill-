@@ -109,6 +109,15 @@ export const saveTransaction043 = (transaction: Transaction043) => {
     localStorage.setItem(TRANSACTIONS_043_KEY, JSON.stringify(transactions));
 };
 
+export const updateTransaction043 = (updated: Transaction043) => {
+    const transactions = getTransactions043();
+    const index = transactions.findIndex(t => t.id === updated.id);
+    if (index !== -1) {
+        transactions[index] = updated;
+        localStorage.setItem(TRANSACTIONS_043_KEY, JSON.stringify(transactions));
+    }
+};
+
 export const deleteTransaction043 = (id: string) => {
     const transactions = getTransactions043();
     const filtered = transactions.filter(t => t.id !== id);

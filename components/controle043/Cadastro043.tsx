@@ -57,8 +57,7 @@ export const Cadastro043: React.FC = () => {
 
         saveTransaction043(newTrans);
 
-        // Reset fields but keep Date
-        setStore('');
+        // Reset fields but keep Date and Store (as requested)
         // Keep Type
         setValue(0);
         setDescription('');
