@@ -21,6 +21,16 @@ export interface Order {
     deliveryDate: string | null; // YYYY-MM-DD or null
 }
 
+export interface Transaction043 {
+    id: string;
+    date: string; // YYYY-MM-DD
+    store: string;
+    type: 'DEBIT' | 'CREDIT';
+    value: number;
+    description: string; // Max 50 chars
+}
+
 export type View = 'home' | 'pedidos' | 'controle043' | 'financeiro' | 'saldo' | 'backup';
 
 export type PedidosSubView = 'cadastrar' | 'consulta' | 'relatorios' | 'campos';
+export type Controle043SubView = 'cadastrar' | 'consulta' | 'relatorios';

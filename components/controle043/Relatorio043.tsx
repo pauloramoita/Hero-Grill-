@@ -1,0 +1,123 @@
+
+import React, { useState, useEffect } from 'react';
+import { getTransactions043, getAppData, formatCurrency, formatDateBr, getTodayLocalISO } from '../../services/storageService';
+import { AppData, Transaction043 } from '../../types';
+import { FileText, TrendingUp, TrendingDown } from 'lucide-react';
+
+export const Relatorio043: React.FC = () => {
+    const [transactions, setTransactions] = useState<Transaction043[]>([]);
+    const [filteredTransactions, setFilteredTransactions] = useState<Transaction043[]>([]);
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+
+    // Relatório Filters
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    
+    const [startDate, setStartDate] = useState(firstDay);
+    const [endDate, setEndDate] = useState(getTodayLocalISO());
+    const [storeFilter, setStoreFilter] = useState('');
+
+    useEffect(() => {
+        setTransactions(getTransactions043());
+        setAppData(getAppData());
+    }, []);
+
+    const generateReport = () => {
+        const filtered = transactions.filter(t => {
+            return t.date >= startDate && 
+                   t.date <= endDate && 
+                   (storeFilter === '' || t.store === storeFilter);
+        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        setFilteredTransactions(filtered);
+    };
+
+    // Calculate Totals
+    const totalDebit = filteredTransactions.filter(t => t.type === 'DEBIT').reduce((acc, t) => acc + t.value, 0);
+    const totalCredit = filteredTransactions.filter(t => t.type === 'CREDIT').reduce((acc, t) => acc + t.value, 0);
+    const balance = totalCredit - totalDebit;
+
+    return (
+        <div className="space-y-8">
+            {/* Filters */}
+            <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+                <h3 className="text-lg font-bold text-heroRed mb-4 border-b pb-2">Parâmetros do Relatório</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Início</label>
+                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full border p-2 rounded" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Final</label>
+                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full border p-2 rounded" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
+                        <select value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)} className="w-full border p-2 rounded">
+                            <option value="">Todas as Lojas</option>
+                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                </div>
+                <button onClick={generateReport} className="bg-heroBlack text-white px-8 py-3 rounded font-bold hover:bg-gray-800 flex items-center gap-2 w-full md:w-auto justify-center">
+                    <FileText size={20} /> Gerar Relatório
+                </button>
+            </div>
+
+            {/* Results */}
+            {filteredTransactions.length > 0 ? (
+                <div className="space-y-4 animate-fadeIn">
+                    {/* List */}
+                    <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-100">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Data</th>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Loja</th>
+                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Descrição</th>
+                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Débito</th>
+                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Crédito</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {filteredTransactions.map(t => (
+                                    <tr key={t.id}>
+                                        <td className="px-6 py-2 text-sm text-gray-900">{formatDateBr(t.date)}</td>
+                                        <td className="px-6 py-2 text-sm text-gray-600">{t.store}</td>
+                                        <td className="px-6 py-2 text-sm text-gray-500 italic">{t.description || '-'}</td>
+                                        <td className="px-6 py-2 text-sm text-right text-red-600 font-medium">
+                                            {t.type === 'DEBIT' ? formatCurrency(t.value) : '-'}
+                                        </td>
+                                        <td className="px-6 py-2 text-sm text-right text-green-600 font-medium">
+                                            {t.type === 'CREDIT' ? formatCurrency(t.value) : '-'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot className="bg-gray-50 font-bold">
+                                <tr>
+                                    <td colSpan={3} className="px-6 py-4 text-right text-gray-700">TOTAIS DO PERÍODO:</td>
+                                    <td className="px-6 py-4 text-right text-red-700">{formatCurrency(totalDebit)}</td>
+                                    <td className="px-6 py-4 text-right text-green-700">{formatCurrency(totalCredit)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    {/* Final Summary Box */}
+                    <div className="flex justify-end">
+                        <div className={`p-6 rounded-lg shadow-lg border w-full md:w-1/3 text-center ${balance >= 0 ? 'bg-blue-600 border-blue-700 text-white' : 'bg-yellow-500 border-yellow-600 text-white'}`}>
+                            <h4 className="text-sm font-bold uppercase opacity-90 mb-2">Saldo Final (Créditos - Débitos)</h4>
+                            <span className="text-4xl font-black tracking-tight">{formatCurrency(balance)}</span>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="text-center text-gray-400 py-12 border-2 border-dashed border-gray-200 rounded-lg">
+                    <TrendingUp size={48} className="mx-auto mb-2 opacity-20" />
+                    <p>Selecione os filtros e clique em "Gerar Relatório" para visualizar os dados.</p>
+                </div>
+            )}
+        </div>
+    );
+};

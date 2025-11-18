@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
+import { Controle043Module } from './components/controle043/Controle043Module';
 import { BackupModule } from './components/BackupModule';
 import { View } from './types';
 import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Grid } from 'lucide-react';
@@ -11,7 +12,7 @@ const App: React.FC = () => {
 
     const menuItems: { id: View, label: string, icon: React.ReactNode, color: string, disabled: boolean }[] = [
         { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={48} />, color: 'bg-heroRed', disabled: false },
-        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={48} />, color: 'bg-gray-800', disabled: true },
+        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={48} />, color: 'bg-heroBlack', disabled: false },
         { id: 'financeiro', label: 'Financeiro', icon: <DollarSign size={48} />, color: 'bg-gray-700', disabled: true },
         { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={48} />, color: 'bg-gray-800', disabled: true },
         { id: 'backup', label: 'Backup', icon: <Database size={48} />, color: 'bg-gray-700', disabled: false },
@@ -62,10 +63,11 @@ const App: React.FC = () => {
             <main className="flex-grow py-8">
                 {currentView === 'home' && renderHome()}
                 {currentView === 'pedidos' && <PedidosModule />}
+                {currentView === 'controle043' && <Controle043Module />}
                 {currentView === 'backup' && <BackupModule />}
                 
                 {/* Fallback for undefined views */}
-                {currentView !== 'home' && currentView !== 'pedidos' && currentView !== 'backup' && (
+                {currentView !== 'home' && currentView !== 'pedidos' && currentView !== 'controle043' && currentView !== 'backup' && (
                     <div className="text-center mt-20">
                         <h2 className="text-3xl font-bold text-gray-400">Módulo em desenvolvimento...</h2>
                         <button onClick={() => setCurrentView('home')} className="mt-4 text-blue-500 hover:underline">Voltar</button>

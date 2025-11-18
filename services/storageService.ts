@@ -1,7 +1,9 @@
-import { AppData, Order } from '../types';
+
+import { AppData, Order, Transaction043 } from '../types';
 
 const DATA_KEY = 'hero_grill_data';
 const ORDERS_KEY = 'hero_grill_orders';
+const TRANSACTIONS_043_KEY = 'hero_grill_transactions_043';
 
 const defaultData: AppData = {
     stores: [],
@@ -39,6 +41,8 @@ export const getAppData = (): AppData => {
 export const saveAppData = (data: AppData) => {
     localStorage.setItem(DATA_KEY, JSON.stringify(data));
 };
+
+// === ORDERS ===
 
 export const getOrders = (): Order[] => {
     const stored = localStorage.getItem(ORDERS_KEY);
@@ -85,6 +89,34 @@ export const deleteOrder = (id: string) => {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(filteredOrders));
 };
 
+// === CONTROLE 043 ===
+
+export const getTransactions043 = (): Transaction043[] => {
+    const stored = localStorage.getItem(TRANSACTIONS_043_KEY);
+    if (!stored) return [];
+    try {
+        const parsed = JSON.parse(stored);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        console.error("Failed to parse transactions 043", e);
+        return [];
+    }
+};
+
+export const saveTransaction043 = (transaction: Transaction043) => {
+    const transactions = getTransactions043();
+    transactions.push(transaction);
+    localStorage.setItem(TRANSACTIONS_043_KEY, JSON.stringify(transactions));
+};
+
+export const deleteTransaction043 = (id: string) => {
+    const transactions = getTransactions043();
+    const filtered = transactions.filter(t => t.id !== id);
+    localStorage.setItem(TRANSACTIONS_043_KEY, JSON.stringify(filtered));
+};
+
+// === HELPERS ===
+
 export const formatCurrency = (value: number): string => {
     // Protection against NaN or undefined
     const safeValue = typeof value === 'number' && !isNaN(value) ? value : 0;
@@ -97,6 +129,13 @@ export const getTodayLocalISO = (): string => {
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+};
+
+export const getMonthLocalISO = (): string => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
 };
 
 export const formatDateBr = (isoDate: string | null | undefined): string => {
@@ -283,21 +322,29 @@ export const exportToXML = (orders: Order[], filename: string) => {
 export const createBackup = () => {
     const appDataStr = localStorage.getItem(DATA_KEY);
     const ordersStr = localStorage.getItem(ORDERS_KEY);
+    const trans043Str = localStorage.getItem(TRANSACTIONS_043_KEY);
     
     const orders = ordersStr ? JSON.parse(ordersStr) : [];
+    const trans043 = trans043Str ? JSON.parse(trans043Str) : [];
     
-    // Keep exporting dates in BR format for user readability in JSON
     const ordersExport = orders.map((o: any) => ({
         ...o,
         date: formatDateBr(o.date),
         deliveryDate: o.deliveryDate ? formatDateBr(o.deliveryDate) : null
     }));
+    
+    // Export 043 with BR date for readability in JSON
+    const trans043Export = trans043.map((t: any) => ({
+        ...t,
+        date: formatDateBr(t.date)
+    }));
 
     const backupObj = {
-        version: 1,
+        version: 2, // Incremented version due to 043 module
         timestamp: new Date().toISOString(),
         appData: appDataStr ? JSON.parse(appDataStr) : defaultData,
-        orders: ordersExport
+        orders: ordersExport,
+        transactions043: trans043Export
     };
 
     const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
@@ -323,12 +370,10 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                 const content = e.target?.result as string;
                 if (!content) throw new Error("Arquivo vazio ou ilegível.");
 
-                // 1. Try to parse JSON
                 let parsed: any;
                 try {
                     parsed = JSON.parse(content);
                 } catch (jsonErr) {
-                    // Retry sanitizing BOM or weird chars
                     const clean = content.replace(/^\uFEFF/, '').trim();
                     try {
                         parsed = JSON.parse(clean);
@@ -338,15 +383,15 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                 }
                 
                 if (!parsed || typeof parsed !== 'object') {
-                    throw new Error("Estrutura do arquivo inválida. Certifique-se que é um arquivo .json exportado pelo sistema.");
+                    throw new Error("Estrutura do arquivo inválida.");
                 }
 
-                // Check if critical keys exist
+                // Basic structure check
                 if (!parsed.appData && !parsed.orders) {
-                    throw new Error("O arquivo não contém dados de backup válidos (chaves 'appData' ou 'orders' ausentes).");
+                    throw new Error("O arquivo não contém dados de backup válidos.");
                 }
 
-                // 2. Normalize AppData (Create arrays if missing)
+                // 1. App Data
                 const newAppData: AppData = {
                     stores: Array.isArray(parsed.appData?.stores) ? parsed.appData.stores : [],
                     products: Array.isArray(parsed.appData?.products) ? parsed.appData.products : [],
@@ -355,26 +400,18 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                     units: Array.isArray(parsed.appData?.units) ? parsed.appData.units : [],
                 };
 
-                // 3. Normalize Orders (Sanitize every field)
+                // 2. Orders
                 const rawOrders = Array.isArray(parsed.orders) ? parsed.orders : [];
-                
-                // Robust Number Parser for BR vs US formats
                 const safeNum = (val: any): number => {
                     if (typeof val === 'number') return val;
                     if (typeof val === 'string') {
                         const v = val.trim();
                         if (!v) return 0;
-                        
-                        // If it has a comma, it's almost certainly BR format (1.200,50 or 12,50)
                         if (v.includes(',')) {
-                            // Remove all dots (thousands separators)
                             const cleanDots = v.replace(/\./g, '');
-                            // Replace comma with dot
                             const standard = cleanDots.replace(',', '.');
                             return parseFloat(standard) || 0;
                         }
-                        
-                        // If no comma, assume standard float (1200.50) or integer (1200)
                         return parseFloat(v) || 0;
                     }
                     return 0;
@@ -383,7 +420,6 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                 const newOrders: Order[] = rawOrders.map((o: any, idx: number) => {
                     return {
                         id: o.id || `restored-${Date.now()}-${idx}`,
-                        // Ensure date is ISO (YYYY-MM-DD) regardless of input format
                         date: ensureIsoDate(o.date),
                         store: String(o.store || ''),
                         product: String(o.product || ''),
@@ -396,25 +432,37 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                         deliveryDate: o.deliveryDate ? ensureIsoDate(o.deliveryDate) : null
                     };
                 });
+                
+                // 3. Transactions 043 (New)
+                const rawTrans043 = Array.isArray(parsed.transactions043) ? parsed.transactions043 : [];
+                const newTrans043: Transaction043[] = rawTrans043.map((t: any, idx: number) => {
+                    return {
+                        id: t.id || `restored-043-${Date.now()}-${idx}`,
+                        date: ensureIsoDate(t.date),
+                        store: String(t.store || ''),
+                        type: t.type === 'DEBIT' || t.type === 'CREDIT' ? t.type : 'DEBIT',
+                        value: safeNum(t.value),
+                        description: String(t.description || '').substring(0, 50)
+                    }
+                });
 
-                // 4. Save to LocalStorage
                 try {
                     localStorage.removeItem(DATA_KEY);
                     localStorage.removeItem(ORDERS_KEY);
+                    localStorage.removeItem(TRANSACTIONS_043_KEY);
 
                     localStorage.setItem(DATA_KEY, JSON.stringify(newAppData));
                     localStorage.setItem(ORDERS_KEY, JSON.stringify(newOrders));
+                    localStorage.setItem(TRANSACTIONS_043_KEY, JSON.stringify(newTrans043));
                 } catch (storageError) {
-                    throw new Error("Erro ao salvar no navegador. Armazenamento cheio ou bloqueado.");
+                    throw new Error("Erro ao salvar no navegador. Armazenamento cheio.");
                 }
                 
-                // Calculate totals for feedback
                 const totalStores = newAppData.stores.length;
-                const totalProducts = newAppData.products.length;
                 
                 resolve({ 
                     success: true, 
-                    message: `Sucesso!\n\nForam recuperados:\n- ${newOrders.length} pedidos\n- ${totalProducts} produtos cadastrados\n- ${totalStores} lojas cadastradas.` 
+                    message: `Sucesso!\n\nRecuperados:\n- ${newOrders.length} pedidos\n- ${newTrans043.length} lançamentos (043)\n- ${totalStores} lojas.` 
                 });
             } catch (error: any) {
                 console.error("Backup error:", error);
@@ -430,7 +478,6 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
     });
 };
 
-// === MOCK DATA GENERATOR (FOR DEV/TESTING) ===
 export const generateMockData = () => {
     const mockStores = ['Matriz Londrina', 'Shopping Catuaí', 'Filial Centro', 'Loja Maringá', 'Quiosque Aeroporto'];
     const mockProducts = ['Picanha Grill', 'Filé Mignon', 'Alcatra Completa', 'Refrigerante Lata', 'Suco Natural', 'Cerveja Artesanal'];
@@ -447,9 +494,9 @@ export const generateMockData = () => {
     };
 
     const mockOrders: Order[] = [];
+    const mockTrans043: Transaction043[] = [];
     const today = new Date();
     
-    // Generate 30 random orders for the last 30 days
     for (let i = 0; i < 30; i++) {
         const date = new Date(today);
         date.setDate(today.getDate() - Math.floor(Math.random() * 30));
@@ -474,6 +521,24 @@ export const generateMockData = () => {
         });
     }
 
+    // Mock Data for 043
+    for (let i = 0; i < 15; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - Math.floor(Math.random() * 30));
+        const dateStr = date.toISOString().split('T')[0];
+        const isDebit = Math.random() > 0.5;
+        
+        mockTrans043.push({
+            id: `mock043-${i}`,
+            date: dateStr,
+            store: mockStores[Math.floor(Math.random() * mockStores.length)],
+            type: isDebit ? 'DEBIT' : 'CREDIT',
+            value: Math.floor(Math.random() * 5000) + 100,
+            description: isDebit ? 'Empréstimo bancário' : 'Devolução parcial'
+        });
+    }
+
     localStorage.setItem(DATA_KEY, JSON.stringify(mockAppData));
     localStorage.setItem(ORDERS_KEY, JSON.stringify(mockOrders));
+    localStorage.setItem(TRANSACTIONS_043_KEY, JSON.stringify(mockTrans043));
 };
