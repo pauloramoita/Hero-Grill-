@@ -77,7 +77,7 @@ const App: React.FC = () => {
             <footer className="bg-heroBlack text-white text-center py-6 mt-auto">
                 <p className="text-sm opacity-50">
                     &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados. 
-                    <span className="ml-2 text-xs bg-gray-800 px-2 py-1 rounded-full text-gray-400">v1.7 (Stable Fix)</span>
+                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v1.8 (Vercel Ready)</span>
                 </p>
             </footer>
         </div>
