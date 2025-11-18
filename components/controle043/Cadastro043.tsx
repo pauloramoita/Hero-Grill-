@@ -94,7 +94,7 @@ export const Cadastro043: React.FC = () => {
                         <option value="">Selecione...</option>
                         {data.stores.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    {data.stores.length === 0 && <p className="text-xs text-red-500 mt-1">Cadastre lojas no módulo de Pedidos > Campos!</p>}
+                    {data.stores.length === 0 && <p className="text-xs text-red-500 mt-1">Cadastre lojas no módulo de Pedidos &gt; Campos!</p>}
                 </div>
 
                 {/* Tipo */}
