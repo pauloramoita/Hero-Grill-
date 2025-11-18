@@ -33,7 +33,7 @@ export const Consulta043: React.FC = () => {
 
     // Apply Filters
     useEffect(() => {
-        let result = transactions;
+        let result = [...transactions];
 
         // 1. Store Filter
         if (storeFilter) {
@@ -51,6 +51,9 @@ export const Consulta043: React.FC = () => {
             }
             return true;
         });
+
+        // 3. Sort by Date Ascending (Oldest -> Newest) as requested
+        result.sort((a, b) => a.date.localeCompare(b.date));
 
         setFilteredTransactions(result);
     }, [transactions, storeFilter, timeType, dateValue, monthValue, yearValue]);
