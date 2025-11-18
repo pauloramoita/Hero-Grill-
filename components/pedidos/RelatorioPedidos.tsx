@@ -11,6 +11,7 @@ export const RelatorioPedidos: React.FC = () => {
     const [filteredData, setFilteredData] = useState<Order[]>([]);
     
     const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
@@ -52,12 +53,23 @@ export const RelatorioPedidos: React.FC = () => {
         }
     }, [allOrders]);
 
-    const handleDelete = (id: string) => {
-        if (window.confirm('Tem certeza que deseja excluir este pedido?')) {
-            deleteOrder(id);
+    const handleDeleteClick = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setDeletingId(id);
+    };
+
+    const confirmDelete = () => {
+        if (deletingId) {
+            deleteOrder(deletingId);
             // Update local state immediately
-            setAllOrders(prev => prev.filter(o => o.id !== id));
+            setAllOrders(prev => prev.filter(o => o.id !== deletingId));
+            setDeletingId(null);
         }
+    };
+
+    const handleEditClick = (order: Order, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingOrder(order);
     };
 
     const handleEditSave = (updatedOrder: Order) => {
@@ -154,7 +166,7 @@ export const RelatorioPedidos: React.FC = () => {
                                             <div className="flex gap-2">
                                                 <button 
                                                     type="button"
-                                                    onClick={() => setEditingOrder(order)}
+                                                    onClick={(e) => handleEditClick(order, e)}
                                                     className="text-gray-600 hover:text-gray-900 p-1 cursor-pointer"
                                                     title="Editar"
                                                 >
@@ -162,7 +174,7 @@ export const RelatorioPedidos: React.FC = () => {
                                                 </button>
                                                 <button 
                                                     type="button"
-                                                    onClick={() => handleDelete(order.id)}
+                                                    onClick={(e) => handleDeleteClick(order.id, e)}
                                                     className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
                                                     title="Excluir"
                                                 >
@@ -184,6 +196,33 @@ export const RelatorioPedidos: React.FC = () => {
                     onClose={() => setEditingOrder(null)} 
                     onSave={handleEditSave} 
                 />
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deletingId && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4 border-l-4 border-heroRed animate-fadeIn">
+                        <h3 className="text-xl font-bold text-heroBlack mb-2">Confirmar Exclusão</h3>
+                        <p className="text-gray-600 mb-6">
+                            Tem certeza que deseja excluir este pedido? <br/>
+                            <span className="text-sm text-red-500 font-semibold">Esta ação não pode ser desfeita.</span>
+                        </p>
+                        <div className="flex justify-end gap-3">
+                            <button 
+                                onClick={() => setDeletingId(null)}
+                                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={confirmDelete}
+                                className="px-4 py-2 bg-heroRed text-white rounded-lg font-medium hover:bg-red-800 transition-colors flex items-center gap-2"
+                            >
+                                <Trash2 size={18} /> Excluir
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
