@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
@@ -76,7 +75,10 @@ const App: React.FC = () => {
             </main>
 
             <footer className="bg-heroBlack text-white text-center py-6 mt-auto">
-                <p className="text-sm opacity-50">&copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados.</p>
+                <p className="text-sm opacity-50">
+                    &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados. 
+                    <span className="ml-2 text-xs bg-gray-800 px-2 py-1 rounded-full text-gray-400">v1.1 (Controle 043)</span>
+                </p>
             </footer>
         </div>
     );
