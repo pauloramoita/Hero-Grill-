@@ -181,33 +181,95 @@ const escapeXml = (unsafe: string) => {
 };
 
 export const exportToXML = (orders: Order[], filename: string) => {
-    let xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n';
-    xmlContent += '<Pedidos>\n';
+    let xmlContent = '<?xml version="1.0"?>\n';
+    xmlContent += '<?mso-application progid="Excel.Sheet"?>\n';
+    xmlContent += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n';
+    xmlContent += ' xmlns:o="urn:schemas-microsoft-com:office:office"\n';
+    xmlContent += ' xmlns:x="urn:schemas-microsoft-com:office:excel"\n';
+    xmlContent += ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"\n';
+    xmlContent += ' xmlns:html="http://www.w3.org/TR/REC-html40">\n';
     
+    // Styles
+    xmlContent += ' <Styles>\n';
+    xmlContent += '  <Style ss:ID="Default" ss:Name="Normal">\n';
+    xmlContent += '   <Alignment ss:Vertical="Bottom"/>\n';
+    xmlContent += '   <Borders/>\n';
+    xmlContent += '   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>\n';
+    xmlContent += '   <Interior/>\n';
+    xmlContent += '   <NumberFormat/>\n';
+    xmlContent += '   <Protection/>\n';
+    xmlContent += '  </Style>\n';
+    
+    xmlContent += '  <Style ss:ID="HeaderStyle">\n';
+    xmlContent += '   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>\n';
+    xmlContent += '   <Borders>\n';
+    xmlContent += '    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
+    xmlContent += '    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
+    xmlContent += '    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
+    xmlContent += '    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
+    xmlContent += '   </Borders>\n';
+    xmlContent += '   <Font ss:FontName="Calibri" ss:Size="12" ss:Color="#FFFFFF" ss:Bold="1"/>\n';
+    xmlContent += '   <Interior ss:Color="#D32F2F" ss:Pattern="Solid"/>\n';
+    xmlContent += '  </Style>\n';
+
+    xmlContent += '  <Style ss:ID="CurrencyStyle">\n';
+    xmlContent += '   <NumberFormat ss:Format="Currency"/>\n';
+    xmlContent += '  </Style>\n';
+    
+    xmlContent += '  <Style ss:ID="CenterStyle">\n';
+    xmlContent += '   <Alignment ss:Horizontal="Center"/>\n';
+    xmlContent += '  </Style>\n';
+    xmlContent += ' </Styles>\n';
+
+    xmlContent += ' <Worksheet ss:Name="Relatorio Pedidos">\n';
+    xmlContent += '  <Table x:FullColumns="1" x:FullRows="1" ss:DefaultRowHeight="15">\n';
+    
+    // Columns
+    xmlContent += '   <Column ss:Width="80"/>\n'; // Date
+    xmlContent += '   <Column ss:Width="120"/>\n'; // Store
+    xmlContent += '   <Column ss:Width="150"/>\n'; // Product
+    xmlContent += '   <Column ss:Width="100"/>\n'; // Brand
+    xmlContent += '   <Column ss:Width="100"/>\n'; // Supplier
+    xmlContent += '   <Column ss:Width="80"/>\n'; // Unit Value
+    xmlContent += '   <Column ss:Width="50" ss:StyleID="CenterStyle"/>\n'; // Unit
+    xmlContent += '   <Column ss:Width="60" ss:StyleID="CenterStyle"/>\n'; // Qty
+    xmlContent += '   <Column ss:Width="90"/>\n'; // Total
+    xmlContent += '   <Column ss:Width="90" ss:StyleID="CenterStyle"/>\n'; // Delivery
+
+    // Header
+    xmlContent += '   <Row ss:Height="25">\n';
+    const headers = ['Data', 'Loja', 'Produto', 'Marca', 'Fornecedor', 'Valor Unit.', 'Un.', 'Qtd', 'Total', 'Entrega'];
+    headers.forEach(h => {
+        xmlContent += `    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${h}</Data></Cell>\n`;
+    });
+    xmlContent += '   </Row>\n';
+
+    // Rows
     orders.forEach(o => {
-        xmlContent += '  <Pedido>\n';
-        xmlContent += `    <ID>${escapeXml(o.id)}</ID>\n`;
-        xmlContent += `    <DataPedido>${escapeXml(formatDateBr(o.date))}</DataPedido>\n`;
-        xmlContent += `    <Loja>${escapeXml(o.store)}</Loja>\n`;
-        xmlContent += `    <Produto>${escapeXml(o.product)}</Produto>\n`;
-        xmlContent += `    <Marca>${escapeXml(o.brand)}</Marca>\n`;
-        xmlContent += `    <Fornecedor>${escapeXml(o.supplier)}</Fornecedor>\n`;
-        xmlContent += `    <ValorUnitario>${o.unitValue.toFixed(2).replace('.', ',')}</ValorUnitario>\n`;
-        xmlContent += `    <Unidade>${escapeXml(o.unitMeasure)}</Unidade>\n`;
-        xmlContent += `    <Quantidade>${o.quantity.toFixed(3).replace('.', ',')}</Quantidade>\n`;
-        xmlContent += `    <Total>${o.totalValue.toFixed(2).replace('.', ',')}</Total>\n`;
-        xmlContent += `    <DataEntrega>${escapeXml(o.deliveryDate ? formatDateBr(o.deliveryDate) : 'Pendente')}</DataEntrega>\n`;
-        xmlContent += '  </Pedido>\n';
+        xmlContent += '   <Row>\n';
+        xmlContent += `    <Cell ss:StyleID="CenterStyle"><Data ss:Type="String">${formatDateBr(o.date)}</Data></Cell>\n`;
+        xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(o.store)}</Data></Cell>\n`;
+        xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(o.product)}</Data></Cell>\n`;
+        xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(o.brand)}</Data></Cell>\n`;
+        xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(o.supplier)}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${o.unitValue}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CenterStyle"><Data ss:Type="String">${escapeXml(o.unitMeasure)}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CenterStyle"><Data ss:Type="Number">${o.quantity}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${o.totalValue}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CenterStyle"><Data ss:Type="String">${o.deliveryDate ? formatDateBr(o.deliveryDate) : 'Pendente'}</Data></Cell>\n`;
+        xmlContent += '   </Row>\n';
     });
 
-    xmlContent += '</Pedidos>';
+    xmlContent += '  </Table>\n';
+    xmlContent += ' </Worksheet>\n';
+    xmlContent += '</Workbook>\n';
 
-    const blob = new Blob([xmlContent], { type: 'application/xml;charset=utf-8;' });
+    const blob = new Blob([xmlContent], { type: 'application/vnd.ms-excel' });
     const link = document.createElement('a');
     if (link.download !== undefined) {
         const url = URL.createObjectURL(blob);
         link.setAttribute('href', url);
-        link.setAttribute('download', `${filename}.xml`);
+        link.setAttribute('download', `${filename}.xls`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
@@ -366,4 +428,52 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
 
         reader.readAsText(file);
     });
+};
+
+// === MOCK DATA GENERATOR (FOR DEV/TESTING) ===
+export const generateMockData = () => {
+    const mockStores = ['Matriz Londrina', 'Shopping Catuaí', 'Filial Centro', 'Loja Maringá', 'Quiosque Aeroporto'];
+    const mockProducts = ['Picanha Grill', 'Filé Mignon', 'Alcatra Completa', 'Refrigerante Lata', 'Suco Natural', 'Cerveja Artesanal'];
+    const mockBrands = ['Friboi', 'Seara', 'Coca-Cola', 'Ambev', 'Natural One', 'Swift'];
+    const mockSuppliers = ['Distribuidora Paraná', 'Mercadão de Carnes', 'Bebidas Express', 'Hortifruti Central'];
+    const mockUnits = ['Kg', 'Un', 'Lt', 'Cx'];
+
+    const mockAppData: AppData = {
+        stores: mockStores,
+        products: mockProducts,
+        brands: mockBrands,
+        suppliers: mockSuppliers,
+        units: mockUnits
+    };
+
+    const mockOrders: Order[] = [];
+    const today = new Date();
+    
+    // Generate 30 random orders for the last 30 days
+    for (let i = 0; i < 30; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - Math.floor(Math.random() * 30));
+        const dateStr = date.toISOString().split('T')[0];
+        
+        const isDelivered = Math.random() > 0.3;
+        const unitValue = Math.floor(Math.random() * 50) + 5;
+        const qty = Math.floor(Math.random() * 10) + 1;
+
+        mockOrders.push({
+            id: `mock-${i}`,
+            date: dateStr,
+            store: mockStores[Math.floor(Math.random() * mockStores.length)],
+            product: mockProducts[Math.floor(Math.random() * mockProducts.length)],
+            brand: mockBrands[Math.floor(Math.random() * mockBrands.length)],
+            supplier: mockSuppliers[Math.floor(Math.random() * mockSuppliers.length)],
+            unitMeasure: mockUnits[Math.floor(Math.random() * mockUnits.length)],
+            unitValue: unitValue,
+            quantity: qty,
+            totalValue: unitValue * qty,
+            deliveryDate: isDelivered ? dateStr : null
+        });
+    }
+
+    localStorage.setItem(DATA_KEY, JSON.stringify(mockAppData));
+    localStorage.setItem(ORDERS_KEY, JSON.stringify(mockOrders));
 };

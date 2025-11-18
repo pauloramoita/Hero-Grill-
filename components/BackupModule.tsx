@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { Download, Upload, Database, AlertTriangle, Loader2 } from 'lucide-react';
-import { createBackup, restoreBackup } from '../services/storageService';
+import { Download, Upload, Database, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { createBackup, restoreBackup, generateMockData } from '../services/storageService';
 
 export const BackupModule: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -15,6 +15,14 @@ export const BackupModule: React.FC = () => {
             fileInputRef.current?.click();
         }
     };
+
+    const handleMockData = () => {
+        if (window.confirm('Isso apagará os dados atuais e gerará dados fictícios para teste. Útil se o banco de dados foi limpo pelo ambiente de desenvolvimento. Continuar?')) {
+            generateMockData();
+            alert('Dados de teste gerados com sucesso!');
+            window.location.reload();
+        }
+    }
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -137,6 +145,19 @@ export const BackupModule: React.FC = () => {
                             )}
                         </button>
                     </div>
+                </div>
+
+                {/* Dev Helper */}
+                <div className="mt-8 border-t pt-8 text-center">
+                    <h4 className="text-gray-400 font-bold text-sm mb-4 uppercase tracking-widest">Área de Desenvolvimento</h4>
+                    <button 
+                        onClick={handleMockData}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-sm font-medium"
+                    >
+                        <RefreshCw size={16} />
+                        Gerar Dados de Teste (Repopular Banco)
+                    </button>
+                    <p className="text-xs text-gray-400 mt-2">Use se o banco de dados sumir após recarregar a página.</p>
                 </div>
             </div>
         </div>
