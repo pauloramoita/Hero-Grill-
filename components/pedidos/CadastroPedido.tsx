@@ -17,7 +17,7 @@ export const CadastroPedido: React.FC = () => {
     const [unitValue, setUnitValue] = useState<number>(0);
     
     const [unitMeasure, setUnitMeasure] = useState('');
-    const [quantity, setQuantity] = useState<string>('');
+    const [quantity, setQuantity] = useState<string>(''); // String for masking
     const [deliveryDate, setDeliveryDate] = useState('');
 
     // Validation State
@@ -34,13 +34,19 @@ export const CadastroPedido: React.FC = () => {
             const lastOrder = getLastOrderForProduct(product);
             if (lastOrder) {
                 setBrand(lastOrder.brand);
-                setSupplier(lastOrder.supplier);
+                // If user hasn't selected a supplier yet, use the one from history. 
+                // If they have, we might want to keep their selection or overwrite. 
+                // Logic here: if supplier is empty, fill it. If strict history needed, overwrite.
+                // Given the requirement to "keep supplier" from previous manual entry, 
+                // we only overwrite if the current supplier field is empty.
+                if (!supplier) {
+                    setSupplier(lastOrder.supplier);
+                }
                 setUnitMeasure(lastOrder.unitMeasure);
                 setUnitValue(lastOrder.unitValue);
                 setErrors(prev => ({
                     ...prev,
                     brand: false,
-                    supplier: false,
                     unitMeasure: false,
                     unitValue: false
                 }));
@@ -48,8 +54,16 @@ export const CadastroPedido: React.FC = () => {
         }
     }, [product]);
 
+    // Helper to parse the masked quantity string back to float
+    const getQuantityFloat = (): number => {
+        if (!quantity) return 0;
+        // Remove thousands separator (.) and replace decimal separator (,) with dot (.)
+        const cleanValue = quantity.replace(/\./g, '').replace(',', '.');
+        return parseFloat(cleanValue) || 0;
+    };
+
     const calculateTotal = () => {
-        const qty = parseFloat(quantity) || 0;
+        const qty = getQuantityFloat();
         return formatCurrency(unitValue * qty);
     };
 
@@ -68,6 +82,29 @@ export const CadastroPedido: React.FC = () => {
         if (errors.unitValue) setErrors({ ...errors, unitValue: false });
     };
 
+    // Handle Quantity Input (Right to Left with 3 decimals)
+    const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        // 1. Get only numbers
+        let rawValue = e.target.value.replace(/\D/g, '');
+        
+        if (!rawValue) {
+            setQuantity('');
+            return;
+        }
+
+        // 2. Convert to integer to handle leading zeros naturally
+        const intValue = parseInt(rawValue, 10);
+
+        // 3. Divide by 1000 to simulate 3 decimal places
+        const formatted = (intValue / 1000).toLocaleString('pt-BR', {
+            minimumFractionDigits: 3,
+            maximumFractionDigits: 3
+        });
+
+        setQuantity(formatted);
+        if (errors.quantity) setErrors({ ...errors, quantity: false });
+    };
+
     const handleFieldChange = (setter: React.Dispatch<React.SetStateAction<string>>, field: string, value: string) => {
         setter(value);
         if (errors[field]) setErrors({ ...errors, [field]: false });
@@ -77,6 +114,8 @@ export const CadastroPedido: React.FC = () => {
         e.preventDefault();
         setSubmitError(null);
 
+        const qtyFloat = getQuantityFloat();
+
         const newErrors = {
             store: !store,
             product: !product,
@@ -84,7 +123,7 @@ export const CadastroPedido: React.FC = () => {
             supplier: !supplier,
             unitMeasure: !unitMeasure,
             unitValue: unitValue <= 0,
-            quantity: !quantity || parseFloat(quantity) <= 0
+            quantity: qtyFloat <= 0
         };
 
         setErrors(newErrors);
@@ -103,24 +142,27 @@ export const CadastroPedido: React.FC = () => {
             supplier,
             unitValue: unitValue,
             unitMeasure,
-            quantity: parseFloat(quantity),
-            totalValue: unitValue * parseFloat(quantity),
+            quantity: qtyFloat,
+            totalValue: unitValue * qtyFloat,
             deliveryDate: deliveryDate || null
         };
 
         saveOrder(newOrder);
         
-        // Reset Fields
-        setStore('');
+        // Reset Fields Logic
+        // Requirements: Keep Date, Store, Supplier. Reset others.
+        
+        // setStore(''); // KEEPS STORE
         setProduct('');
         setBrand('');
-        setSupplier('');
+        // setSupplier(''); // KEEPS SUPPLIER
         setUnitMeasure('');
         setUnitValue(0);
         setQuantity('');
         setDeliveryDate('');
         setErrors({});
         
+        // Optional visual feedback toast could go here
         alert('Pedido cadastrado com sucesso!');
     };
 
@@ -230,14 +272,14 @@ export const CadastroPedido: React.FC = () => {
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1">Quantidade Pedida {errors.quantity && <span className="text-red-500">*</span>}</label>
                     <input 
-                        type="number"
-                        step="0.001"
+                        type="text"
+                        inputMode="numeric"
                         value={quantity} 
-                        onChange={(e) => handleFieldChange(setQuantity, 'quantity', e.target.value)}
-                        className={`${getInputClass(errors.quantity)} text-right`}
-                        placeholder="0.000"
+                        onChange={handleQuantityChange}
+                        className={`${getInputClass(errors.quantity)} text-right font-mono`}
+                        placeholder="0,000"
                     />
-                    <p className="text-xs text-gray-400 mt-1 text-right">Use 3 casas decimais (ex: 1,500)</p>
+                    <p className="text-xs text-gray-400 mt-1 text-right">Formato: 0,000 (Digite os números)</p>
                 </div>
 
                 {/* Total (Read Only) */}
