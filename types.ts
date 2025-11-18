@@ -30,7 +30,27 @@ export interface Transaction043 {
     description: string; // Max 50 chars
 }
 
+export interface AccountBalance {
+    id: string;
+    store: string;
+    year: number;
+    month: string; // "01" to "12"
+    
+    // Contas
+    caixaEconomica: number;
+    cofre: number;
+    loteria: number;
+    pagbankH: number;
+    pagbankD: number;
+    investimentos: number;
+    
+    // Calculados
+    totalBalance: number; // Soma das contas
+    // Note: "Total" (Variação) é calculado dinamicamente comparando com o registro anterior
+}
+
 export type View = 'home' | 'pedidos' | 'controle043' | 'financeiro' | 'saldo' | 'backup';
 
 export type PedidosSubView = 'cadastrar' | 'consulta' | 'relatorios' | 'campos';
 export type Controle043SubView = 'cadastrar' | 'consulta' | 'relatorios';
+export type SaldoSubView = 'lancamentos' | 'consulta' | 'relatorios';

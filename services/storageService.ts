@@ -1,9 +1,10 @@
 
-import { AppData, Order, Transaction043 } from '../types';
+import { AppData, Order, Transaction043, AccountBalance } from '../types';
 
 const DATA_KEY = 'hero_grill_data';
 const ORDERS_KEY = 'hero_grill_orders';
 const TRANSACTIONS_043_KEY = 'hero_grill_transactions_043';
+const SALDO_CONTAS_KEY = 'hero_grill_saldo_contas';
 
 const defaultData: AppData = {
     stores: [],
@@ -122,6 +123,63 @@ export const deleteTransaction043 = (id: string) => {
     const transactions = getTransactions043();
     const filtered = transactions.filter(t => t.id !== id);
     localStorage.setItem(TRANSACTIONS_043_KEY, JSON.stringify(filtered));
+};
+
+// === SALDO CONTAS ===
+
+export const getAccountBalances = (): AccountBalance[] => {
+    const stored = localStorage.getItem(SALDO_CONTAS_KEY);
+    if (!stored) return [];
+    try {
+        const parsed = JSON.parse(stored);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        console.error("Failed to parse account balances", e);
+        return [];
+    }
+};
+
+export const saveAccountBalance = (balance: AccountBalance) => {
+    const balances = getAccountBalances();
+    // Check if already exists for this store/month/year
+    const exists = balances.some(b => b.store === balance.store && b.year === balance.year && b.month === balance.month);
+    if (exists) {
+        throw new Error("Já existe um lançamento para esta Loja neste Mês/Ano.");
+    }
+    balances.push(balance);
+    localStorage.setItem(SALDO_CONTAS_KEY, JSON.stringify(balances));
+};
+
+export const updateAccountBalance = (updated: AccountBalance) => {
+    const balances = getAccountBalances();
+    const index = balances.findIndex(b => b.id === updated.id);
+    if (index !== -1) {
+        balances[index] = updated;
+        localStorage.setItem(SALDO_CONTAS_KEY, JSON.stringify(balances));
+    }
+};
+
+export const deleteAccountBalance = (id: string) => {
+    const balances = getAccountBalances();
+    const filtered = balances.filter(b => b.id !== id);
+    localStorage.setItem(SALDO_CONTAS_KEY, JSON.stringify(filtered));
+};
+
+// Helper to get previous month balance
+export const getPreviousMonthBalance = (store: string, currentYear: number, currentMonth: string): AccountBalance | undefined => {
+    const balances = getAccountBalances();
+    
+    let prevYear = currentYear;
+    let prevMonthInt = parseInt(currentMonth, 10) - 1;
+    
+    if (prevMonthInt === 0) {
+        prevMonthInt = 12;
+        prevYear = currentYear - 1;
+    }
+    
+    const prevMonthStr = prevMonthInt.toString().padStart(2, '0');
+    
+    return balances.find(b => b.store === store && b.year === prevYear && b.month === prevMonthStr);
 };
 
 // === HELPERS ===
@@ -332,9 +390,11 @@ export const createBackup = () => {
     const appDataStr = localStorage.getItem(DATA_KEY);
     const ordersStr = localStorage.getItem(ORDERS_KEY);
     const trans043Str = localStorage.getItem(TRANSACTIONS_043_KEY);
+    const saldoContasStr = localStorage.getItem(SALDO_CONTAS_KEY);
     
     const orders = ordersStr ? JSON.parse(ordersStr) : [];
     const trans043 = trans043Str ? JSON.parse(trans043Str) : [];
+    const saldoContas = saldoContasStr ? JSON.parse(saldoContasStr) : [];
     
     const ordersExport = orders.map((o: any) => ({
         ...o,
@@ -342,18 +402,19 @@ export const createBackup = () => {
         deliveryDate: o.deliveryDate ? formatDateBr(o.deliveryDate) : null
     }));
     
-    // Export 043 with BR date for readability in JSON
+    // Export 043 with BR date
     const trans043Export = trans043.map((t: any) => ({
         ...t,
         date: formatDateBr(t.date)
     }));
 
     const backupObj = {
-        version: 2, // Incremented version due to 043 module
+        version: 3, // Incremented version for Saldo Contas
         timestamp: new Date().toISOString(),
         appData: appDataStr ? JSON.parse(appDataStr) : defaultData,
         orders: ordersExport,
-        transactions043: trans043Export
+        transactions043: trans043Export,
+        saldoContas: saldoContas
     };
 
     const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
@@ -396,7 +457,7 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                 }
 
                 // Basic structure check
-                if (!parsed.appData && !parsed.orders) {
+                if (!parsed.appData && !parsed.orders && !parsed.saldoContas) {
                     throw new Error("O arquivo não contém dados de backup válidos.");
                 }
 
@@ -409,8 +470,6 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                     units: Array.isArray(parsed.appData?.units) ? parsed.appData.units : [],
                 };
 
-                // 2. Orders
-                const rawOrders = Array.isArray(parsed.orders) ? parsed.orders : [];
                 const safeNum = (val: any): number => {
                     if (typeof val === 'number') return val;
                     if (typeof val === 'string') {
@@ -426,6 +485,8 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                     return 0;
                 };
 
+                // 2. Orders
+                const rawOrders = Array.isArray(parsed.orders) ? parsed.orders : [];
                 const newOrders: Order[] = rawOrders.map((o: any, idx: number) => {
                     return {
                         id: o.id || `restored-${Date.now()}-${idx}`,
@@ -442,7 +503,7 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                     };
                 });
                 
-                // 3. Transactions 043 (New)
+                // 3. Transactions 043
                 const rawTrans043 = Array.isArray(parsed.transactions043) ? parsed.transactions043 : [];
                 const newTrans043: Transaction043[] = rawTrans043.map((t: any, idx: number) => {
                     return {
@@ -455,23 +516,41 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                     }
                 });
 
+                // 4. Saldo Contas (New)
+                const rawSaldo = Array.isArray(parsed.saldoContas) ? parsed.saldoContas : [];
+                const newSaldo: AccountBalance[] = rawSaldo.map((s: any, idx: number) => {
+                    return {
+                        id: s.id || `restored-saldo-${Date.now()}-${idx}`,
+                        store: String(s.store || ''),
+                        year: parseInt(s.year) || new Date().getFullYear(),
+                        month: String(s.month || '01').padStart(2, '0'),
+                        caixaEconomica: safeNum(s.caixaEconomica),
+                        cofre: safeNum(s.cofre),
+                        loteria: safeNum(s.loteria),
+                        pagbankH: safeNum(s.pagbankH),
+                        pagbankD: safeNum(s.pagbankD),
+                        investimentos: safeNum(s.investimentos),
+                        totalBalance: safeNum(s.totalBalance)
+                    };
+                });
+
                 try {
                     localStorage.removeItem(DATA_KEY);
                     localStorage.removeItem(ORDERS_KEY);
                     localStorage.removeItem(TRANSACTIONS_043_KEY);
+                    localStorage.removeItem(SALDO_CONTAS_KEY);
 
                     localStorage.setItem(DATA_KEY, JSON.stringify(newAppData));
                     localStorage.setItem(ORDERS_KEY, JSON.stringify(newOrders));
                     localStorage.setItem(TRANSACTIONS_043_KEY, JSON.stringify(newTrans043));
+                    localStorage.setItem(SALDO_CONTAS_KEY, JSON.stringify(newSaldo));
                 } catch (storageError) {
                     throw new Error("Erro ao salvar no navegador. Armazenamento cheio.");
                 }
                 
-                const totalStores = newAppData.stores.length;
-                
                 resolve({ 
                     success: true, 
-                    message: `Sucesso!\n\nRecuperados:\n- ${newOrders.length} pedidos\n- ${newTrans043.length} lançamentos (043)\n- ${totalStores} lojas.` 
+                    message: `Sucesso!\n\nRecuperados:\n- ${newOrders.length} pedidos\n- ${newTrans043.length} lançamentos (043)\n- ${newSaldo.length} saldos de contas\n- Lojas e cadastros.` 
                 });
             } catch (error: any) {
                 console.error("Backup error:", error);
@@ -504,8 +583,10 @@ export const generateMockData = () => {
 
     const mockOrders: Order[] = [];
     const mockTrans043: Transaction043[] = [];
+    const mockSaldoContas: AccountBalance[] = [];
     const today = new Date();
     
+    // Orders Mock
     for (let i = 0; i < 30; i++) {
         const date = new Date(today);
         date.setDate(today.getDate() - Math.floor(Math.random() * 30));
@@ -530,7 +611,7 @@ export const generateMockData = () => {
         });
     }
 
-    // Mock Data for 043
+    // 043 Mock
     for (let i = 0; i < 15; i++) {
         const date = new Date(today);
         date.setDate(today.getDate() - Math.floor(Math.random() * 30));
@@ -547,7 +628,46 @@ export const generateMockData = () => {
         });
     }
 
+    // Saldo Contas Mock (Generating for last 3 months for each store)
+    const currentYear = today.getFullYear();
+    const months = ['09', '10', '11'];
+    
+    let idCounter = 0;
+    mockStores.forEach(store => {
+        let previousBalance = 10000 + Math.random() * 5000;
+        
+        months.forEach(month => {
+            // Fluctuation
+            const cx = previousBalance * 0.2 + Math.random() * 1000;
+            const cf = previousBalance * 0.1 + Math.random() * 500;
+            const lt = Math.random() * 200;
+            const ph = previousBalance * 0.3 + Math.random() * 2000;
+            const pd = previousBalance * 0.1 + Math.random() * 1000;
+            const inv = previousBalance * 0.3 + Math.random() * 3000;
+            
+            const total = cx + cf + lt + ph + pd + inv;
+
+            mockSaldoContas.push({
+                id: `mock-saldo-${idCounter++}`,
+                store: store,
+                year: currentYear,
+                month: month,
+                caixaEconomica: cx,
+                cofre: cf,
+                loteria: lt,
+                pagbankH: ph,
+                pagbankD: pd,
+                investimentos: inv,
+                totalBalance: total
+            });
+
+            previousBalance = total; // simulate growth
+        });
+    });
+
+
     localStorage.setItem(DATA_KEY, JSON.stringify(mockAppData));
     localStorage.setItem(ORDERS_KEY, JSON.stringify(mockOrders));
     localStorage.setItem(TRANSACTIONS_043_KEY, JSON.stringify(mockTrans043));
+    localStorage.setItem(SALDO_CONTAS_KEY, JSON.stringify(mockSaldoContas));
 };
