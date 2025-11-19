@@ -13,7 +13,7 @@ import {
     getOrders
 } from '../../services/storageService';
 import { AppData, FinancialAccount, DailyTransaction, Order, User } from '../../types';
-import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, AlertCircle, EyeOff, Filter, Calculator, ArrowRight } from 'lucide-react';
+import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, AlertCircle, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock, Layers } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 
 interface LancamentosFinanceiroProps {
@@ -48,6 +48,11 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [supplier, setSupplier] = useState('');
     const [value, setValue] = useState(0);
     const [status, setStatus] = useState<'Pago' | 'Pendente'>('Pendente');
+    const [description, setDescription] = useState(''); // Moved to top level for better control
+
+    // Recurrence State
+    const [recurrenceType, setRecurrenceType] = useState<'none' | 'installment' | 'fixed'>('none');
+    const [recurrenceCount, setRecurrenceCount] = useState<number>(2);
 
     // Edit State
     const [editingItem, setEditingItem] = useState<DailyTransaction | null>(null);
@@ -58,7 +63,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [filterStore, setFilterStore] = useState('');
     const [filterAccount, setFilterAccount] = useState('');
     const [filterSupplier, setFilterSupplier] = useState('');
-    const [filterClassification, setFilterClassification] = useState(''); // Novo Filtro
+    const [filterClassification, setFilterClassification] = useState('');
 
     // Permission Check
     const canViewBalances = user.isMaster || user.permissions.modules?.includes('view_balances');
@@ -88,6 +93,17 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         setValue(floatValue);
     };
 
+    const addMonths = (dateStr: string, months: number): string => {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const dateObj = new Date(year, month - 1, day);
+        dateObj.setMonth(dateObj.getMonth() + months);
+        
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -103,36 +119,73 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             }
         }
 
+        if (recurrenceType !== 'none' && recurrenceCount < 2) {
+            alert('Para repetição/parcelamento, a quantidade mínima é 2.');
+            return;
+        }
+
         setSaving(true);
         try {
-            await saveDailyTransaction({
-                id: '',
-                date,
-                paymentDate: status === 'Pago' ? paymentDate : null,
-                store,
-                type,
-                accountId,
-                destinationStore: type === 'Transferência' ? destinationStore : undefined,
-                destinationAccountId: type === 'Transferência' ? destinationAccountId : undefined,
-                paymentMethod,
-                product: type !== 'Transferência' ? product : '',
-                category: type !== 'Transferência' ? category : '',
-                supplier: (type === 'Despesa' && type !== 'Transferência') ? supplier : '',
-                classification: type !== 'Transferência' ? classification : '', // Salvar Classificação
-                value,
-                status,
-                origin: 'manual'
-            });
+            const transactionsToCreate = [];
+            const loopCount = recurrenceType === 'none' ? 1 : recurrenceCount;
+
+            for (let i = 0; i < loopCount; i++) {
+                // Calculate Date
+                const currentDueDate = i === 0 ? date : addMonths(date, i);
+                
+                // Calculate Description
+                let currentDesc = description;
+                if (recurrenceType === 'installment') {
+                    currentDesc = description ? `${description} (${i + 1}/${loopCount})` : `Parcela (${i + 1}/${loopCount})`;
+                } else if (recurrenceType === 'fixed' && i > 0) {
+                    // Optional: Add month suffix for fixed expenses if desired, but usually standard name is fine
+                    // currentDesc = `${description} - Mês ${i + 1}`;
+                }
+
+                // Status Logic: Usually only the first one matches the form status (e.g. Paid), subsequent ones might be Pendente
+                // However, user might want to launch all as Pending. 
+                // Let's assume: If Recurrence > 1, force subsequent to 'Pendente' unless user explicitly wants otherwise? 
+                // Simplest: Respect form status for ALL, or force Pendente for future.
+                // Decision: If i > 0 (future), usually it's Pending.
+                const currentStatus = i === 0 ? status : 'Pendente';
+                const currentPaymentDate = (i === 0 && status === 'Pago') ? paymentDate : null;
+
+                transactionsToCreate.push({
+                    id: '',
+                    date: currentDueDate,
+                    paymentDate: currentPaymentDate,
+                    store,
+                    type,
+                    accountId,
+                    destinationStore: type === 'Transferência' ? destinationStore : undefined,
+                    destinationAccountId: type === 'Transferência' ? destinationAccountId : undefined,
+                    paymentMethod,
+                    product: type !== 'Transferência' ? product : '',
+                    category: type !== 'Transferência' ? category : '',
+                    supplier: (type === 'Despesa' && type !== 'Transferência') ? supplier : '',
+                    classification: type !== 'Transferência' ? classification : '',
+                    value,
+                    status: currentStatus,
+                    description: currentDesc,
+                    origin: 'manual' as const
+                });
+            }
+
+            // Parallel Execution
+            await Promise.all(transactionsToCreate.map(t => saveDailyTransaction(t)));
             
             // Reset form basics
             setValue(0);
             setProduct('');
-            alert('Lançamento Salvo!');
-            loadData(); // Refresh list
+            setDescription('');
+            setRecurrenceType('none');
+            setRecurrenceCount(2);
+            alert(loopCount > 1 ? `${loopCount} Lançamentos Gerados com Sucesso!` : 'Lançamento Salvo!');
+            loadData(); 
         } catch (err: any) {
             console.error(err);
             if (err.message && (err.message.includes('destination_account_id') || err.message.includes('classification') || err.message.includes('schema cache'))) {
-                alert('⚠️ ATENÇÃO: ATUALIZAÇÃO DE BANCO DE DADOS NECESSÁRIA\n\nO sistema detectou que colunas novas (como Classification) ainda não foram criadas no seu banco de dados.\n\nSOLUÇÃO:\n1. Vá até o módulo "Backup".\n2. Clique em "Ver SQL de Instalação/Correção".\n3. Copie o código SQL.\n4. Cole e execute no "SQL Editor" do seu painel Supabase.\n\nIsso corrigirá o erro permanentemente.');
+                alert('⚠️ ATENÇÃO: ERRO DE BANCO DE DADOS\n\nColunas novas não encontradas. Vá ao módulo Backup > Ver SQL e execute o comando.');
             } else {
                 alert('Erro ao salvar: ' + err.message);
             }
@@ -232,7 +285,8 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 supplier: o.supplier,
                 value: o.totalValue,
                 status: 'Pendente' as const,
-                origin: 'pedido' as const
+                origin: 'pedido' as const,
+                description: `Pedido ref. ${o.product}`
             }));
 
         const merged = [...filteredTrans, ...filteredOrders].sort((a, b) => b.date.localeCompare(a.date));
@@ -290,7 +344,14 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             )}
 
             <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
-                <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Novo Lançamento</h2>
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                    <h2 className="text-xl font-bold text-gray-800">Novo Lançamento</h2>
+                    {recurrenceType !== 'none' && (
+                        <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-1 rounded border border-purple-200 flex items-center gap-1">
+                            <Repeat size={12} /> Modo Repetição Ativo
+                        </span>
+                    )}
+                </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
@@ -312,7 +373,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         </select>
                     </div>
                      <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Valor (R$)</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Valor {recurrenceType === 'installment' ? 'da Parcela' : ''} (R$)</label>
                         <input 
                             type="text" 
                             value={formatCurrency(value)} 
@@ -418,7 +479,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                             </select>
                         </div>
 
-                        {/* Campo de Classificação adicionado conforme solicitado */}
                         <div>
                             <label className="block text-xs font-bold text-gray-600 mb-1">Classificação (Tipo)</label>
                             <select value={classification} onChange={e => setClassification(e.target.value)} className="w-full p-2 border rounded">
@@ -429,7 +489,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Data Vencimento</label>
                         <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-2 border rounded"/>
@@ -438,30 +498,98 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         <label className="block text-xs font-bold text-gray-600 mb-1">Data Pagamento</label>
                         <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full p-2 border rounded"/>
                     </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Status Inicial</label>
-                        <div className="flex gap-2">
-                            <button 
-                                type="button"
-                                onClick={() => setStatus('Pago')}
-                                className={`flex-1 py-2 text-xs font-bold rounded ${status === 'Pago' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}
-                            >
-                                PAGO
-                            </button>
-                            <button 
-                                type="button"
-                                onClick={() => setStatus('Pendente')}
-                                className={`flex-1 py-2 text-xs font-bold rounded ${status === 'Pendente' ? 'bg-yellow-500 text-white' : 'bg-gray-200'}`}
-                            >
-                                PENDENTE
-                            </button>
-                        </div>
+                    <div className="md:col-span-2">
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Descrição</label>
+                        <input 
+                            type="text" 
+                            value={description} 
+                            onChange={e => setDescription(e.target.value)} 
+                            className="w-full p-2 border rounded"
+                            placeholder="Ex: Aluguel referente a Janeiro"
+                            maxLength={100}
+                        />
                     </div>
                 </div>
 
-                <div className="flex justify-end">
+                {/* REPETIÇÃO / PARCELAMENTO */}
+                <div className="bg-gray-50 p-4 rounded border border-gray-200 mb-6">
+                    <div className="flex flex-col md:flex-row md:items-center gap-4">
+                        <div className="flex items-center gap-2 text-gray-700 font-bold min-w-fit">
+                            <Repeat size={18} />
+                            <span>Repetição:</span>
+                        </div>
+                        <div className="flex gap-2 flex-1">
+                            <button 
+                                type="button"
+                                onClick={() => setRecurrenceType('none')}
+                                className={`px-4 py-2 rounded text-sm font-bold transition-colors ${recurrenceType === 'none' ? 'bg-gray-800 text-white shadow' : 'bg-white border hover:bg-gray-100'}`}
+                            >
+                                Único
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={() => { setRecurrenceType('installment'); setRecurrenceCount(2); }}
+                                className={`px-4 py-2 rounded text-sm font-bold transition-colors ${recurrenceType === 'installment' ? 'bg-blue-600 text-white shadow' : 'bg-white border hover:bg-blue-50 text-blue-600'}`}
+                            >
+                                Parcelado (x)
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={() => { setRecurrenceType('fixed'); setRecurrenceCount(12); }}
+                                className={`px-4 py-2 rounded text-sm font-bold transition-colors ${recurrenceType === 'fixed' ? 'bg-purple-600 text-white shadow' : 'bg-white border hover:bg-purple-50 text-purple-600'}`}
+                            >
+                                Fixo (Mensal)
+                            </button>
+                        </div>
+                        
+                        {recurrenceType !== 'none' && (
+                            <div className="flex items-center gap-2 bg-white p-1 rounded border animate-fadeIn">
+                                <span className="text-xs font-bold px-2 text-gray-500">
+                                    {recurrenceType === 'installment' ? 'Qtd. Parcelas:' : 'Repetir por (Meses):'}
+                                </span>
+                                <input 
+                                    type="number" 
+                                    min="2" 
+                                    max="120" 
+                                    value={recurrenceCount} 
+                                    onChange={(e) => setRecurrenceCount(parseInt(e.target.value) || 2)}
+                                    className="w-20 p-1 border rounded text-center font-bold"
+                                />
+                            </div>
+                        )}
+                    </div>
+                    {recurrenceType === 'installment' && (
+                        <p className="text-xs text-blue-600 mt-2 ml-1 flex items-center gap-1">
+                            <CalendarClock size={12}/> O sistema criará {recurrenceCount} lançamentos mensais. A descrição terá o sufixo (1/{recurrenceCount}), etc.
+                        </p>
+                    )}
+                    {recurrenceType === 'fixed' && (
+                        <p className="text-xs text-purple-600 mt-2 ml-1 flex items-center gap-1">
+                             <CalendarClock size={12}/> O sistema duplicará este lançamento pelos próximos {recurrenceCount - 1} meses automaticamente.
+                        </p>
+                    )}
+                </div>
+
+                <div className="flex justify-between items-center">
+                    <div className="flex gap-2">
+                        <button 
+                            type="button"
+                            onClick={() => setStatus('Pago')}
+                            className={`px-6 py-2 text-xs font-bold rounded ${status === 'Pago' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}
+                        >
+                            PAGO
+                        </button>
+                        <button 
+                            type="button"
+                            onClick={() => setStatus('Pendente')}
+                            className={`px-6 py-2 text-xs font-bold rounded ${status === 'Pendente' ? 'bg-yellow-500 text-white' : 'bg-gray-200'}`}
+                        >
+                            PENDENTE
+                        </button>
+                    </div>
+
                     <button disabled={saving} className="bg-green-700 hover:bg-green-800 text-white px-8 py-3 rounded font-bold flex items-center gap-2 shadow-lg">
-                        {saving ? <Loader2 className="animate-spin" /> : <CheckCircle />} LANÇAR
+                        {saving ? <Loader2 className="animate-spin" /> : <CheckCircle />} LANÇAR {recurrenceType !== 'none' ? 'MÚLTIPLOS' : ''}
                     </button>
                 </div>
             </form>
@@ -568,7 +696,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         <tbody className="divide-y divide-gray-200 text-sm">
                             {filteredList.map((item, idx) => (
                                 <tr key={item.id} className={`hover:bg-gray-50 ${item.origin === 'pedido' ? 'bg-blue-50/30' : ''}`}>
-                                    <td className="px-4 py-3">{formatDateBr(item.date)}</td>
+                                    <td className="px-4 py-3 whitespace-nowrap">{formatDateBr(item.date)}</td>
                                     <td className="px-4 py-3">{item.store}</td>
                                     <td className="px-4 py-3">
                                         {item.origin === 'pedido' ? (
@@ -586,7 +714,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                             </div>
                                         ) : (
                                             <>
-                                                <div className="font-bold text-gray-700">{item.category || item.supplier}</div>
+                                                <div className="font-bold text-gray-700">{item.description || item.category || item.supplier}</div>
                                                 <div className="text-xs text-gray-500">{item.product}</div>
                                             </>
                                         )}
