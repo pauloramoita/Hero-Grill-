@@ -7,11 +7,12 @@ import { BackupModule } from './components/BackupModule';
 import { SaldoModule } from './components/saldo/SaldoModule';
 import { FinanceiroModule } from './components/financeiro/FinanceiroModule'; // Old Financeiro
 import { NovoFinanceiroModule } from './components/novo_financeiro/NovoFinanceiroModule'; // New Financeiro
+import { DashboardModule } from './components/dashboard/DashboardModule';
 import { AdminModule } from './components/admin/AdminModule';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { View, User } from './types';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Grid, LogOut, Settings, KeyRound, Landmark } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Grid, LogOut, Settings, KeyRound, Landmark, LayoutDashboard } from 'lucide-react';
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
@@ -35,10 +36,13 @@ const App: React.FC = () => {
     // Filtra módulos baseados nas permissões do usuário
     const hasPermission = (moduleId: string) => {
         if (user.isMaster) return true;
+        // Permite acesso ao dashboard se tiver acesso ao financeiro novo ou for explicitamente permitido
+        if (moduleId === 'dashboard') return user.permissions.modules?.includes('dashboard') || user.permissions.modules?.includes('novo_financeiro');
         return user.permissions.modules?.includes(moduleId);
     };
 
     const menuItems: { id: View, label: string, icon: React.ReactNode, color: string, disabled: boolean, requiredPerm: string }[] = [
+        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={48} />, color: 'bg-blue-600', disabled: false, requiredPerm: 'dashboard' },
         { id: 'pedidos', label: 'Cadastro', icon: <ShoppingCart size={48} />, color: 'bg-heroRed', disabled: false, requiredPerm: 'pedidos' },
         { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={48} />, color: 'bg-heroBlack', disabled: false, requiredPerm: 'controle043' },
         { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={48} />, color: 'bg-gray-800', disabled: false, requiredPerm: 'saldo' },
@@ -118,6 +122,7 @@ const App: React.FC = () => {
             
             <main className="flex-grow py-8">
                 {currentView === 'home' && renderHome()}
+                {currentView === 'dashboard' && hasPermission('dashboard') && <DashboardModule />}
                 {currentView === 'pedidos' && hasPermission('pedidos') && <PedidosModule user={user} />}
                 {currentView === 'controle043' && hasPermission('controle043') && <Controle043Module />}
                 {currentView === 'saldo' && hasPermission('saldo') && <SaldoModule />}
@@ -130,7 +135,7 @@ const App: React.FC = () => {
             <footer className="bg-heroBlack text-white text-center py-6 mt-auto">
                 <p className="text-sm opacity-50">
                     &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados. 
-                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v2.2.0 (ACL+)</span>
+                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v2.3.0 (Dashboard)</span>
                 </p>
             </footer>
 

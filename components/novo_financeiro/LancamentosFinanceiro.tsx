@@ -127,7 +127,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             loadData(); // Refresh list
         } catch (err: any) {
             console.error(err);
-            // Tratamento específico para erro de coluna inexistente (Migração pendente)
             if (err.message && (err.message.includes('destination_account_id') || err.message.includes('destination_store') || err.message.includes('schema cache'))) {
                 alert('⚠️ ATENÇÃO: ATUALIZAÇÃO DE BANCO DE DADOS NECESSÁRIA\n\nO sistema detectou que as colunas de transferência ainda não foram criadas no seu banco de dados.\n\nSOLUÇÃO:\n1. Vá até o módulo "Backup".\n2. Clique em "Ver SQL de Instalação/Correção".\n3. Copie o código SQL.\n4. Cole e execute no "SQL Editor" do seu painel Supabase.\n\nIsso corrigirá o erro permanentemente.');
             } else {
@@ -145,7 +144,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         }
     };
 
-    // Lógica Pagar: Só paga se tiver Conta e Método preenchidos
     const handlePay = async (t: DailyTransaction) => {
         if (!t.accountId || !t.paymentMethod || t.paymentMethod === '-' || !t.store) {
             alert("Para realizar o pagamento, é necessário preencher 'Conta' e 'Método de Pagamento'.\n\nClique no botão Editar (lápis) para completar o cadastro.");
@@ -153,7 +151,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         }
 
         if (window.confirm(`Confirmar pagamento de ${formatCurrency(t.value)}?`)) {
-             // Ao pagar, consolidamos como transação manual (financeira)
             const updated: DailyTransaction = { 
                 ...t, 
                 status: 'Pago', 
@@ -179,15 +176,12 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         }
     }
 
-    // Helper to get Account Name
     const getAccountName = (id: string | null | undefined) => {
         if (!id) return '-';
         return accounts.find(a => a.id === id)?.name || 'Conta Removida';
     };
 
-    // Lista Combinada e Filtrada
     const getFilteredList = () => {
-        // 1. Transações Financeiras já existentes
         const filteredTrans = transactions.filter(t => {
             const matchesDate = t.date >= filterStart && t.date <= filterEnd;
             const matchesStore = !filterStore || t.store === filterStore;
@@ -196,7 +190,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             let matchesAccount = true;
             if (filterAccount) {
                 if (t.type === 'Transferência') {
-                    // Se for transferência, checa origem ou destino
                     matchesAccount = t.accountId === filterAccount || t.destinationAccountId === filterAccount;
                 } else {
                     matchesAccount = t.accountId === filterAccount;
@@ -206,7 +199,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             return matchesDate && matchesStore && matchesSupplier && matchesAccount;
         });
         
-        // 2. Pedidos do Cadastro (que ainda não viraram transações financeiras)
         const existingIds = new Set(transactions.map(t => t.id));
 
         const filteredOrders = orders
@@ -215,11 +207,11 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 const matchesDate = dDate >= filterStart && dDate <= filterEnd;
                 const matchesStore = !filterStore || o.store === filterStore;
                 const matchesSupplier = !filterSupplier || o.supplier === filterSupplier;
-                const matchesAccount = !filterAccount; // Se filtrar por conta, esconde pedidos (pois não têm conta ainda)
+                const matchesAccount = !filterAccount;
 
                 return matchesDate && matchesStore && matchesSupplier && matchesAccount;
             })
-            .filter(o => !existingIds.has(o.id)) // Remove se já existir no financeiro
+            .filter(o => !existingIds.has(o.id))
             .map(o => ({
                 id: o.id,
                 date: o.deliveryDate || o.date,
@@ -227,7 +219,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 store: o.store,
                 type: 'Despesa' as const,
                 accountId: null,
-                paymentMethod: 'Boleto', // Padrão visual para sugestão
+                paymentMethod: 'Boleto',
                 product: o.product,
                 category: o.category || '-',
                 supplier: o.supplier,
@@ -236,23 +228,19 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 origin: 'pedido' as const
             }));
 
-        // 3. Merge e Sort
         const merged = [...filteredTrans, ...filteredOrders].sort((a, b) => b.date.localeCompare(a.date));
         return merged;
     };
 
-    // Calculate Account Balances (Dynamic)
     const getAccountCurrentBalance = (acc: FinancialAccount) => {
         let balance = acc.initialBalance;
         transactions.forEach(t => {
             if (t.status === 'Pago') {
-                // Verifica se é saída da conta (Origem)
                 if (t.accountId === acc.id) {
                     if (t.type === 'Receita') balance += t.value;
                     if (t.type === 'Despesa') balance -= t.value;
                     if (t.type === 'Transferência') balance -= t.value;
                 }
-                // Verifica se é entrada na conta (Destino - Transferência)
                 if (t.type === 'Transferência' && t.destinationAccountId === acc.id) {
                     balance += t.value;
                 }
@@ -264,16 +252,13 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     if (loading) return <Loader2 className="animate-spin mx-auto mt-10" />;
 
     const filteredList = getFilteredList();
-    
-    // Totais do Filtro Atual
     const totalQty = filteredList.length;
     const totalReceitas = filteredList.filter(i => i.type === 'Receita').reduce((acc, i) => acc + i.value, 0);
-    const totalDespesas = filteredList.filter(i => i.type === 'Despesa').reduce((acc, i) => acc + i.value, 0); // Pedidos contam como despesa aqui
+    const totalDespesas = filteredList.filter(i => i.type === 'Despesa').reduce((acc, i) => acc + i.value, 0);
     const totalSaldo = totalReceitas - totalDespesas;
 
     return (
         <div className="space-y-8 pb-20">
-            {/* Top Section: Account Balances (Restricted) */}
             {canViewBalances ? (
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 overflow-x-auto pb-2">
                     {accounts.filter(a => !store || a.store === store).map(acc => {
@@ -282,7 +267,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                             <div key={acc.id} className="bg-white p-4 rounded shadow border border-gray-200 min-w-[200px]">
                                 <div className="text-xs text-gray-500 font-bold uppercase">{acc.store}</div>
                                 <div className="font-bold text-gray-800 truncate">{acc.name}</div>
-                                <div className={`text-xl font-black mt-1 ${currentBal < 0 ? 'text-heroRed' : 'text-green-700'}`}>
+                                <div className={`text-xl font-black mt-1 ${currentBal < 0 ? 'text-red-600' : 'text-green-700'}`}>
                                     {formatCurrency(currentBal)}
                                 </div>
                             </div>
@@ -297,7 +282,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 </div>
             )}
 
-            {/* Input Form */}
             <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
                 <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Novo Lançamento</h2>
                 
@@ -343,7 +327,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
 
                 {type === 'Transferência' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-4 bg-blue-50 p-4 rounded border border-blue-200">
-                         {/* Origem */}
                         <div className="space-y-3">
                             <h4 className="font-bold text-blue-800 border-b border-blue-200 pb-1">Origem (De onde sai?)</h4>
                             <div>
@@ -363,8 +346,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 </select>
                             </div>
                         </div>
-
-                        {/* Destino */}
                         <div className="space-y-3">
                             <h4 className="font-bold text-green-800 border-b border-green-200 pb-1">Destino (Para onde vai?)</h4>
                              <div>
@@ -469,7 +450,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 </div>
             </form>
 
-            {/* Filter & List */}
             <div className="bg-white rounded-lg shadow border border-gray-200">
                 <div className="p-4 border-b bg-gray-50">
                     <div className="flex items-center justify-between gap-4 mb-4">
@@ -478,7 +458,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         </h3>
                     </div>
                     
-                    {/* Filters Bar */}
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                         <div className="md:col-span-1">
                             <label className="block text-xs font-bold text-gray-500 mb-1">Data Início</label>
@@ -520,7 +499,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                     </div>
                 </div>
 
-                 {/* Summary Bar */}
                  <div className="bg-blue-50 p-4 border-b border-blue-100 flex flex-wrap gap-4 justify-between items-center text-sm">
                     <div className="flex items-center gap-2">
                         <Calculator size={16} className="text-blue-600"/>
@@ -603,7 +581,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                     </td>
                                     <td className="px-4 py-3 text-center">
                                         <div className="flex justify-center gap-2">
-                                            {/* Botão Pagar */}
                                             {item.status === 'Pendente' && (
                                                 <button 
                                                     onClick={() => handlePay(item as DailyTransaction)} 
@@ -613,7 +590,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                                     <DollarSign size={16}/>
                                                 </button>
                                             )}
-                                            {/* Botão Editar */}
                                             <button 
                                                 onClick={() => handleEditClick(item as DailyTransaction)} 
                                                 className="text-blue-600 hover:bg-blue-100 p-1 rounded transition-colors"
@@ -621,7 +597,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                             >
                                                 <Edit size={16} />
                                             </button>
-                                            {/* Botão Excluir */}
                                             <button 
                                                 onClick={() => handleDelete(item.id)} 
                                                 className="text-red-500 hover:bg-red-100 p-1 rounded transition-colors"
