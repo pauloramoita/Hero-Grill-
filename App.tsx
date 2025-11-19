@@ -5,6 +5,7 @@ import { PedidosModule } from './components/pedidos/PedidosModule';
 import { Controle043Module } from './components/controle043/Controle043Module';
 import { BackupModule } from './components/BackupModule';
 import { SaldoModule } from './components/saldo/SaldoModule';
+import { FinanceiroModule } from './components/financeiro/FinanceiroModule';
 import { View } from './types';
 import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Grid } from 'lucide-react';
 
@@ -15,7 +16,7 @@ const App: React.FC = () => {
         { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={48} />, color: 'bg-heroRed', disabled: false },
         { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={48} />, color: 'bg-heroBlack', disabled: false },
         { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={48} />, color: 'bg-gray-800', disabled: false },
-        { id: 'financeiro', label: 'Financeiro', icon: <DollarSign size={48} />, color: 'bg-gray-700', disabled: true },
+        { id: 'financeiro', label: 'Financeiro', icon: <DollarSign size={48} />, color: 'bg-gray-700', disabled: false },
         { id: 'backup', label: 'Backup', icon: <Database size={48} />, color: 'bg-gray-700', disabled: false },
         { id: 'home', label: 'Extra', icon: <Grid size={48} />, color: 'bg-gray-800', disabled: true },
     ];
@@ -66,10 +67,11 @@ const App: React.FC = () => {
                 {currentView === 'pedidos' && <PedidosModule />}
                 {currentView === 'controle043' && <Controle043Module />}
                 {currentView === 'saldo' && <SaldoModule />}
+                {currentView === 'financeiro' && <FinanceiroModule />}
                 {currentView === 'backup' && <BackupModule />}
                 
                 {/* Fallback for undefined views */}
-                {currentView !== 'home' && currentView !== 'pedidos' && currentView !== 'controle043' && currentView !== 'saldo' && currentView !== 'backup' && (
+                {currentView !== 'home' && currentView !== 'pedidos' && currentView !== 'controle043' && currentView !== 'saldo' && currentView !== 'financeiro' && currentView !== 'backup' && (
                     <div className="text-center mt-20">
                         <h2 className="text-3xl font-bold text-gray-400">Módulo em desenvolvimento...</h2>
                         <button onClick={() => setCurrentView('home')} className="mt-4 text-blue-500 hover:underline">Voltar</button>
@@ -80,7 +82,7 @@ const App: React.FC = () => {
             <footer className="bg-heroBlack text-white text-center py-6 mt-auto">
                 <p className="text-sm opacity-50">
                     &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados. 
-                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v1.12.3 (Stable)</span>
+                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v1.13.0 (Finance)</span>
                 </p>
             </footer>
         </div>

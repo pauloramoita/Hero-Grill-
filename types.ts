@@ -49,8 +49,34 @@ export interface AccountBalance {
     // Note: "Total" (Variação) é calculado dinamicamente comparando com o registro anterior
 }
 
+export interface FinancialRecord {
+    id: string;
+    store: string;
+    year: number;
+    month: string; // "01" to "12"
+
+    // Créditos (Receitas)
+    creditCaixa: number;
+    creditDelta: number;
+    creditPagBankH: number;
+    creditPagBankD: number;
+    creditIfood: number;
+    totalRevenues: number; // Calculated Sum
+
+    // Débitos (Despesas)
+    debitCaixa: number;
+    debitPagBankH: number;
+    debitPagBankD: number;
+    debitLoteria: number;
+    totalExpenses: number; // Calculated Sum
+
+    // Resultado
+    netResult: number; // Revenues - Expenses
+}
+
 export type View = 'home' | 'pedidos' | 'controle043' | 'financeiro' | 'saldo' | 'backup';
 
 export type PedidosSubView = 'cadastrar' | 'consulta' | 'relatorios' | 'campos';
 export type Controle043SubView = 'cadastrar' | 'consulta' | 'relatorios';
 export type SaldoSubView = 'lancamentos' | 'consulta' | 'relatorios';
+export type FinanceiroSubView = 'lancamentos' | 'consulta' | 'relatorios';

@@ -1,10 +1,11 @@
 
-import { AppData, Order, Transaction043, AccountBalance } from '../types';
+import { AppData, Order, Transaction043, AccountBalance, FinancialRecord } from '../types';
 
 const DATA_KEY = 'hero_grill_data';
 const ORDERS_KEY = 'hero_grill_orders';
 const TRANSACTIONS_043_KEY = 'hero_grill_transactions_043';
 const SALDO_CONTAS_KEY = 'hero_grill_saldo_contas';
+const FINANCEIRO_KEY = 'hero_grill_financeiro';
 
 const defaultData: AppData = {
     stores: [],
@@ -181,6 +182,46 @@ export const getPreviousMonthBalance = (store: string, currentYear: number, curr
     
     return balances.find(b => b.store === store && b.year === prevYear && b.month === prevMonthStr);
 };
+
+// === FINANCEIRO (NOVO) ===
+
+export const getFinancialRecords = (): FinancialRecord[] => {
+    const stored = localStorage.getItem(FINANCEIRO_KEY);
+    if (!stored) return [];
+    try {
+        const parsed = JSON.parse(stored);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        console.error("Failed to parse financial records", e);
+        return [];
+    }
+};
+
+export const saveFinancialRecord = (record: FinancialRecord) => {
+    const records = getFinancialRecords();
+    const exists = records.some(r => r.store === record.store && r.year === record.year && r.month === record.month);
+    if (exists) {
+        throw new Error("Já existe um registro financeiro para esta Loja neste Mês/Ano.");
+    }
+    records.push(record);
+    localStorage.setItem(FINANCEIRO_KEY, JSON.stringify(records));
+};
+
+export const updateFinancialRecord = (updated: FinancialRecord) => {
+    const records = getFinancialRecords();
+    const index = records.findIndex(r => r.id === updated.id);
+    if (index !== -1) {
+        records[index] = updated;
+        localStorage.setItem(FINANCEIRO_KEY, JSON.stringify(records));
+    }
+};
+
+export const deleteFinancialRecord = (id: string) => {
+    const records = getFinancialRecords();
+    const filtered = records.filter(r => r.id !== id);
+    localStorage.setItem(FINANCEIRO_KEY, JSON.stringify(filtered));
+};
+
 
 // === HELPERS ===
 
@@ -458,6 +499,53 @@ export const exportBalancesToXML = (balances: any[], filename: string) => {
     downloadXml(xmlContent, filename);
 };
 
+export const exportFinancialToXML = (records: FinancialRecord[], filename: string) => {
+    let xmlContent = getExcelHeader();
+    xmlContent += ' <Worksheet ss:Name="Financeiro">\n';
+    xmlContent += '  <Table x:FullColumns="1" x:FullRows="1" ss:DefaultRowHeight="15">\n';
+    
+    // Columns
+    xmlContent += '   <Column ss:Width="100" ss:StyleID="CenterStyle"/>\n'; // Período
+    xmlContent += '   <Column ss:Width="150"/>\n'; // Loja
+    xmlContent += '   <Column ss:Width="110"/>\n'; // Receitas
+    xmlContent += '   <Column ss:Width="110"/>\n'; // Despesas
+    xmlContent += '   <Column ss:Width="110"/>\n'; // Resultado
+
+    // Header
+    xmlContent += '   <Row ss:Height="25">\n';
+    const headers = ['Período', 'Loja', 'Total Receitas', 'Total Despesas', 'Resultado (Saldo)'];
+    headers.forEach(h => {
+        xmlContent += `    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${h}</Data></Cell>\n`;
+    });
+    xmlContent += '   </Row>\n';
+
+    const monthNames: Record<string, string> = {
+        '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril',
+        '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto',
+        '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro'
+    };
+
+    // Rows
+    records.forEach(r => {
+        const monthName = monthNames[r.month] || r.month;
+        const period = `${monthName}/${r.year}`;
+        
+        xmlContent += '   <Row>\n';
+        xmlContent += `    <Cell><Data ss:Type="String">${period}</Data></Cell>\n`;
+        xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(r.store)}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${r.totalRevenues}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${r.totalExpenses}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${r.netResult}</Data></Cell>\n`;
+        xmlContent += '   </Row>\n';
+    });
+
+    xmlContent += '  </Table>\n';
+    xmlContent += ' </Worksheet>\n';
+    xmlContent += '</Workbook>\n';
+
+    downloadXml(xmlContent, filename);
+};
+
 // === BACKUP FUNCTIONS ===
 
 export const createBackup = () => {
@@ -465,10 +553,12 @@ export const createBackup = () => {
     const ordersStr = localStorage.getItem(ORDERS_KEY);
     const trans043Str = localStorage.getItem(TRANSACTIONS_043_KEY);
     const saldoContasStr = localStorage.getItem(SALDO_CONTAS_KEY);
+    const financeiroStr = localStorage.getItem(FINANCEIRO_KEY);
     
     const orders = ordersStr ? JSON.parse(ordersStr) : [];
     const trans043 = trans043Str ? JSON.parse(trans043Str) : [];
     const saldoContas = saldoContasStr ? JSON.parse(saldoContasStr) : [];
+    const financeiro = financeiroStr ? JSON.parse(financeiroStr) : [];
     
     const ordersExport = orders.map((o: any) => ({
         ...o,
@@ -483,12 +573,13 @@ export const createBackup = () => {
     }));
 
     const backupObj = {
-        version: 3, // Incremented version for Saldo Contas
+        version: 4, // Incremented version for Financeiro
         timestamp: new Date().toISOString(),
         appData: appDataStr ? JSON.parse(appDataStr) : defaultData,
         orders: ordersExport,
         transactions043: trans043Export,
-        saldoContas: saldoContas
+        saldoContas: saldoContas,
+        financeiro: financeiro
     };
 
     const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
@@ -531,7 +622,7 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                 }
 
                 // Basic structure check
-                if (!parsed.appData && !parsed.orders && !parsed.saldoContas) {
+                if (!parsed.appData && !parsed.orders && !parsed.saldoContas && !parsed.financeiro) {
                     throw new Error("O arquivo não contém dados de backup válidos.");
                 }
 
@@ -608,23 +699,48 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                     };
                 });
 
+                // 5. Financeiro (New)
+                const rawFin = Array.isArray(parsed.financeiro) ? parsed.financeiro : [];
+                const newFinanceiro: FinancialRecord[] = rawFin.map((f: any, idx: number) => {
+                     return {
+                         id: f.id || `restored-fin-${Date.now()}-${idx}`,
+                         store: String(f.store || ''),
+                         year: parseInt(f.year) || new Date().getFullYear(),
+                         month: String(f.month || '01').padStart(2, '0'),
+                         creditCaixa: safeNum(f.creditCaixa),
+                         creditDelta: safeNum(f.creditDelta),
+                         creditPagBankH: safeNum(f.creditPagBankH),
+                         creditPagBankD: safeNum(f.creditPagBankD),
+                         creditIfood: safeNum(f.creditIfood),
+                         totalRevenues: safeNum(f.totalRevenues),
+                         debitCaixa: safeNum(f.debitCaixa),
+                         debitPagBankH: safeNum(f.debitPagBankH),
+                         debitPagBankD: safeNum(f.debitPagBankD),
+                         debitLoteria: safeNum(f.debitLoteria),
+                         totalExpenses: safeNum(f.totalExpenses),
+                         netResult: safeNum(f.netResult)
+                     }
+                });
+
                 try {
                     localStorage.removeItem(DATA_KEY);
                     localStorage.removeItem(ORDERS_KEY);
                     localStorage.removeItem(TRANSACTIONS_043_KEY);
                     localStorage.removeItem(SALDO_CONTAS_KEY);
+                    localStorage.removeItem(FINANCEIRO_KEY);
 
                     localStorage.setItem(DATA_KEY, JSON.stringify(newAppData));
                     localStorage.setItem(ORDERS_KEY, JSON.stringify(newOrders));
                     localStorage.setItem(TRANSACTIONS_043_KEY, JSON.stringify(newTrans043));
                     localStorage.setItem(SALDO_CONTAS_KEY, JSON.stringify(newSaldo));
+                    localStorage.setItem(FINANCEIRO_KEY, JSON.stringify(newFinanceiro));
                 } catch (storageError) {
                     throw new Error("Erro ao salvar no navegador. Armazenamento cheio.");
                 }
                 
                 resolve({ 
                     success: true, 
-                    message: `Sucesso!\n\nRecuperados:\n- ${newOrders.length} pedidos\n- ${newTrans043.length} lançamentos (043)\n- ${newSaldo.length} saldos de contas\n- Lojas e cadastros.` 
+                    message: `Sucesso!\n\nRecuperados:\n- ${newOrders.length} pedidos\n- ${newTrans043.length} lançamentos (043)\n- ${newSaldo.length} saldos de contas\n- ${newFinanceiro.length} registros financeiros\n- Lojas e cadastros.` 
                 });
             } catch (error: any) {
                 console.error("Backup error:", error);
@@ -658,6 +774,8 @@ export const generateMockData = () => {
     const mockOrders: Order[] = [];
     const mockTrans043: Transaction043[] = [];
     const mockSaldoContas: AccountBalance[] = [];
+    const mockFinanceiro: FinancialRecord[] = [];
+
     const today = new Date();
     
     // Orders Mock
@@ -734,6 +852,39 @@ export const generateMockData = () => {
                 investimentos: inv,
                 totalBalance: total
             });
+            
+            // Financeiro Mock
+            const revCaixa = Math.random() * 5000;
+            const revDelta = Math.random() * 3000;
+            const revPh = Math.random() * 8000;
+            const revPd = Math.random() * 2000;
+            const revIfood = Math.random() * 6000;
+            const totalRev = revCaixa + revDelta + revPh + revPd + revIfood;
+
+            const debCaixa = Math.random() * 2000;
+            const debPh = Math.random() * 4000;
+            const debPd = Math.random() * 1000;
+            const debLot = Math.random() * 500;
+            const totalExp = debCaixa + debPh + debPd + debLot;
+
+            mockFinanceiro.push({
+                id: `mock-fin-${idCounter}`,
+                store: store,
+                year: currentYear,
+                month: month,
+                creditCaixa: revCaixa,
+                creditDelta: revDelta,
+                creditPagBankH: revPh,
+                creditPagBankD: revPd,
+                creditIfood: revIfood,
+                totalRevenues: totalRev,
+                debitCaixa: debCaixa,
+                debitPagBankH: debPh,
+                debitPagBankD: debPd,
+                debitLoteria: debLot,
+                totalExpenses: totalExp,
+                netResult: totalRev - totalExp
+            });
 
             previousBalance = total; // simulate growth
         });
@@ -744,4 +895,5 @@ export const generateMockData = () => {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(mockOrders));
     localStorage.setItem(TRANSACTIONS_043_KEY, JSON.stringify(mockTrans043));
     localStorage.setItem(SALDO_CONTAS_KEY, JSON.stringify(mockSaldoContas));
+    localStorage.setItem(FINANCEIRO_KEY, JSON.stringify(mockFinanceiro));
 };
