@@ -1,4 +1,5 @@
 
+
 export interface AppData {
     stores: string[];
     products: string[];
@@ -78,8 +79,34 @@ export interface FinancialRecord {
     netResult: number; // Revenues - Expenses
 }
 
+// === NOVAS INTERFACES PARA O NOVO FINANCEIRO ===
+
+export interface FinancialAccount {
+    id: string;
+    name: string;
+    store: string;
+    initialBalance: number;
+}
+
+export interface DailyTransaction {
+    id: string;
+    date: string; // Data Vencimento
+    paymentDate: string | null; // Data Pagamento
+    store: string;
+    type: 'Receita' | 'Despesa' | 'Transferência';
+    accountId: string | null;
+    paymentMethod: string; // Boleto, PiX, Dinheiro
+    product: string;
+    category: string;
+    supplier: string;
+    value: number;
+    status: 'Pago' | 'Pendente';
+    description?: string;
+    origin?: 'manual' | 'pedido'; // Para diferenciar lançamentos manuais de pedidos importados
+}
+
 export interface UserPermissions {
-    modules: string[]; // 'pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin'
+    modules: string[]; // 'pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro'
     stores: string[]; // Lista de lojas permitidas
 }
 
@@ -92,10 +119,11 @@ export interface User {
     isMaster?: boolean; // Identifica o admin hardcoded
 }
 
-export type View = 'home' | 'pedidos' | 'controle043' | 'financeiro' | 'saldo' | 'backup' | 'admin';
+export type View = 'home' | 'pedidos' | 'controle043' | 'financeiro' | 'novo_financeiro' | 'saldo' | 'backup' | 'admin';
 
 export type PedidosSubView = 'cadastrar' | 'consulta' | 'relatorios' | 'campos';
 export type Controle043SubView = 'cadastrar' | 'consulta' | 'relatorios';
 export type SaldoSubView = 'lancamentos' | 'consulta' | 'relatorios';
 export type FinanceiroSubView = 'lancamentos' | 'consulta' | 'relatorios';
+export type NovoFinanceiroSubView = 'lancamentos' | 'consulta' | 'relatorios' | 'campos';
 export type AdminSubView = 'usuarios';

@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { FinanceiroSubView } from '../../types';
 import { CadastroFinanceiro } from './CadastroFinanceiro';
@@ -23,9 +24,9 @@ export const FinanceiroModule: React.FC = () => {
                 </div>
                 <div>
                      <h1 className="text-3xl font-black text-gray-800 uppercase italic">
-                        Financeiro
+                        Entradas e Saídas
                     </h1>
-                    <p className="text-gray-500 text-sm">Gestão de Receitas e Despesas (Cash Flow)</p>
+                    <p className="text-gray-500 text-sm">Gestão de Receitas e Despesas (Cash Flow Mensal)</p>
                 </div>
             </div>
 

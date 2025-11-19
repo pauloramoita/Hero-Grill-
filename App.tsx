@@ -5,20 +5,18 @@ import { PedidosModule } from './components/pedidos/PedidosModule';
 import { Controle043Module } from './components/controle043/Controle043Module';
 import { BackupModule } from './components/BackupModule';
 import { SaldoModule } from './components/saldo/SaldoModule';
-import { FinanceiroModule } from './components/financeiro/FinanceiroModule';
+import { FinanceiroModule } from './components/financeiro/FinanceiroModule'; // Old Financeiro
+import { NovoFinanceiroModule } from './components/novo_financeiro/NovoFinanceiroModule'; // New Financeiro
 import { AdminModule } from './components/admin/AdminModule';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { View, User } from './types';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Grid, LogOut, Settings, KeyRound } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Grid, LogOut, Settings, KeyRound, Landmark } from 'lucide-react';
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
     const [currentView, setCurrentView] = useState<View>('home');
     const [showPasswordModal, setShowPasswordModal] = useState(false);
-
-    // Efeito para carregar sessão (opcional, por enquanto limpa no refresh por segurança conforme pedido "sempre pedir login")
-    // Se quiser persistir: useEffect(() => { const saved = localStorage.getItem('hero_user'); if(saved) setUser(JSON.parse(saved)); }, []);
 
     const handleLogin = (loggedUser: User) => {
         setUser(loggedUser);
@@ -44,7 +42,8 @@ const App: React.FC = () => {
         { id: 'pedidos', label: 'Cadastro', icon: <ShoppingCart size={48} />, color: 'bg-heroRed', disabled: false, requiredPerm: 'pedidos' },
         { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={48} />, color: 'bg-heroBlack', disabled: false, requiredPerm: 'controle043' },
         { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={48} />, color: 'bg-gray-800', disabled: false, requiredPerm: 'saldo' },
-        { id: 'financeiro', label: 'Financeiro', icon: <DollarSign size={48} />, color: 'bg-gray-700', disabled: false, requiredPerm: 'financeiro' },
+        { id: 'financeiro', label: 'Entradas e Saídas', icon: <DollarSign size={48} />, color: 'bg-gray-700', disabled: false, requiredPerm: 'financeiro' }, // Renamed old module
+        { id: 'novo_financeiro', label: 'Financeiro', icon: <Landmark size={48} />, color: 'bg-green-700', disabled: false, requiredPerm: 'novo_financeiro' }, // New Module
         { id: 'backup', label: 'Backup', icon: <Database size={48} />, color: 'bg-gray-700', disabled: false, requiredPerm: 'backup' },
         { id: 'admin', label: 'Administração', icon: <Settings size={48} />, color: 'bg-gray-900', disabled: false, requiredPerm: 'admin' },
     ];
@@ -64,6 +63,9 @@ const App: React.FC = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {menuItems.map((item) => {
+                    // Se usuário master, mostra tudo (exceto se explicitamente desabilitado no código por ser work in progress, mas aqui assume true)
+                    // Se usuário comum, verifica permissão. Para 'novo_financeiro', se não tiver permissão explicita ainda, libera para master apenas ou adiciona na permissão default.
+                    // Assumindo que master tem tudo.
                     if (!hasPermission(item.requiredPerm)) return null;
 
                     return (
@@ -99,7 +101,7 @@ const App: React.FC = () => {
                 <Header onHomeClick={() => setCurrentView('home')} />
                 <div className="absolute top-6 right-6 flex items-center gap-4">
                     <div className="hidden md:flex items-center">
-                        <button 
+                         <button 
                             onClick={() => setShowPasswordModal(true)}
                             className="text-gray-400 hover:text-gray-600 text-xs font-bold mr-4 transition-colors"
                         >
@@ -123,6 +125,7 @@ const App: React.FC = () => {
                 {currentView === 'controle043' && hasPermission('controle043') && <Controle043Module />}
                 {currentView === 'saldo' && hasPermission('saldo') && <SaldoModule />}
                 {currentView === 'financeiro' && hasPermission('financeiro') && <FinanceiroModule />}
+                {currentView === 'novo_financeiro' && hasPermission('novo_financeiro') && <NovoFinanceiroModule />}
                 {currentView === 'backup' && hasPermission('backup') && <BackupModule />}
                 {currentView === 'admin' && hasPermission('admin') && <AdminModule />}
             </main>
@@ -130,11 +133,11 @@ const App: React.FC = () => {
             <footer className="bg-heroBlack text-white text-center py-6 mt-auto">
                 <p className="text-sm opacity-50">
                     &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados. 
-                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v1.16.0 (Home Pwd)</span>
+                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v2.0.0 (Novo Fin.)</span>
                 </p>
             </footer>
 
-            {showPasswordModal && (
+             {showPasswordModal && (
                 <ChangePasswordModal 
                     user={user} 
                     onClose={() => setShowPasswordModal(false)} 

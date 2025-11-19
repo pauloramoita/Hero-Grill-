@@ -1,6 +1,7 @@
 
+
 import { createClient } from '@supabase/supabase-js';
-import { AppData, Order, Transaction043, AccountBalance, FinancialRecord, User } from '../types';
+import { AppData, Order, Transaction043, AccountBalance, FinancialRecord, User, FinancialAccount, DailyTransaction } from '../types';
 
 // === CONFIGURAÇÃO SUPABASE ===
 
@@ -54,7 +55,7 @@ CREATE TABLE IF NOT EXISTS system_users (
   created_at timestamptz DEFAULT now()
 );
 
--- Tabela de Pedidos (Atualizada com Tipo e Categoria)
+-- Tabela de Pedidos
 CREATE TABLE IF NOT EXISTS orders (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   date date NOT NULL,
@@ -67,23 +68,12 @@ CREATE TABLE IF NOT EXISTS orders (
   quantity numeric,
   total_value numeric,
   delivery_date date,
-  type text, -- Novo campo: Variável ou Fixa
-  category text, -- Novo campo
+  type text,
+  category text,
   created_at timestamptz DEFAULT now()
 );
 
--- MIGRATION: Adicionar colunas caso não existam (Para bancos já criados)
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='type') THEN
-        ALTER TABLE orders ADD COLUMN type text DEFAULT 'Variável';
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='category') THEN
-        ALTER TABLE orders ADD COLUMN category text;
-    END IF;
-END $$;
-
--- Tabela de Configurações (Lojas, Produtos, etc)
+-- Tabela de Configurações
 CREATE TABLE IF NOT EXISTS app_configurations (
   category text PRIMARY KEY,
   items jsonb,
@@ -101,7 +91,7 @@ CREATE TABLE IF NOT EXISTS transactions_043 (
   created_at timestamptz DEFAULT now()
 );
 
--- Tabela de Saldos de Contas
+-- Tabela de Saldos de Contas (Antigo Financeiro)
 CREATE TABLE IF NOT EXISTS account_balances (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   store text NOT NULL,
@@ -117,7 +107,7 @@ CREATE TABLE IF NOT EXISTS account_balances (
   created_at timestamptz DEFAULT now()
 );
 
--- Tabela de Registros Financeiros (Receitas/Despesas)
+-- Tabela de Registros Financeiros (Receitas/Despesas - Antigo)
 CREATE TABLE IF NOT EXISTS financial_records (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   store text NOT NULL,
@@ -135,6 +125,36 @@ CREATE TABLE IF NOT EXISTS financial_records (
   debit_loteria numeric DEFAULT 0,
   total_expenses numeric DEFAULT 0,
   net_result numeric DEFAULT 0,
+  created_at timestamptz DEFAULT now()
+);
+
+-- === NOVO FINANCEIRO ===
+
+-- Tabela de Contas Bancárias/Caixas
+CREATE TABLE IF NOT EXISTS financial_accounts (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  name text NOT NULL,
+  store text NOT NULL,
+  initial_balance numeric DEFAULT 0,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Tabela de Lançamentos Diários (Novo Financeiro)
+CREATE TABLE IF NOT EXISTS daily_transactions (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  date date NOT NULL, -- Vencimento
+  payment_date date, -- Pagamento
+  store text,
+  type text, -- Receita, Despesa, Transferencia
+  account_id uuid REFERENCES financial_accounts(id),
+  payment_method text,
+  product text,
+  category text,
+  supplier text,
+  value numeric DEFAULT 0,
+  status text DEFAULT 'Pendente', -- Pago, Pendente
+  description text,
+  origin text DEFAULT 'manual',
   created_at timestamptz DEFAULT now()
 );
 `;
@@ -207,7 +227,6 @@ export const getAppData = async (): Promise<AppData> => {
         if (row.category === 'categories') appData.categories = row.items || [];
     });
 
-    // Garante que "Variável" e "Fixa" estejam presentes se a lista de types vier vazia do banco (primeiro acesso)
     if (appData.types.length === 0) {
         appData.types = ['Variável', 'Fixa'];
     }
@@ -252,7 +271,7 @@ const MASTER_USER: User = {
     name: 'Administrador Mestre',
     username: 'Administrador',
     permissions: {
-        modules: ['pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin'],
+        modules: ['pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro'],
         stores: [] // Empty implies all for master logic
     },
     isMaster: true
@@ -312,7 +331,6 @@ export const getUsers = async (): Promise<User[]> => {
 };
 
 export const saveUser = async (user: User) => {
-    // Não permite salvar o admin mestre no banco
     if (user.username === 'Administrador') throw new Error("Nome de usuário reservado.");
 
     const dbUser = {
@@ -323,12 +341,9 @@ export const saveUser = async (user: User) => {
     };
 
     if (user.id) {
-        // Update
         const { error } = await supabase.from('system_users').update(dbUser).eq('id', user.id);
         if (error) throw new Error(error.message);
     } else {
-        // Insert
-        // Check if exists
         const { data: existing } = await supabase.from('system_users').select('id').eq('username', user.username);
         if (existing && existing.length > 0) throw new Error("Usuário já existe.");
 
@@ -343,12 +358,10 @@ export const deleteUser = async (id: string) => {
 };
 
 export const changeUserPassword = async (userId: string, currentPass: string, newPass: string) => {
-    // Não permite alterar o master
     if (userId === 'master-001') {
         throw new Error("A senha do Administrador Mestre é fixa e não pode ser alterada por esta tela.");
     }
 
-    // 1. Verificar senha atual
     const { data, error } = await supabase
         .from('system_users')
         .select('id')
@@ -360,7 +373,6 @@ export const changeUserPassword = async (userId: string, currentPass: string, ne
         throw new Error("A senha atual informada está incorreta.");
     }
 
-    // 2. Atualizar para nova senha
     const { error: updateError } = await supabase
         .from('system_users')
         .update({ password: newPass })
@@ -369,6 +381,93 @@ export const changeUserPassword = async (userId: string, currentPass: string, ne
     if (updateError) {
         throw new Error("Erro ao atualizar senha: " + updateError.message);
     }
+};
+
+// === NOVO FINANCEIRO - CONTAS E TRANSAÇÕES ===
+
+export const getFinancialAccounts = async (): Promise<FinancialAccount[]> => {
+    const { data, error } = await supabase.from('financial_accounts').select('*');
+    if (error) {
+        console.error(error);
+        return [];
+    }
+    return data.map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        store: a.store,
+        initialBalance: a.initial_balance
+    }));
+};
+
+export const saveFinancialAccount = async (account: FinancialAccount) => {
+    const dbAccount = {
+        name: account.name,
+        store: account.store,
+        initial_balance: account.initialBalance
+    };
+    const { error } = await supabase.from('financial_accounts').insert(dbAccount);
+    if (error) throw new Error(error.message);
+};
+
+export const deleteFinancialAccount = async (id: string) => {
+    const { error } = await supabase.from('financial_accounts').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+};
+
+export const getDailyTransactions = async (): Promise<DailyTransaction[]> => {
+    const { data, error } = await supabase.from('daily_transactions').select('*');
+    if (error) {
+        console.error(error);
+        return [];
+    }
+    return data.map((t: any) => ({
+        id: t.id,
+        date: t.date,
+        paymentDate: t.payment_date,
+        store: t.store,
+        type: t.type,
+        accountId: t.account_id,
+        paymentMethod: t.payment_method,
+        product: t.product,
+        category: t.category,
+        supplier: t.supplier,
+        value: t.value,
+        status: t.status,
+        description: t.description,
+        origin: t.origin
+    }));
+};
+
+export const saveDailyTransaction = async (t: DailyTransaction) => {
+    const dbT = {
+        date: t.date,
+        payment_date: t.paymentDate,
+        store: t.store,
+        type: t.type,
+        account_id: t.accountId || null,
+        payment_method: t.paymentMethod,
+        product: t.product,
+        category: t.category,
+        supplier: t.supplier,
+        value: t.value,
+        status: t.status,
+        description: t.description,
+        origin: t.origin
+    };
+
+    // Se ID existe, update. Se não, insert.
+    if (t.id) {
+        const { error } = await supabase.from('daily_transactions').update(dbT).eq('id', t.id);
+        if (error) throw new Error(error.message);
+    } else {
+        const { error } = await supabase.from('daily_transactions').insert(dbT);
+        if (error) throw new Error(error.message);
+    }
+};
+
+export const deleteDailyTransaction = async (id: string) => {
+    const { error } = await supabase.from('daily_transactions').delete().eq('id', id);
+    if (error) throw new Error(error.message);
 };
 
 
@@ -624,7 +723,7 @@ export const getPreviousMonthBalance = async (store: string, currentYear: number
     };
 };
 
-// === FINANCEIRO ===
+// === FINANCEIRO (ANTIGO - ENTRADAS E SAIDAS) ===
 
 export const getFinancialRecords = async (): Promise<FinancialRecord[]> => {
     const { data, error } = await supabase.from('financial_records').select('*');
@@ -852,9 +951,11 @@ export const createBackup = async () => {
         const saldoContas = await getAccountBalances();
         const financeiro = await getFinancialRecords();
         const users = await getUsers();
+        const financialAccounts = await getFinancialAccounts();
+        const dailyTransactions = await getDailyTransactions();
 
         const backupObj = {
-            version: 8, // Updated version
+            version: 9, // Updated version
             timestamp: new Date().toISOString(),
             source: 'supabase_cloud',
             appData,
@@ -862,7 +963,9 @@ export const createBackup = async () => {
             transactions043,
             saldoContas,
             financeiro,
-            users
+            users,
+            financialAccounts,
+            dailyTransactions
         };
 
         const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
@@ -891,12 +994,10 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                 // 1. Restaurando Configurações
                 if (parsed.appData) await saveAppData(parsed.appData);
 
-                // 2. Restaurando Pedidos (Upsert em Lotes para performance e anti-duplicidade)
+                // 2. Restaurando Pedidos (Upsert em Lotes)
                 if (parsed.orders && Array.isArray(parsed.orders)) {
                     const dbOrders = parsed.orders.map((o: any) => {
-                        // Clean invalid UUIDs if they exist from old localstorage data
                         const validId = o.id && isValidUUID(o.id) ? o.id : undefined;
-                        
                         return {
                             id: validId, 
                             date: o.date,
@@ -913,18 +1014,11 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                             category: o.category
                         };
                     });
-
-                    // Processar em chunks de 100 para não estourar payload
+                    // Processar em chunks de 100
                     const CHUNK_SIZE = 100;
-                    let errorCount = 0;
                     for (let i = 0; i < dbOrders.length; i += CHUNK_SIZE) {
                         const chunk = dbOrders.slice(i, i + CHUNK_SIZE);
-                        // Se tem ID, upsert. Se não, insert.
-                        const { error } = await supabase.from('orders').upsert(chunk, { ignoreDuplicates: false });
-                        if (error) {
-                            console.warn("Erro ao restaurar bloco de pedidos:", error.message);
-                            errorCount++;
-                        }
+                        await supabase.from('orders').upsert(chunk, { ignoreDuplicates: false });
                     }
                 }
 
@@ -939,7 +1033,7 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                     }
                 }
 
-                // 4. Restaurando Saldos (Upsert)
+                // 4. Restaurando Saldos
                 if (parsed.saldoContas && Array.isArray(parsed.saldoContas)) {
                      for (const b of parsed.saldoContas) {
                         const balanceData = {
@@ -953,7 +1047,7 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                      }
                 }
 
-                 // 5. Restaurando Financeiro (Upsert)
+                 // 5. Restaurando Financeiro (Antigo)
                  if (parsed.financeiro && Array.isArray(parsed.financeiro)) {
                      for (const f of parsed.financeiro) {
                          const finData = {
@@ -980,6 +1074,43 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                             permissions: u.permissions
                         };
                         await supabase.from('system_users').upsert(userData);
+                    }
+                }
+
+                // 7. Novo Financeiro - Contas
+                if (parsed.financialAccounts && Array.isArray(parsed.financialAccounts)) {
+                    for (const a of parsed.financialAccounts) {
+                        const accData = {
+                            id: a.id && isValidUUID(a.id) ? a.id : undefined,
+                            name: a.name,
+                            store: a.store,
+                            initial_balance: a.initialBalance
+                        };
+                        await supabase.from('financial_accounts').upsert(accData);
+                    }
+                }
+
+                // 8. Novo Financeiro - Transações
+                if (parsed.dailyTransactions && Array.isArray(parsed.dailyTransactions)) {
+                    const transactions = parsed.dailyTransactions.map((t: any) => ({
+                        id: t.id && isValidUUID(t.id) ? t.id : undefined,
+                        date: t.date,
+                        payment_date: t.paymentDate,
+                        store: t.store,
+                        type: t.type,
+                        account_id: t.accountId,
+                        payment_method: t.paymentMethod,
+                        product: t.product,
+                        category: t.category,
+                        supplier: t.supplier,
+                        value: t.value,
+                        status: t.status,
+                        description: t.description,
+                        origin: t.origin
+                    }));
+                    // Chunking optional but recommended if large
+                     for (let i = 0; i < transactions.length; i += 100) {
+                        await supabase.from('daily_transactions').upsert(transactions.slice(i, i + 100));
                     }
                 }
                 
