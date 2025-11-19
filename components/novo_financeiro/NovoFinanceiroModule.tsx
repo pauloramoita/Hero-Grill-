@@ -12,16 +12,15 @@ interface NovoFinanceiroModuleProps {
 export const NovoFinanceiroModule: React.FC<NovoFinanceiroModuleProps> = ({ user }) => {
     const [activeTab, setActiveTab] = useState<NovoFinanceiroSubView>('lancamentos');
 
-    const tabs: { id: NovoFinanceiroSubView, label: string, icon: React.ReactNode, disabled?: boolean, requiredPerm?: string }[] = [
-        { id: 'lancamentos', label: 'Lançamentos', icon: <ClipboardList size={20} /> },
-        { id: 'consulta', label: 'Consultas', icon: <Search size={20} />, disabled: true },
-        { id: 'relatorios', label: 'Relatórios', icon: <BarChart2 size={20} />, disabled: true },
-        // Campos financeiro também pode ser restrito pela permissão config_campos, mas o padrão atual é mostrar
-        { id: 'campos', label: 'Campos Financeiro!', icon: <Settings size={20} />, requiredPerm: 'config_campos' },
-    ];
+    // Permissão para configurar contas financeiras
+    const canConfigFinanceiro = user.isMaster || user.permissions.modules?.includes('config_financeiro_campos');
 
-    // Filter tabs based on permission for 'Campos!'
-    const canConfig = user.isMaster || user.permissions.modules?.includes('config_campos');
+    const tabs: { id: NovoFinanceiroSubView, label: string, icon: React.ReactNode, disabled?: boolean, visible: boolean }[] = [
+        { id: 'lancamentos', label: 'Lançamentos', icon: <ClipboardList size={20} />, visible: true },
+        { id: 'consulta', label: 'Consultas', icon: <Search size={20} />, disabled: true, visible: true },
+        { id: 'relatorios', label: 'Relatórios', icon: <BarChart2 size={20} />, disabled: true, visible: true },
+        { id: 'campos', label: 'Campos Financeiro!', icon: <Settings size={20} />, visible: canConfigFinanceiro },
+    ];
 
     return (
         <div className="w-full max-w-7xl mx-auto p-4">
@@ -40,8 +39,7 @@ export const NovoFinanceiroModule: React.FC<NovoFinanceiroModuleProps> = ({ user
             {/* Tabs */}
             <div className="flex flex-wrap gap-2 mb-8 border-b border-gray-200 pb-1">
                 {tabs.map(tab => {
-                    // Hide if required permission is missing
-                    if (tab.requiredPerm && !canConfig) return null;
+                    if (!tab.visible) return null;
 
                     return (
                         <button
@@ -67,7 +65,7 @@ export const NovoFinanceiroModule: React.FC<NovoFinanceiroModuleProps> = ({ user
             {/* Content */}
             <div className="animate-fadeIn">
                 {activeTab === 'lancamentos' && <LancamentosFinanceiro user={user} />}
-                {activeTab === 'campos' && <CamposFinanceiro />}
+                {activeTab === 'campos' && canConfigFinanceiro && <CamposFinanceiro />}
                 {(activeTab === 'consulta' || activeTab === 'relatorios') && (
                     <div className="p-10 text-center text-gray-400 bg-gray-50 border border-dashed rounded-lg">
                         <h3 className="text-xl font-bold">Em Construção</h3>
