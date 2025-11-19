@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, AppData } from '../../types';
 import { getUsers, saveUser, deleteUser, getAppData } from '../../services/storageService';
-import { Save, Trash2, UserPlus, CheckSquare, Square, Loader2, Shield } from 'lucide-react';
+import { Save, Trash2, UserPlus, CheckSquare, Square, Loader2, Shield, AlertCircle } from 'lucide-react';
 
 export const UserManagement: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
@@ -103,7 +103,11 @@ export const UserManagement: React.FC = () => {
             await loadData();
             alert('Usuário salvo com sucesso!');
         } catch (err: any) {
-            alert(`Erro: ${err.message}`);
+            let msg = err.message;
+            if (msg.includes('system_users') && msg.includes('does not exist')) {
+                msg = "ERRO CRÍTICO: A tabela de usuários não existe no banco de dados.\n\nVá no módulo 'Backup' e clique em 'Ver SQL de Instalação' para corrigir isso no Supabase.";
+            }
+            alert(msg);
         } finally {
             setSaving(false);
         }
@@ -113,6 +117,15 @@ export const UserManagement: React.FC = () => {
 
     return (
         <div className="max-w-6xl mx-auto animate-fadeIn space-y-8">
+            {/* Info Box for Admin */}
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 text-sm text-blue-800 flex items-center gap-3">
+                 <AlertCircle size={20} />
+                 <div>
+                    <strong>Dica de Administração:</strong> Certifique-se de que o banco de dados está atualizado. 
+                    Se encontrar erros ao salvar, verifique o módulo de Backup.
+                 </div>
+            </div>
+
             {/* Form Card */}
             <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-200">
                 <div className="flex items-center gap-3 mb-6 border-b pb-2">

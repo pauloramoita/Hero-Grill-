@@ -1,11 +1,13 @@
+
 import React, { useRef, useState, useEffect } from 'react';
-import { Download, Upload, Database, AlertTriangle, Loader2, RefreshCw, CheckCircle, XCircle, Server } from 'lucide-react';
-import { createBackup, restoreBackup, generateMockData, checkConnection, getConfigStatus } from '../services/storageService';
+import { Download, Upload, Database, AlertTriangle, Loader2, RefreshCw, CheckCircle, XCircle, Server, Terminal, X, Copy } from 'lucide-react';
+import { createBackup, restoreBackup, generateMockData, checkConnection, getConfigStatus, SETUP_SQL } from '../services/storageService';
 
 export const BackupModule: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
+    const [showSql, setShowSql] = useState(false);
     
     // Diagnostic State
     const [connectionStatus, setConnectionStatus] = useState<'checking' | 'ok' | 'error' | 'config_missing'>('checking');
@@ -50,6 +52,10 @@ export const BackupModule: React.FC = () => {
     const handleMockData = () => {
         generateMockData();
     }
+
+    const copySqlToClipboard = () => {
+        navigator.clipboard.writeText(SETUP_SQL).then(() => alert('Código SQL copiado!'));
+    };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -227,18 +233,64 @@ export const BackupModule: React.FC = () => {
 
                 {/* Dev Helper */}
                 <div className="mt-8 border-t pt-8 text-center">
-                    <h4 className="text-gray-400 font-bold text-sm mb-4 uppercase tracking-widest">Ferramentas de Teste</h4>
-                    <button 
-                        onClick={handleMockData}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 transition-colors text-sm font-bold border border-yellow-300"
-                    >
-                        <RefreshCw size={16} />
-                        Inserir Dados de Teste no Supabase
-                    </button>
-                    <p className="text-xs text-gray-400 mt-2">Use isso se o banco estiver vazio para confirmar que a escrita está funcionando.</p>
-                    <p className="text-xs text-gray-300 mt-2">v1.12.5 (Fix)</p>
+                    <h4 className="text-gray-400 font-bold text-sm mb-4 uppercase tracking-widest">Ferramentas de Instalação</h4>
+                    <div className="flex justify-center gap-3">
+                        <button 
+                            onClick={() => setShowSql(true)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded hover:bg-black transition-colors text-sm font-bold shadow"
+                        >
+                            <Terminal size={16} />
+                            Ver SQL de Instalação / Correção
+                        </button>
+                        
+                        <button 
+                            onClick={handleMockData}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 transition-colors text-sm font-bold border border-yellow-300"
+                        >
+                            <RefreshCw size={16} />
+                            Inserir Dados de Teste
+                        </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">Use o SQL se as tabelas ainda não foram criadas no Supabase.</p>
                 </div>
             </div>
+
+            {/* SQL Modal */}
+            {showSql && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 p-4">
+                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-3xl flex flex-col max-h-[80vh]">
+                        <div className="flex justify-between items-center p-4 border-b">
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                <Database size={20}/> Código SQL para Criação de Tabelas
+                            </h3>
+                            <button onClick={() => setShowSql(false)} className="text-gray-500 hover:text-red-500">
+                                <X size={24}/>
+                            </button>
+                        </div>
+                        <div className="p-4 flex-1 overflow-hidden flex flex-col">
+                            <p className="text-sm text-gray-600 mb-2">
+                                Copie o código abaixo e execute no <strong>SQL Editor</strong> do seu painel Supabase para corrigir erros de "table not found".
+                            </p>
+                            <div className="relative flex-1 border rounded bg-gray-900 overflow-hidden">
+                                <textarea 
+                                    readOnly 
+                                    value={SETUP_SQL} 
+                                    className="w-full h-full p-4 font-mono text-xs text-green-400 bg-gray-900 outline-none resize-none"
+                                />
+                                <button 
+                                    onClick={copySqlToClipboard}
+                                    className="absolute top-2 right-2 bg-white text-black px-3 py-1 rounded text-xs font-bold hover:bg-gray-200 flex items-center gap-1 shadow"
+                                >
+                                    <Copy size={12}/> Copiar
+                                </button>
+                            </div>
+                        </div>
+                        <div className="p-4 border-t bg-gray-50 flex justify-end">
+                            <button onClick={() => setShowSql(false)} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 font-bold text-gray-700">Fechar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

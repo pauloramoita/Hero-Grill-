@@ -42,6 +42,90 @@ export const supabase = createClient(
     supabaseKey || 'missing-key'
 );
 
+// === SQL DE SETUP (CONSTANTE) ===
+export const SETUP_SQL = `
+-- Tabela de Usuários do Sistema
+CREATE TABLE IF NOT EXISTS system_users (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  name text NOT NULL,
+  username text NOT NULL UNIQUE,
+  password text NOT NULL,
+  permissions jsonb DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Tabela de Pedidos
+CREATE TABLE IF NOT EXISTS orders (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  date date NOT NULL,
+  store text,
+  product text,
+  brand text,
+  supplier text,
+  unit_measure text,
+  unit_value numeric,
+  quantity numeric,
+  total_value numeric,
+  delivery_date date,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Tabela de Configurações (Lojas, Produtos, etc)
+CREATE TABLE IF NOT EXISTS app_configurations (
+  category text PRIMARY KEY,
+  items jsonb,
+  updated_at timestamptz DEFAULT now()
+);
+
+-- Tabela de Transações 043
+CREATE TABLE IF NOT EXISTS transactions_043 (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  date date NOT NULL,
+  store text,
+  type text, -- 'DEBIT' or 'CREDIT'
+  value numeric,
+  description text,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Tabela de Saldos de Contas
+CREATE TABLE IF NOT EXISTS account_balances (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  store text NOT NULL,
+  year int NOT NULL,
+  month text NOT NULL,
+  caixa_economica numeric DEFAULT 0,
+  cofre numeric DEFAULT 0,
+  loteria numeric DEFAULT 0,
+  pagbank_h numeric DEFAULT 0,
+  pagbank_d numeric DEFAULT 0,
+  investimentos numeric DEFAULT 0,
+  total_balance numeric DEFAULT 0,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Tabela de Registros Financeiros (Receitas/Despesas)
+CREATE TABLE IF NOT EXISTS financial_records (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  store text NOT NULL,
+  year int NOT NULL,
+  month text NOT NULL,
+  credit_caixa numeric DEFAULT 0,
+  credit_delta numeric DEFAULT 0,
+  credit_pagbank_h numeric DEFAULT 0,
+  credit_pagbank_d numeric DEFAULT 0,
+  credit_ifood numeric DEFAULT 0,
+  total_revenues numeric DEFAULT 0,
+  debit_caixa numeric DEFAULT 0,
+  debit_pagbank_h numeric DEFAULT 0,
+  debit_pagbank_d numeric DEFAULT 0,
+  debit_loteria numeric DEFAULT 0,
+  total_expenses numeric DEFAULT 0,
+  net_result numeric DEFAULT 0,
+  created_at timestamptz DEFAULT now()
+);
+`;
+
 // === DIAGNÓSTICO ===
 
 export const checkConnection = async (): Promise<{ status: 'ok' | 'error' | 'config_missing', message: string, details?: string }> => {
@@ -159,7 +243,15 @@ export const loginUser = async (username: string, password: string): Promise<{su
             .eq('password', password) // Note: In production, use hashing. Plaintext for simple requested scope.
             .single();
 
-        if (error || !data) {
+        if (error) {
+            // Se tabela não existe, erro específico
+            if(error.message?.includes("does not exist")) {
+                return { success: false, message: 'Erro de Configuração: Tabela de usuários não existe. Entre como Administrador para corrigir.' };
+            }
+            return { success: false, message: 'Usuário ou senha incorretos.' };
+        }
+        
+        if (!data) {
             return { success: false, message: 'Usuário ou senha incorretos.' };
         }
 
