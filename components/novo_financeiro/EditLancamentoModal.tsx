@@ -1,8 +1,9 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { AppData, FinancialAccount, DailyTransaction } from '../../types';
 import { getAppData, getFinancialAccounts, formatCurrency } from '../../services/storageService';
-import { X, Save, CheckCircle } from 'lucide-react';
+import { X, Save, CheckCircle, ArrowRight } from 'lucide-react';
 
 interface EditLancamentoModalProps {
     transaction: DailyTransaction;
@@ -20,6 +21,11 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
     const [store, setStore] = useState(transaction.store || '');
     const [type, setType] = useState<'Receita' | 'Despesa' | 'Transferência'>(transaction.type as any || 'Despesa');
     const [accountId, setAccountId] = useState(transaction.accountId || '');
+    
+    // Transfer
+    const [destinationStore, setDestinationStore] = useState(transaction.destinationStore || '');
+    const [destinationAccountId, setDestinationAccountId] = useState(transaction.destinationAccountId || '');
+
     const [paymentMethod, setPaymentMethod] = useState(transaction.paymentMethod || 'Boleto');
     const [product, setProduct] = useState(transaction.product || '');
     const [category, setCategory] = useState(transaction.category || '');
@@ -46,9 +52,16 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (!store || !accountId || value <= 0) {
-            alert('Por favor, preencha Loja, Conta e Valor.');
-            return;
+        if (type === 'Transferência') {
+            if (!store || !accountId || !destinationStore || !destinationAccountId || value <= 0) {
+                alert('Preencha Origem, Destino e Valor.');
+                return;
+            }
+        } else {
+             if (!store || !accountId || value <= 0) {
+                alert('Preencha Loja, Conta e Valor.');
+                return;
+            }
         }
 
         const updated: DailyTransaction = {
@@ -58,10 +71,12 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
             store,
             type,
             accountId,
+            destinationStore: type === 'Transferência' ? destinationStore : undefined,
+            destinationAccountId: type === 'Transferência' ? destinationAccountId : undefined,
             paymentMethod,
-            product,
-            category,
-            supplier,
+            product: type !== 'Transferência' ? product : '',
+            category: type !== 'Transferência' ? category : '',
+            supplier: type !== 'Transferência' ? supplier : '',
             value,
             status,
             description,
@@ -73,6 +88,7 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
 
     // Filter accounts by selected store
     const filteredAccounts = accounts.filter(a => !store || a.store === store);
+    const filteredDestAccounts = accounts.filter(a => !destinationStore || a.store === destinationStore);
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
@@ -87,64 +103,12 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
                 <form onSubmit={handleSubmit} className="p-6">
                     {/* Basic Info */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
-                            <select value={store} onChange={e => setStore(e.target.value)} className="w-full p-2 border rounded">
-                                <option value="">Selecione...</option>
-                                {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                        </div>
-                        <div>
+                         <div>
                             <label className="block text-xs font-bold text-gray-600 mb-1">Tipo</label>
-                            <select value={type} onChange={e => setType(e.target.value as any)} className="w-full p-2 border rounded">
+                            <select value={type} onChange={e => setType(e.target.value as any)} className="w-full p-2 border rounded font-bold">
                                 <option value="Despesa">Despesa</option>
                                 <option value="Receita">Receita</option>
                                 <option value="Transferência">Transferência</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Conta {accountId === '' && <span className="text-red-500">*</span>}</label>
-                            <select value={accountId} onChange={e => setAccountId(e.target.value)} className={`w-full p-2 border rounded ${!accountId ? 'border-red-300 bg-red-50' : ''}`}>
-                                <option value="">Selecione a Conta...</option>
-                                {filteredAccounts.map(a => (
-                                    <option key={a.id} value={a.id}>{a.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Categoria</label>
-                            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-2 border rounded">
-                                <option value="">Selecione...</option>
-                                {appData.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
-                            <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-2 border rounded">
-                                <option value="">Selecione...</option>
-                                {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Produto</label>
-                            <select value={product} onChange={e => setProduct(e.target.value)} className="w-full p-2 border rounded">
-                                <option value="">Selecione...</option>
-                                {appData.products.map(p => <option key={p} value={p}>{p}</option>)}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Método Pagamento</label>
-                            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full p-2 border rounded">
-                                <option value="Boleto">Boleto</option>
-                                <option value="PiX">PiX</option>
-                                <option value="Dinheiro">Dinheiro</option>
-                                <option value="Cartão">Cartão</option>
                             </select>
                         </div>
                         <div>
@@ -155,6 +119,110 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
                                 onChange={handleCurrencyChange} 
                                 className="w-full p-2 border rounded text-right font-bold text-lg"
                             />
+                        </div>
+                    </div>
+
+                    {type === 'Transferência' ? (
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6 bg-blue-50 p-4 rounded border border-blue-200">
+                             {/* Origem */}
+                            <div className="space-y-3">
+                                <h4 className="font-bold text-blue-800 border-b border-blue-200 pb-1">Origem</h4>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Loja Origem</label>
+                                    <select value={store} onChange={e => setStore(e.target.value)} className="w-full p-2 border rounded">
+                                        <option value="">Selecione...</option>
+                                        {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Conta Origem</label>
+                                    <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full p-2 border rounded">
+                                        <option value="">Selecione...</option>
+                                        {filteredAccounts.map(a => (
+                                            <option key={a.id} value={a.id}>{a.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Destino */}
+                            <div className="space-y-3">
+                                <h4 className="font-bold text-green-800 border-b border-green-200 pb-1">Destino</h4>
+                                 <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Loja Destino</label>
+                                    <select value={destinationStore} onChange={e => setDestinationStore(e.target.value)} className="w-full p-2 border rounded">
+                                        <option value="">Selecione...</option>
+                                        {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Conta Destino</label>
+                                    <select value={destinationAccountId} onChange={e => setDestinationAccountId(e.target.value)} className="w-full p-2 border rounded">
+                                        <option value="">Selecione...</option>
+                                        {filteredDestAccounts.map(a => (
+                                            <option key={a.id} value={a.id}>{a.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
+                                    <select value={store} onChange={e => setStore(e.target.value)} className="w-full p-2 border rounded">
+                                        <option value="">Selecione...</option>
+                                        {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Conta {accountId === '' && <span className="text-red-500">*</span>}</label>
+                                    <select value={accountId} onChange={e => setAccountId(e.target.value)} className={`w-full p-2 border rounded ${!accountId ? 'border-red-300 bg-red-50' : ''}`}>
+                                        <option value="">Selecione a Conta...</option>
+                                        {filteredAccounts.map(a => (
+                                            <option key={a.id} value={a.id}>{a.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Categoria</label>
+                                    <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-2 border rounded">
+                                        <option value="">Selecione...</option>
+                                        {appData.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
+                                    <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-2 border rounded">
+                                        <option value="">Selecione...</option>
+                                        {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Produto</label>
+                                    <select value={product} onChange={e => setProduct(e.target.value)} className="w-full p-2 border rounded">
+                                        <option value="">Selecione...</option>
+                                        {appData.products.map(p => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                         <div>
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Método Pagamento</label>
+                            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full p-2 border rounded">
+                                <option value="Boleto">Boleto</option>
+                                <option value="PiX">PiX</option>
+                                <option value="Dinheiro">Dinheiro</option>
+                                <option value="Cartão">Cartão</option>
+                                <option value="Transferência bancária">Transferência bancária</option>
+                            </select>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-600 mb-1">Descrição (Opcional)</label>

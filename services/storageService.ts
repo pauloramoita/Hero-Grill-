@@ -147,6 +147,8 @@ CREATE TABLE IF NOT EXISTS daily_transactions (
   store text,
   type text, -- Receita, Despesa, Transferencia
   account_id uuid REFERENCES financial_accounts(id),
+  destination_store text, -- Novo: Destino Transferencia
+  destination_account_id uuid REFERENCES financial_accounts(id), -- Novo: Destino Transferencia
   payment_method text,
   product text,
   category text,
@@ -437,6 +439,8 @@ export const getDailyTransactions = async (): Promise<DailyTransaction[]> => {
         store: t.store,
         type: t.type,
         accountId: t.account_id,
+        destinationStore: t.destination_store,
+        destinationAccountId: t.destination_account_id,
         paymentMethod: t.payment_method,
         product: t.product,
         category: t.category,
@@ -455,6 +459,8 @@ export const saveDailyTransaction = async (t: DailyTransaction) => {
         store: t.store,
         type: t.type,
         account_id: t.accountId || null,
+        destination_store: t.destinationStore || null,
+        destination_account_id: t.destinationAccountId || null,
         payment_method: t.paymentMethod,
         product: t.product,
         category: t.category,
@@ -965,7 +971,7 @@ export const createBackup = async () => {
         const dailyTransactions = await getDailyTransactions();
 
         const backupObj = {
-            version: 9, // Updated version
+            version: 10, // Updated version for Transfer support
             timestamp: new Date().toISOString(),
             source: 'supabase_cloud',
             appData,
@@ -1109,6 +1115,8 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                         store: t.store,
                         type: t.type,
                         account_id: t.accountId,
+                        destination_store: t.destinationStore, // Novo
+                        destination_account_id: t.destinationAccountId, // Novo
                         payment_method: t.paymentMethod,
                         product: t.product,
                         category: t.category,

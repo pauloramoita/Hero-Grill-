@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { 
     getAppData, 
@@ -12,7 +13,7 @@ import {
     getOrders
 } from '../../services/storageService';
 import { AppData, FinancialAccount, DailyTransaction, Order, User } from '../../types';
-import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, AlertCircle, EyeOff, Filter, Calculator } from 'lucide-react';
+import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, AlertCircle, EyeOff, Filter, Calculator, ArrowRight } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 
 interface LancamentosFinanceiroProps {
@@ -35,6 +36,11 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [store, setStore] = useState('');
     const [type, setType] = useState<'Receita' | 'Despesa' | 'Transferência'>('Despesa'); // Default Despesa
     const [accountId, setAccountId] = useState('');
+    
+    // Transfer Specifics
+    const [destinationStore, setDestinationStore] = useState('');
+    const [destinationAccountId, setDestinationAccountId] = useState('');
+
     const [paymentMethod, setPaymentMethod] = useState('Boleto'); // Default Boleto
     const [product, setProduct] = useState('');
     const [category, setCategory] = useState('');
@@ -81,9 +87,17 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!store || !accountId || value <= 0) {
-            alert('Preencha Loja, Conta e Valor.');
-            return;
+        
+        if (type === 'Transferência') {
+            if (!store || !accountId || !destinationStore || !destinationAccountId || value <= 0) {
+                alert('Preencha Origem, Destino e Valor.');
+                return;
+            }
+        } else {
+             if (!store || !accountId || value <= 0) {
+                alert('Preencha Loja, Conta e Valor.');
+                return;
+            }
         }
 
         setSaving(true);
@@ -95,10 +109,12 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 store,
                 type,
                 accountId,
+                destinationStore: type === 'Transferência' ? destinationStore : undefined,
+                destinationAccountId: type === 'Transferência' ? destinationAccountId : undefined,
                 paymentMethod,
-                product,
-                category,
-                supplier,
+                product: type !== 'Transferência' ? product : '',
+                category: type !== 'Transferência' ? category : '',
+                supplier: type !== 'Transferência' ? supplier : '',
                 value,
                 status,
                 origin: 'manual'
@@ -158,7 +174,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     }
 
     // Helper to get Account Name
-    const getAccountName = (id: string | null) => {
+    const getAccountName = (id: string | null | undefined) => {
         if (!id) return '-';
         return accounts.find(a => a.id === id)?.name || 'Conta Removida';
     };
@@ -210,9 +226,17 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const getAccountCurrentBalance = (acc: FinancialAccount) => {
         let balance = acc.initialBalance;
         transactions.forEach(t => {
-            if (t.accountId === acc.id && t.status === 'Pago') {
-                if (t.type === 'Receita') balance += t.value;
-                if (t.type === 'Despesa') balance -= t.value;
+            if (t.status === 'Pago') {
+                // Verifica se é saída da conta (Origem)
+                if (t.accountId === acc.id) {
+                    if (t.type === 'Receita') balance += t.value;
+                    if (t.type === 'Despesa') balance -= t.value;
+                    if (t.type === 'Transferência') balance -= t.value;
+                }
+                // Verifica se é entrada na conta (Destino - Transferência)
+                if (t.type === 'Transferência' && t.destinationAccountId === acc.id) {
+                    balance += t.value;
+                }
             }
         });
         return balance;
@@ -253,62 +277,13 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
                 <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Novo Lançamento</h2>
                 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
-                        <select value={store} onChange={e => setStore(e.target.value)} className="w-full p-2 border rounded">
-                            <option value="">Selecione...</option>
-                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Tipo</label>
-                        <select value={type} onChange={e => setType(e.target.value as any)} className="w-full p-2 border rounded">
+                        <select value={type} onChange={e => setType(e.target.value as any)} className="w-full p-2 border rounded bg-gray-50 font-bold">
                             <option value="Despesa">Despesa</option>
                             <option value="Receita">Receita</option>
                             <option value="Transferência">Transferência</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Conta</label>
-                        <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full p-2 border rounded">
-                            <option value="">Selecione...</option>
-                            {accounts.filter(a => !store || a.store === store).map(a => (
-                                <option key={a.id} value={a.id}>{a.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Método Pagamento</label>
-                        <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full p-2 border rounded">
-                            <option value="Boleto">Boleto</option>
-                            <option value="PiX">PiX</option>
-                            <option value="Dinheiro">Dinheiro</option>
-                            <option value="Cartão">Cartão</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Categoria</label>
-                        <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-2 border rounded">
-                            <option value="">Selecione...</option>
-                            {appData.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
-                        <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-2 border rounded">
-                            <option value="">Selecione...</option>
-                            {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Produto (Opcional)</label>
-                        <select value={product} onChange={e => setProduct(e.target.value)} className="w-full p-2 border rounded">
-                            <option value="">Selecione...</option>
-                            {appData.products.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
                     </div>
                      <div>
@@ -317,10 +292,106 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                             type="text" 
                             value={formatCurrency(value)} 
                             onChange={handleCurrencyChange} 
-                            className="w-full p-2 border rounded text-right font-bold"
+                            className="w-full p-2 border rounded text-right font-bold text-lg"
                         />
                     </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Método Pagamento</label>
+                        <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full p-2 border rounded">
+                            <option value="Boleto">Boleto</option>
+                            <option value="PiX">PiX</option>
+                            <option value="Dinheiro">Dinheiro</option>
+                            <option value="Cartão">Cartão</option>
+                            <option value="Transferência bancária">Transferência bancária</option>
+                        </select>
+                    </div>
                 </div>
+
+                {type === 'Transferência' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-4 bg-blue-50 p-4 rounded border border-blue-200">
+                         {/* Origem */}
+                        <div className="space-y-3">
+                            <h4 className="font-bold text-blue-800 border-b border-blue-200 pb-1">Origem (De onde sai?)</h4>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Loja Origem</label>
+                                <select value={store} onChange={e => setStore(e.target.value)} className="w-full p-2 border rounded">
+                                    <option value="">Selecione...</option>
+                                    {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Conta Origem</label>
+                                <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full p-2 border rounded">
+                                    <option value="">Selecione...</option>
+                                    {accounts.filter(a => !store || a.store === store).map(a => (
+                                        <option key={a.id} value={a.id}>{a.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Destino */}
+                        <div className="space-y-3">
+                            <h4 className="font-bold text-green-800 border-b border-green-200 pb-1">Destino (Para onde vai?)</h4>
+                             <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Loja Destino</label>
+                                <select value={destinationStore} onChange={e => setDestinationStore(e.target.value)} className="w-full p-2 border rounded">
+                                    <option value="">Selecione...</option>
+                                    {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Conta Destino</label>
+                                <select value={destinationAccountId} onChange={e => setDestinationAccountId(e.target.value)} className="w-full p-2 border rounded">
+                                    <option value="">Selecione...</option>
+                                    {accounts.filter(a => !destinationStore || a.store === destinationStore).map(a => (
+                                        <option key={a.id} value={a.id}>{a.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
+                            <select value={store} onChange={e => setStore(e.target.value)} className="w-full p-2 border rounded">
+                                <option value="">Selecione...</option>
+                                {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Conta</label>
+                            <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full p-2 border rounded">
+                                <option value="">Selecione...</option>
+                                {accounts.filter(a => !store || a.store === store).map(a => (
+                                    <option key={a.id} value={a.id}>{a.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                         <div>
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Categoria</label>
+                            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-2 border rounded">
+                                <option value="">Selecione...</option>
+                                {appData.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
+                            <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-2 border rounded">
+                                <option value="">Selecione...</option>
+                                {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Produto (Opcional)</label>
+                            <select value={product} onChange={e => setProduct(e.target.value)} className="w-full p-2 border rounded">
+                                <option value="">Selecione...</option>
+                                {appData.products.map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                     <div>
@@ -433,7 +504,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 <th className="px-4 py-3 text-left">Vencimento</th>
                                 <th className="px-4 py-3 text-left">Loja</th>
                                 <th className="px-4 py-3 text-left">Origem</th>
-                                <th className="px-4 py-3 text-left">Categoria/Prod</th>
+                                <th className="px-4 py-3 text-left">Descrição / Destino</th>
                                 <th className="px-4 py-3 text-left">Conta</th>
                                 <th className="px-4 py-3 text-left">Método</th>
                                 <th className="px-4 py-3 text-right">Valor</th>
@@ -449,19 +520,29 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                     <td className="px-4 py-3">
                                         {item.origin === 'pedido' ? (
                                             <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold">Cadastro</span>
+                                        ) : item.type === 'Transferência' ? (
+                                            <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold">Transf.</span>
                                         ) : (
                                             <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs font-bold">Manual</span>
                                         )}
                                     </td>
                                     <td className="px-4 py-3">
-                                        <div className="font-bold text-gray-700">{item.category || item.supplier}</div>
-                                        <div className="text-xs text-gray-500">{item.product}</div>
+                                        {item.type === 'Transferência' ? (
+                                            <div className="flex items-center gap-1 text-purple-700 font-bold">
+                                                 <ArrowRight size={12}/> {item.destinationStore} <span className="text-gray-400">|</span> {getAccountName(item.destinationAccountId)}
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="font-bold text-gray-700">{item.category || item.supplier}</div>
+                                                <div className="text-xs text-gray-500">{item.product}</div>
+                                            </>
+                                        )}
                                     </td>
                                     <td className="px-4 py-3">
                                         {item.accountId ? getAccountName(item.accountId) : <span className="text-red-400 text-xs italic font-bold">Definir Conta</span>}
                                     </td>
                                     <td className="px-4 py-3">{item.paymentMethod}</td>
-                                    <td className={`px-4 py-3 text-right font-bold ${item.type === 'Receita' ? 'text-green-600' : 'text-red-600'}`}>
+                                    <td className={`px-4 py-3 text-right font-bold ${item.type === 'Receita' ? 'text-green-600' : item.type === 'Transferência' ? 'text-purple-600' : 'text-red-600'}`}>
                                         {item.type === 'Receita' ? '+' : '-'}{formatCurrency(item.value)}
                                     </td>
                                     <td className="px-4 py-3 text-center">

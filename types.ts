@@ -92,9 +92,11 @@ export interface DailyTransaction {
     id: string;
     date: string; // Data Vencimento
     paymentDate: string | null; // Data Pagamento
-    store: string;
+    store: string; // Origem
     type: 'Receita' | 'Despesa' | 'Transferência';
-    accountId: string | null;
+    accountId: string | null; // Origem
+    destinationStore?: string; // Destino (apenas Transferência)
+    destinationAccountId?: string | null; // Destino (apenas Transferência)
     paymentMethod: string; // Boleto, PiX, Dinheiro
     product: string;
     category: string;
