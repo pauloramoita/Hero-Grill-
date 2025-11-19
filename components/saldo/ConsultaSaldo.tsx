@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAccountBalances, getAppData, formatCurrency, deleteAccountBalance, updateAccountBalance, exportBalancesToXML } from '../../services/storageService';
 import { AppData, AccountBalance } from '../../types';
-import { Search, Trash2, Edit, TrendingUp, TrendingDown, Minus, Layers, FileSpreadsheet, Printer } from 'lucide-react';
+import { Search, Trash2, Edit, TrendingUp, TrendingDown, Minus, Layers, FileSpreadsheet, Printer, Loader2 } from 'lucide-react';
 import { EditSaldoModal } from './EditSaldoModal';
 
 interface BalanceWithVariation extends AccountBalance {
@@ -14,6 +14,7 @@ export const ConsultaSaldo: React.FC = () => {
     const [rawBalances, setRawBalances] = useState<AccountBalance[]>([]);
     const [displayBalances, setDisplayBalances] = useState<BalanceWithVariation[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [loading, setLoading] = useState(true);
     
     const [storeFilter, setStoreFilter] = useState('');
     const [yearFilter, setYearFilter] = useState('');
@@ -40,10 +41,12 @@ export const ConsultaSaldo: React.FC = () => {
         loadData();
     }, []);
 
-    const loadData = () => {
-        setAppData(getAppData());
-        const loaded = getAccountBalances();
+    const loadData = async () => {
+        setLoading(true);
+        const [d, loaded] = await Promise.all([getAppData(), getAccountBalances()]);
+        setAppData(d);
         setRawBalances(loaded);
+        setLoading(false);
     };
 
     useEffect(() => {
@@ -110,9 +113,9 @@ export const ConsultaSaldo: React.FC = () => {
         setDisplayBalances(result);
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if (window.confirm('Tem certeza que deseja excluir este registro?')) {
-            deleteAccountBalance(id);
+            await deleteAccountBalance(id);
             loadData();
         }
     };
@@ -121,8 +124,8 @@ export const ConsultaSaldo: React.FC = () => {
         setEditingBalance(b);
     };
 
-    const handleEditSave = (updated: AccountBalance) => {
-        updateAccountBalance(updated);
+    const handleEditSave = async (updated: AccountBalance) => {
+        await updateAccountBalance(updated);
         setEditingBalance(null);
         loadData();
     };
@@ -141,6 +144,8 @@ export const ConsultaSaldo: React.FC = () => {
 
     const years = (Array.from(new Set(rawBalances.map(b => b.year))) as number[]).sort((a, b) => b - a);
     const getMonthName = (m: string) => monthNames.find(mn => mn.value === m)?.label || m;
+
+    if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin"/></div>;
 
     return (
         <div className="space-y-6">

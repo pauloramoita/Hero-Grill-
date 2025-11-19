@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getFinancialRecords, getAppData, formatCurrency, deleteFinancialRecord, updateFinancialRecord, exportFinancialToXML } from '../../services/storageService';
 import { AppData, FinancialRecord } from '../../types';
-import { Search, Trash2, Edit, FileSpreadsheet, Printer, TrendingUp, TrendingDown, Layers, DollarSign, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Search, Trash2, Edit, FileSpreadsheet, Printer, TrendingUp, TrendingDown, Layers, DollarSign, ArrowUpCircle, ArrowDownCircle, Loader2 } from 'lucide-react';
 import { EditFinanceiroModal } from './EditFinanceiroModal';
 
 interface FinancialRecordWithAgg extends FinancialRecord {
@@ -13,6 +13,7 @@ export const ConsultaFinanceiro: React.FC = () => {
     const [rawRecords, setRawRecords] = useState<FinancialRecord[]>([]);
     const [displayRecords, setDisplayRecords] = useState<FinancialRecordWithAgg[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [loading, setLoading] = useState(true);
     
     const [storeFilter, setStoreFilter] = useState('');
     const [yearFilter, setYearFilter] = useState('');
@@ -39,10 +40,12 @@ export const ConsultaFinanceiro: React.FC = () => {
         loadData();
     }, []);
 
-    const loadData = () => {
-        setAppData(getAppData());
-        const loaded = getFinancialRecords();
+    const loadData = async () => {
+        setLoading(true);
+        const [d, loaded] = await Promise.all([getAppData(), getFinancialRecords()]);
+        setAppData(d);
         setRawRecords(loaded);
+        setLoading(false);
     };
 
     useEffect(() => {
@@ -107,9 +110,9 @@ export const ConsultaFinanceiro: React.FC = () => {
         setDisplayRecords(result);
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if (window.confirm('Tem certeza que deseja excluir este registro financeiro?')) {
-            deleteFinancialRecord(id);
+            await deleteFinancialRecord(id);
             loadData();
         }
     };
@@ -118,8 +121,8 @@ export const ConsultaFinanceiro: React.FC = () => {
         setEditingRecord(r);
     };
 
-    const handleEditSave = (updated: FinancialRecord) => {
-        updateFinancialRecord(updated);
+    const handleEditSave = async (updated: FinancialRecord) => {
+        await updateFinancialRecord(updated);
         setEditingRecord(null);
         loadData();
     };
@@ -143,6 +146,8 @@ export const ConsultaFinanceiro: React.FC = () => {
     const totalRevenues = displayRecords.reduce((acc, r) => acc + r.totalRevenues, 0);
     const totalExpenses = displayRecords.reduce((acc, r) => acc + r.totalExpenses, 0);
     const totalNet = totalRevenues - totalExpenses;
+
+    if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin"/></div>;
 
     return (
         <div className="space-y-6">

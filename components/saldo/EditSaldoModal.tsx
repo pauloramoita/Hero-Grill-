@@ -25,7 +25,11 @@ export const EditSaldoModal: React.FC<EditSaldoModalProps> = ({ balance, onClose
     const [investimentos, setInvestimentos] = useState(balance.investimentos);
 
     useEffect(() => {
-        setAppData(getAppData());
+        const load = async () => {
+            const data = await getAppData();
+            setAppData(data);
+        };
+        load();
     }, []);
 
     const handleCurrencyInput = (setter: React.Dispatch<React.SetStateAction<number>>, e: React.ChangeEvent<HTMLInputElement>) => {

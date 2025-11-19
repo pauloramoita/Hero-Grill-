@@ -1,269 +1,92 @@
-
 import React, { useState, useEffect } from 'react';
-import { getTransactions043, getAppData, formatCurrency, formatDateBr, getMonthLocalISO, getTodayLocalISO, deleteTransaction043, updateTransaction043, exportTransactionsToXML } from '../../services/storageService';
+import { getTransactions043, getAppData, formatCurrency, formatDateBr, deleteTransaction043, updateTransaction043, exportTransactionsToXML } from '../../services/storageService';
 import { AppData, Transaction043 } from '../../types';
-import { Search, Trash2, TrendingUp, TrendingDown, Edit, FileSpreadsheet, Printer } from 'lucide-react';
+import { Trash2, TrendingUp, TrendingDown, Edit, FileSpreadsheet, Printer, Loader2 } from 'lucide-react';
 import { EditTransactionModal } from './EditTransactionModal';
 
 export const Consulta043: React.FC = () => {
     const [transactions, setTransactions] = useState<Transaction043[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<Transaction043[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
-
-    // Edit State
+    const [loading, setLoading] = useState(true);
     const [editingTransaction, setEditingTransaction] = useState<Transaction043 | null>(null);
-
-    // Filter States
-    const [viewMode, setViewMode] = useState<'DETAILED' | 'SYNTHETIC'>('DETAILED');
     const [storeFilter, setStoreFilter] = useState('');
-    const [timeType, setTimeType] = useState<'DATE' | 'MONTH' | 'YEAR'>('MONTH');
     
-    const [dateValue, setDateValue] = useState(getTodayLocalISO());
-    const [monthValue, setMonthValue] = useState(getMonthLocalISO());
-    const [yearValue, setYearValue] = useState(new Date().getFullYear().toString());
+    const [dateValue, setDateValue] = useState(new Date().toISOString().slice(0, 7)); 
 
     useEffect(() => {
-        loadData();
+        const load = async () => {
+            setLoading(true);
+            const [t, d] = await Promise.all([getTransactions043(), getAppData()]);
+            setTransactions(t);
+            setAppData(d);
+            setLoading(false);
+        };
+        load();
     }, []);
 
-    const loadData = () => {
-        setTransactions(getTransactions043());
-        setAppData(getAppData());
-    };
-
-    // Apply Filters
     useEffect(() => {
-        let result = [...transactions];
+        let result = transactions.filter(t => t.date.startsWith(dateValue));
+        if (storeFilter) result = result.filter(t => t.store === storeFilter);
+        setFilteredTransactions(result.sort((a, b) => a.date.localeCompare(b.date)));
+    }, [transactions, storeFilter, dateValue]);
 
-        // 1. Store Filter
-        if (storeFilter) {
-            result = result.filter(t => t.store === storeFilter);
-        }
-
-        // 2. Time Filter
-        result = result.filter(t => {
-            if (timeType === 'DATE') {
-                return t.date === dateValue;
-            } else if (timeType === 'MONTH') {
-                return t.date.startsWith(monthValue);
-            } else if (timeType === 'YEAR') {
-                return t.date.startsWith(yearValue);
-            }
-            return true;
-        });
-
-        // 3. Sort by Date Ascending (Oldest -> Newest) as requested
-        result.sort((a, b) => a.date.localeCompare(b.date));
-
-        setFilteredTransactions(result);
-    }, [transactions, storeFilter, timeType, dateValue, monthValue, yearValue]);
-
-    const handleDelete = (id: string) => {
-        if (window.confirm('Tem certeza que deseja excluir este lançamento?')) {
-            deleteTransaction043(id);
+    const handleDelete = async (id: string) => {
+        if (window.confirm('Excluir?')) {
+            await deleteTransaction043(id);
             setTransactions(prev => prev.filter(t => t.id !== id));
         }
     };
 
-    const handleEditClick = (transaction: Transaction043) => {
-        setEditingTransaction(transaction);
-    };
-
-    const handleEditSave = (updatedTransaction: Transaction043) => {
-        updateTransaction043(updatedTransaction);
-        setTransactions(prev => prev.map(t => t.id === updatedTransaction.id ? updatedTransaction : t));
+    const handleEditSave = async (updated: Transaction043) => {
+        await updateTransaction043(updated);
+        setTransactions(prev => prev.map(t => t.id === updated.id ? updated : t));
         setEditingTransaction(null);
     };
 
-    const handleExport = () => {
-        if (filteredTransactions.length === 0) {
-            alert('Sem dados para exportar.');
-            return;
-        }
-        exportTransactionsToXML(filteredTransactions, 'controle_043_export');
-    };
-
-    const handlePrint = () => {
-        window.print();
-    };
-
-    // Calculate Totals
     const totalDebit = filteredTransactions.filter(t => t.type === 'DEBIT').reduce((acc, t) => acc + t.value, 0);
     const totalCredit = filteredTransactions.filter(t => t.type === 'CREDIT').reduce((acc, t) => acc + t.value, 0);
     const balance = totalCredit - totalDebit;
 
+    if (loading) return <Loader2 className="animate-spin mx-auto mt-10"/>;
+
     return (
         <div className="space-y-6">
-            {/* Filters Panel */}
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-4">
-                    
-                    {/* Visão */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Filtrar por (Visão)</label>
-                        <select 
-                            value={viewMode} 
-                            onChange={(e) => setViewMode(e.target.value as any)} 
-                            className="w-full border p-2 rounded bg-gray-50"
-                        >
-                            <option value="DETAILED">Detalhado</option>
-                            <option value="SYNTHETIC">Sintético (Totais)</option>
-                        </select>
-                    </div>
-
-                    {/* Loja */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
-                        <select 
-                            value={storeFilter} 
-                            onChange={(e) => setStoreFilter(e.target.value)} 
-                            className="w-full border p-2 rounded"
-                        >
-                            <option value="">Todas as Lojas</option>
-                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-
-                    {/* Tipo de Período */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Consultar por</label>
-                        <select 
-                            value={timeType} 
-                            onChange={(e) => setTimeType(e.target.value as any)} 
-                            className="w-full border p-2 rounded bg-gray-50"
-                        >
-                            <option value="DATE">Data Específica</option>
-                            <option value="MONTH">Mês</option>
-                            <option value="YEAR">Ano</option>
-                        </select>
-                    </div>
-
-                    {/* Seleção de Data */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Selecionar</label>
-                        {timeType === 'DATE' && (
-                            <input type="date" value={dateValue} onChange={(e) => setDateValue(e.target.value)} className="w-full border p-2 rounded" />
-                        )}
-                        {timeType === 'MONTH' && (
-                            <input type="month" value={monthValue} onChange={(e) => setMonthValue(e.target.value)} className="w-full border p-2 rounded" />
-                        )}
-                        {timeType === 'YEAR' && (
-                            <input 
-                                type="number" 
-                                min="2020" max="2030" 
-                                value={yearValue} 
-                                onChange={(e) => setYearValue(e.target.value)} 
-                                className="w-full border p-2 rounded" 
-                            />
-                        )}
-                    </div>
-                </div>
-                <div className="flex gap-3 justify-end">
-                     <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-                        <FileSpreadsheet size={18}/> Excel
-                    </button>
-                    <button onClick={handlePrint} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                        <Printer size={18}/> Imprimir / PDF
-                    </button>
-                </div>
+            <div className="bg-white p-6 rounded-lg shadow border no-print flex gap-4 flex-wrap">
+                <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)} className="border p-2 rounded">
+                    <option value="">Todas as Lojas</option>
+                    {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <input type="month" value={dateValue} onChange={e => setDateValue(e.target.value)} className="border p-2 rounded" />
+                <button onClick={() => exportTransactionsToXML(filteredTransactions, '043')} className="ml-auto bg-green-600 text-white px-4 py-2 rounded flex gap-2"><FileSpreadsheet size={18}/> Excel</button>
             </div>
 
-            {/* Totals Banner */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-red-50 p-4 rounded border border-red-200">
-                    <span className="text-red-600 font-bold text-xs uppercase">Total Débitos</span>
-                    <div className="text-2xl font-black text-red-800">{formatCurrency(totalDebit)}</div>
-                </div>
-                <div className="bg-green-50 p-4 rounded border border-green-200">
-                    <span className="text-green-600 font-bold text-xs uppercase">Total Créditos</span>
-                    <div className="text-2xl font-black text-green-800">{formatCurrency(totalCredit)}</div>
-                </div>
-                <div className={`p-4 rounded border ${balance >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-yellow-50 border-yellow-200'}`}>
-                    <span className="text-gray-600 font-bold text-xs uppercase">Saldo Líquido</span>
-                    <div className={`text-2xl font-black ${balance >= 0 ? 'text-blue-800' : 'text-yellow-800'}`}>
-                        {formatCurrency(balance)}
-                    </div>
-                </div>
+                <div className="bg-red-50 p-4 rounded border text-red-800 font-bold">Débitos: {formatCurrency(totalDebit)}</div>
+                <div className="bg-green-50 p-4 rounded border text-green-800 font-bold">Créditos: {formatCurrency(totalCredit)}</div>
+                <div className={`p-4 rounded border font-bold ${balance >= 0 ? 'bg-blue-50 text-blue-800' : 'bg-yellow-50 text-yellow-800'}`}>Saldo: {formatCurrency(balance)}</div>
             </div>
 
-            {/* Content */}
-            {viewMode === 'DETAILED' ? (
-                <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Data</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Loja</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Tipo</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Descrição</th>
-                                <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Valor</th>
-                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase no-print">Ações</th>
+            <div className="bg-white rounded shadow border">
+                <table className="w-full">
+                    <thead className="bg-gray-50"><tr><th className="p-3 text-left">Data</th><th className="p-3 text-left">Loja</th><th className="p-3 text-left">Tipo</th><th className="p-3 text-right">Valor</th><th className="p-3">Ações</th></tr></thead>
+                    <tbody>
+                        {filteredTransactions.map(t => (
+                            <tr key={t.id} className="border-t hover:bg-gray-50">
+                                <td className="p-3">{formatDateBr(t.date)}</td>
+                                <td className="p-3">{t.store}</td>
+                                <td className="p-3 font-bold">{t.type === 'DEBIT' ? <span className="text-red-600">DÉBITO</span> : <span className="text-green-600">CRÉDITO</span>}</td>
+                                <td className="p-3 text-right font-mono">{formatCurrency(t.value)}</td>
+                                <td className="p-3 flex justify-center gap-2">
+                                    <button onClick={() => setEditingTransaction(t)} className="text-gray-600"><Edit size={18}/></button>
+                                    <button onClick={() => handleDelete(t.id)} className="text-red-500"><Trash2 size={18}/></button>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {filteredTransactions.map((t) => (
-                                <tr key={t.id} className="hover:bg-gray-50 break-inside-avoid">
-                                    <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">{formatDateBr(t.date)}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{t.store}</td>
-                                    <td className="px-6 py-4 text-sm">
-                                        {t.type === 'DEBIT' ? (
-                                            <span className="flex items-center gap-1 text-red-600 font-bold bg-red-50 px-2 py-1 rounded w-fit text-xs">
-                                                <TrendingDown size={14} /> DÉBITO
-                                            </span>
-                                        ) : (
-                                            <span className="flex items-center gap-1 text-green-600 font-bold bg-green-50 px-2 py-1 rounded w-fit text-xs">
-                                                <TrendingUp size={14} /> CRÉDITO
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-gray-600 italic">
-                                        {t.description || '-'}
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-right font-mono font-bold text-gray-800">
-                                        {formatCurrency(t.value)}
-                                    </td>
-                                    <td className="px-6 py-4 text-center whitespace-nowrap no-print">
-                                        <button 
-                                            onClick={() => handleEditClick(t)} 
-                                            className="text-gray-600 hover:text-gray-900 p-1 mr-2" 
-                                            title="Editar"
-                                        >
-                                            <Edit size={18} />
-                                        </button>
-                                        <button 
-                                            onClick={() => handleDelete(t.id)}
-                                            className="text-red-400 hover:text-red-600 p-1"
-                                            title="Excluir"
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {filteredTransactions.length === 0 && (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">Nenhum lançamento encontrado para os filtros selecionados.</td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            ) : (
-                <div className="bg-white p-12 rounded-lg shadow border border-gray-200 text-center">
-                     <TrendingUp size={48} className="mx-auto text-gray-300 mb-4" />
-                     <h3 className="text-xl font-bold text-gray-800">Resumo Sintético</h3>
-                     <p className="text-gray-500">Os totais calculados acima representam o consolidado do período selecionado.</p>
-                </div>
-            )}
-
-            {/* Edit Modal */}
-            {editingTransaction && (
-                <EditTransactionModal 
-                    transaction={editingTransaction} 
-                    onClose={() => setEditingTransaction(null)} 
-                    onSave={handleEditSave} 
-                />
-            )}
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {editingTransaction && <EditTransactionModal transaction={editingTransaction} onClose={() => setEditingTransaction(null)} onSave={handleEditSave} />}
         </div>
     );
 };

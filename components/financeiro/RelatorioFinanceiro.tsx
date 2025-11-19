@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { getFinancialRecords, getAppData, formatCurrency, exportFinancialToXML } from '../../services/storageService';
 import { AppData, FinancialRecord } from '../../types';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { FileText, FileSpreadsheet, Printer, AlertTriangle } from 'lucide-react';
+import { FileText, FileSpreadsheet, Printer, AlertTriangle, Loader2 } from 'lucide-react';
 
 interface FinancialChartData extends FinancialRecord {
     monthLabel: string;
@@ -12,6 +12,7 @@ interface FinancialChartData extends FinancialRecord {
 export const RelatorioFinanceiro: React.FC = () => {
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
     const [filteredData, setFilteredData] = useState<FinancialChartData[]>([]);
+    const [loading, setLoading] = useState(true);
     
     const [storeFilter, setStoreFilter] = useState('');
     const [yearFilter, setYearFilter] = useState('');
@@ -35,15 +36,22 @@ export const RelatorioFinanceiro: React.FC = () => {
     ];
 
     useEffect(() => {
-        setAppData(getAppData());
-        const raw = getFinancialRecords();
-        const uniqueYears = Array.from(new Set(raw.map(r => r.year.toString()))).sort().reverse();
-        setYears(uniqueYears);
-        if (uniqueYears.length > 0) setYearFilter(uniqueYears[0]);
+        const load = async () => {
+            setLoading(true);
+            const d = await getAppData();
+            setAppData(d);
+            const raw = await getFinancialRecords();
+            const uniqueYears = Array.from(new Set(raw.map(r => r.year.toString()))).sort().reverse();
+            setYears(uniqueYears);
+            if (uniqueYears.length > 0) setYearFilter(uniqueYears[0]);
+            setLoading(false);
+        };
+        load();
     }, []);
 
-    const generateReport = () => {
-        const rawRecords = getFinancialRecords();
+    const generateReport = async () => {
+        setLoading(true);
+        const rawRecords = await getFinancialRecords();
         let processed: FinancialChartData[] = [];
 
         if (storeFilter === '') {
@@ -90,6 +98,7 @@ export const RelatorioFinanceiro: React.FC = () => {
         });
 
         setFilteredData(processed);
+        setLoading(false);
     };
 
     const handleExport = () => {
@@ -127,6 +136,8 @@ export const RelatorioFinanceiro: React.FC = () => {
 
     const totalNetResult = filteredData.reduce((acc, curr) => acc + curr.netResult, 0);
 
+    if (loading && filteredData.length === 0) return <div className="flex justify-center p-10"><Loader2 className="animate-spin"/></div>;
+
     return (
         <div className="space-y-8">
              {/* Filters - Match Relatorio043 */}
@@ -159,7 +170,7 @@ export const RelatorioFinanceiro: React.FC = () => {
                 </div>
                 <div className="flex gap-3">
                     <button onClick={generateReport} className="bg-heroBlack text-white px-8 py-3 rounded font-bold hover:bg-gray-800 flex items-center gap-2">
-                        <FileText size={20} /> Gerar Relatório
+                         {loading ? <Loader2 className="animate-spin"/> : <FileText size={20} />} Gerar Relatório
                     </button>
                     {filteredData.length > 0 && (
                         <>

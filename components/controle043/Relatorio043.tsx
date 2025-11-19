@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { getTransactions043, getAppData, formatCurrency, formatDateBr, getTodayLocalISO, exportTransactionsToXML } from '../../services/storageService';
 import { AppData, Transaction043 } from '../../types';
-import { FileText, TrendingUp, TrendingDown, FileSpreadsheet, Printer } from 'lucide-react';
+import { FileText, TrendingUp, TrendingDown, FileSpreadsheet, Printer, Loader2 } from 'lucide-react';
 
 export const Relatorio043: React.FC = () => {
     const [transactions, setTransactions] = useState<Transaction043[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<Transaction043[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [loading, setLoading] = useState(true);
 
     // Relatório Filters
     const today = new Date();
@@ -18,8 +19,14 @@ export const Relatorio043: React.FC = () => {
     const [storeFilter, setStoreFilter] = useState('');
 
     useEffect(() => {
-        setTransactions(getTransactions043());
-        setAppData(getAppData());
+        const load = async () => {
+            setLoading(true);
+            const [t, d] = await Promise.all([getTransactions043(), getAppData()]);
+            setTransactions(t);
+            setAppData(d);
+            setLoading(false);
+        };
+        load();
     }, []);
 
     const generateReport = () => {
@@ -48,6 +55,8 @@ export const Relatorio043: React.FC = () => {
     const totalDebit = filteredTransactions.filter(t => t.type === 'DEBIT').reduce((acc, t) => acc + t.value, 0);
     const totalCredit = filteredTransactions.filter(t => t.type === 'CREDIT').reduce((acc, t) => acc + t.value, 0);
     const balance = totalCredit - totalDebit;
+
+    if (loading) return <Loader2 className="animate-spin mx-auto mt-10"/>;
 
     return (
         <div className="space-y-8">

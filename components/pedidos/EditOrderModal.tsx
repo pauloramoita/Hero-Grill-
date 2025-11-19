@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AppData, Order } from '../../types';
 import { getAppData, formatCurrency } from '../../services/storageService';
@@ -23,7 +24,11 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, 
     const [deliveryDate, setDeliveryDate] = useState(order.deliveryDate || '');
 
     useEffect(() => {
-        setAppData(getAppData());
+        const load = async () => {
+            const data = await getAppData();
+            setAppData(data);
+        };
+        load();
     }, []);
 
     const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>) => {

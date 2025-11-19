@@ -3,13 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { getOrders, getAppData, formatCurrency, deleteOrder, updateOrder, formatDateBr, exportToXML } from '../../services/storageService';
 import { AppData, Order } from '../../types';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { FileText, Edit, Trash2, FileSpreadsheet, Printer } from 'lucide-react';
+import { FileText, Edit, Trash2, FileSpreadsheet, Printer, Loader2 } from 'lucide-react';
 import { EditOrderModal } from './EditOrderModal';
 
 export const RelatorioPedidos: React.FC = () => {
     const [allOrders, setAllOrders] = useState<Order[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
     const [filteredData, setFilteredData] = useState<Order[]>([]);
+    const [loading, setLoading] = useState(true);
     
     const [editingOrder, setEditingOrder] = useState<Order | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -29,9 +30,12 @@ export const RelatorioPedidos: React.FC = () => {
         loadData();
     }, []);
 
-    const loadData = () => {
-        setAllOrders(getOrders());
-        setAppData(getAppData());
+    const loadData = async () => {
+        setLoading(true);
+        const [orders, data] = await Promise.all([getOrders(), getAppData()]);
+        setAllOrders(orders);
+        setAppData(data);
+        setLoading(false);
     };
 
     const generateReport = () => {
@@ -49,7 +53,7 @@ export const RelatorioPedidos: React.FC = () => {
 
     useEffect(() => {
         if (filteredData.length > 0 || allOrders.length > 0) {
-            generateReport();
+            // Optional: Auto-generate if needed, but manual trigger is better for performance
         }
     }, [allOrders]);
 
@@ -58,9 +62,9 @@ export const RelatorioPedidos: React.FC = () => {
         setDeletingId(id);
     };
 
-    const confirmDelete = () => {
+    const confirmDelete = async () => {
         if (deletingId) {
-            deleteOrder(deletingId);
+            await deleteOrder(deletingId);
             setAllOrders(prev => prev.filter(o => o.id !== deletingId));
             setDeletingId(null);
         }
@@ -71,8 +75,8 @@ export const RelatorioPedidos: React.FC = () => {
         setEditingOrder(order);
     };
 
-    const handleEditSave = (updatedOrder: Order) => {
-        updateOrder(updatedOrder);
+    const handleEditSave = async (updatedOrder: Order) => {
+        await updateOrder(updatedOrder);
         setEditingOrder(null);
         setAllOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
     };
@@ -97,6 +101,8 @@ export const RelatorioPedidos: React.FC = () => {
 
     // Calc total for summary box
     const totalValue = filteredData.reduce((acc, o) => acc + o.totalValue, 0);
+
+    if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" size={40}/></div>;
 
     return (
         <div className="space-y-8">
@@ -215,7 +221,7 @@ export const RelatorioPedidos: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Final Summary Box - New Addition */}
+                    {/* Final Summary Box */}
                     <div className="flex justify-end">
                         <div className="p-6 rounded-lg shadow-lg border w-full md:w-1/3 text-center bg-blue-600 border-blue-700 text-white">
                             <h4 className="text-sm font-bold uppercase opacity-90 mb-2">Valor Total do Período</h4>

@@ -20,7 +20,11 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ tran
     const [description, setDescription] = useState(transaction.description);
 
     useEffect(() => {
-        setAppData(getAppData());
+        const load = async () => {
+            const data = await getAppData();
+            setAppData(data);
+        };
+        load();
     }, []);
 
     const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {

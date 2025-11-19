@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { getAccountBalances, getAppData, formatCurrency, exportBalancesToXML } from '../../services/storageService';
 import { AppData, AccountBalance } from '../../types';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine } from 'recharts';
-import { FileText, FileSpreadsheet, Printer } from 'lucide-react';
+import { FileText, FileSpreadsheet, Printer, Loader2 } from 'lucide-react';
 
 interface BalanceWithVariation extends AccountBalance {
     variation: number;
@@ -13,6 +13,7 @@ interface BalanceWithVariation extends AccountBalance {
 export const RelatorioSaldo: React.FC = () => {
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
     const [filteredData, setFilteredData] = useState<BalanceWithVariation[]>([]);
+    const [loading, setLoading] = useState(true);
     
     const [storeFilter, setStoreFilter] = useState('');
     const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
@@ -36,14 +37,21 @@ export const RelatorioSaldo: React.FC = () => {
     ];
 
     useEffect(() => {
-        setAppData(getAppData());
-        const raw = getAccountBalances();
-        const uniqueYears = Array.from(new Set(raw.map(b => b.year.toString()))).sort().reverse();
-        setYears(uniqueYears);
+        const load = async () => {
+            setLoading(true);
+            const d = await getAppData();
+            setAppData(d);
+            const raw = await getAccountBalances();
+            const uniqueYears = Array.from(new Set(raw.map(b => b.year.toString()))).sort().reverse();
+            setYears(uniqueYears);
+            setLoading(false);
+        };
+        load();
     }, []);
 
-    const generateReport = () => {
-        const rawBalances = getAccountBalances();
+    const generateReport = async () => {
+        setLoading(true);
+        const rawBalances = await getAccountBalances();
         let processed: BalanceWithVariation[] = [];
 
         if (storeFilter === '') {
@@ -116,6 +124,7 @@ export const RelatorioSaldo: React.FC = () => {
         });
 
         setFilteredData(result);
+        setLoading(false);
     };
 
     const handleExport = () => {
@@ -146,6 +155,8 @@ export const RelatorioSaldo: React.FC = () => {
     };
 
     const totalVariation = filteredData.reduce((acc, curr) => acc + curr.variation, 0);
+
+    if (loading && filteredData.length === 0) return <div className="flex justify-center p-10"><Loader2 className="animate-spin"/></div>;
 
     return (
         <div className="space-y-8">
@@ -179,7 +190,7 @@ export const RelatorioSaldo: React.FC = () => {
                 </div>
                 <div className="flex gap-3">
                     <button onClick={generateReport} className="bg-heroBlack text-white px-8 py-3 rounded font-bold hover:bg-gray-800 flex items-center gap-2">
-                        <FileText size={20} /> Gerar Relatório
+                        {loading ? <Loader2 className="animate-spin"/> : <FileText size={20} />} Gerar Relatório
                     </button>
                     {filteredData.length > 0 && (
                         <>
