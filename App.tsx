@@ -39,7 +39,7 @@ const App: React.FC = () => {
     };
 
     const menuItems: { id: View, label: string, icon: React.ReactNode, color: string, disabled: boolean, requiredPerm: string }[] = [
-        { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={48} />, color: 'bg-heroRed', disabled: false, requiredPerm: 'pedidos' },
+        { id: 'pedidos', label: 'Cadastro', icon: <ShoppingCart size={48} />, color: 'bg-heroRed', disabled: false, requiredPerm: 'pedidos' },
         { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={48} />, color: 'bg-heroBlack', disabled: false, requiredPerm: 'controle043' },
         { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={48} />, color: 'bg-gray-800', disabled: false, requiredPerm: 'saldo' },
         { id: 'financeiro', label: 'Financeiro', icon: <DollarSign size={48} />, color: 'bg-gray-700', disabled: false, requiredPerm: 'financeiro' },

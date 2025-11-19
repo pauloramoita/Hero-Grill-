@@ -20,7 +20,7 @@ export const PedidosModule: React.FC = () => {
     return (
         <div className="w-full max-w-7xl mx-auto p-4">
             <h1 className="text-3xl font-black text-heroBlack mb-6 border-l-8 border-heroRed pl-4 uppercase italic">
-                Módulo de Pedidos
+                Módulo de Cadastro
             </h1>
 
             {/* Tabs */}

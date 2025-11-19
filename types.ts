@@ -5,6 +5,8 @@ export interface AppData {
     brands: string[];
     suppliers: string[];
     units: string[];
+    types: string[]; // Novo
+    categories: string[]; // Novo
 }
 
 export interface Order {
@@ -18,7 +20,9 @@ export interface Order {
     unitMeasure: string;
     quantity: number;
     totalValue: number;
-    deliveryDate: string | null; // YYYY-MM-DD or null
+    deliveryDate: string | null; // Usado agora como Data Vencimento visualmente
+    type?: string; // Novo
+    category?: string; // Novo
 }
 
 export interface Transaction043 {

@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS system_users (
   created_at timestamptz DEFAULT now()
 );
 
--- Tabela de Pedidos
+-- Tabela de Pedidos (Atualizada com Tipo e Categoria)
 CREATE TABLE IF NOT EXISTS orders (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   date date NOT NULL,
@@ -67,8 +67,21 @@ CREATE TABLE IF NOT EXISTS orders (
   quantity numeric,
   total_value numeric,
   delivery_date date,
+  type text, -- Novo campo: Variável ou Fixa
+  category text, -- Novo campo
   created_at timestamptz DEFAULT now()
 );
+
+-- MIGRATION: Adicionar colunas caso não existam (Para bancos já criados)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='type') THEN
+        ALTER TABLE orders ADD COLUMN type text DEFAULT 'Variável';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='category') THEN
+        ALTER TABLE orders ADD COLUMN category text;
+    END IF;
+END $$;
 
 -- Tabela de Configurações (Lojas, Produtos, etc)
 CREATE TABLE IF NOT EXISTS app_configurations (
@@ -157,6 +170,10 @@ export const getConfigStatus = () => ({
     urlPreview: supabaseUrl ? `${supabaseUrl.substring(0, 15)}...` : '(vazio)'
 });
 
+export const isValidUUID = (uuid: string) => {
+    const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return regex.test(uuid);
+}
 
 // === APP DATA (CONFIGURAÇÕES) ===
 
@@ -165,7 +182,9 @@ const defaultData: AppData = {
     products: [],
     brands: [],
     suppliers: [],
-    units: []
+    units: [],
+    types: ['Variável', 'Fixa'], // Padrão solicitado
+    categories: []
 };
 
 export const getAppData = async (): Promise<AppData> => {
@@ -184,7 +203,14 @@ export const getAppData = async (): Promise<AppData> => {
         if (row.category === 'brands') appData.brands = row.items || [];
         if (row.category === 'suppliers') appData.suppliers = row.items || [];
         if (row.category === 'units') appData.units = row.items || [];
+        if (row.category === 'types') appData.types = row.items || [];
+        if (row.category === 'categories') appData.categories = row.items || [];
     });
+
+    // Garante que "Variável" e "Fixa" estejam presentes se a lista de types vier vazia do banco (primeiro acesso)
+    if (appData.types.length === 0) {
+        appData.types = ['Variável', 'Fixa'];
+    }
 
     const sortList = (list: string[]) => [...list].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
@@ -193,7 +219,9 @@ export const getAppData = async (): Promise<AppData> => {
         products: sortList(appData.products),
         brands: sortList(appData.brands),
         suppliers: sortList(appData.suppliers),
-        units: sortList(appData.units)
+        units: sortList(appData.units),
+        types: sortList(appData.types),
+        categories: sortList(appData.categories)
     };
 };
 
@@ -204,6 +232,8 @@ export const saveAppData = async (data: AppData) => {
         { category: 'brands', items: data.brands },
         { category: 'suppliers', items: data.suppliers },
         { category: 'units', items: data.units },
+        { category: 'types', items: data.types },
+        { category: 'categories', items: data.categories },
     ];
 
     for (const cat of categories) {
@@ -240,7 +270,7 @@ export const loginUser = async (username: string, password: string): Promise<{su
             .from('system_users')
             .select('*')
             .eq('username', username)
-            .eq('password', password) // Note: In production, use hashing. Plaintext for simple requested scope.
+            .eq('password', password)
             .single();
 
         if (error) {
@@ -333,7 +363,9 @@ export const getOrders = async (): Promise<Order[]> => {
         unitValue: o.unit_value,
         quantity: o.quantity,
         totalValue: o.total_value,
-        deliveryDate: o.delivery_date
+        deliveryDate: o.delivery_date,
+        type: o.type || 'Variável',
+        category: o.category
     }));
 };
 
@@ -359,7 +391,9 @@ export const getLastOrderForProduct = async (productName: string): Promise<Order
         unitValue: o.unit_value,
         quantity: o.quantity,
         totalValue: o.total_value,
-        deliveryDate: o.delivery_date
+        deliveryDate: o.delivery_date,
+        type: o.type,
+        category: o.category
     };
 };
 
@@ -375,7 +409,9 @@ export const saveOrder = async (order: Order) => {
         unit_value: order.unitValue,
         quantity: order.quantity,
         total_value: order.totalValue,
-        delivery_date: order.deliveryDate
+        delivery_date: order.deliveryDate,
+        type: order.type,
+        category: order.category
     };
     
     const { error } = await supabase.from('orders').insert(dbOrder);
@@ -393,7 +429,9 @@ export const updateOrder = async (order: Order) => {
         unit_value: order.unitValue,
         quantity: order.quantity,
         total_value: order.totalValue,
-        delivery_date: order.deliveryDate
+        delivery_date: order.deliveryDate,
+        type: order.type,
+        category: order.category
     };
 
     const { error } = await supabase.from('orders').update(dbOrder).eq('id', order.id);
@@ -714,13 +752,13 @@ const downloadXml = (content: string, filename: string) => {
 };
 
 export const exportToXML = (orders: Order[], filename: string) => {
-    const escapeXml = (unsafe: string) => unsafe.replace(/[<>&'"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','\'':'&apos;','"':'&quot;'}[c] || c));
+    const escapeXml = (unsafe: string) => unsafe ? unsafe.replace(/[<>&'"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','\'':'&apos;','"':'&quot;'}[c] || c)) : '';
     let xmlContent = getExcelHeader();
-    xmlContent += ' <Worksheet ss:Name="Relatorio Pedidos">\n';
+    xmlContent += ' <Worksheet ss:Name="Relatorio Cadastro">\n';
     xmlContent += '  <Table x:FullColumns="1" x:FullRows="1">\n';
     
     xmlContent += '   <Row>\n';
-    const headers = ['Data', 'Loja', 'Produto', 'Marca', 'Fornecedor', 'Valor Unit.', 'Un.', 'Qtd', 'Total', 'Entrega'];
+    const headers = ['Data', 'Loja', 'Tipo', 'Categoria', 'Produto', 'Marca', 'Fornecedor', 'Valor Unit.', 'Un.', 'Qtd', 'Total', 'Vencimento'];
     headers.forEach(h => { xmlContent += `    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${h}</Data></Cell>\n`; });
     xmlContent += '   </Row>\n';
 
@@ -728,6 +766,8 @@ export const exportToXML = (orders: Order[], filename: string) => {
         xmlContent += '   <Row>\n';
         xmlContent += `    <Cell ss:StyleID="CenterStyle"><Data ss:Type="String">${formatDateBr(o.date)}</Data></Cell>\n`;
         xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(o.store)}</Data></Cell>\n`;
+        xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(o.type || 'Variável')}</Data></Cell>\n`;
+        xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(o.category || '')}</Data></Cell>\n`;
         xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(o.product)}</Data></Cell>\n`;
         xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(o.brand)}</Data></Cell>\n`;
         xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(o.supplier)}</Data></Cell>\n`;
@@ -785,7 +825,7 @@ export const createBackup = async () => {
         const users = await getUsers();
 
         const backupObj = {
-            version: 7, 
+            version: 8, // Updated version
             timestamp: new Date().toISOString(),
             source: 'supabase_cloud',
             appData,
@@ -824,40 +864,49 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
 
                 // 2. Restaurando Pedidos (Upsert em Lotes para performance e anti-duplicidade)
                 if (parsed.orders && Array.isArray(parsed.orders)) {
-                    const dbOrders = parsed.orders.map((o: any) => ({
-                        id: o.id, // Importante: Preservar ID para fazer UPSERT e não duplicar
-                        date: o.date,
-                        store: o.store,
-                        product: o.product,
-                        brand: o.brand,
-                        supplier: o.supplier,
-                        unit_measure: o.unitMeasure,
-                        unit_value: o.unitValue,
-                        quantity: o.quantity,
-                        total_value: o.totalValue,
-                        delivery_date: o.deliveryDate
-                    }));
+                    const dbOrders = parsed.orders.map((o: any) => {
+                        // Clean invalid UUIDs if they exist from old localstorage data
+                        const validId = o.id && isValidUUID(o.id) ? o.id : undefined;
+                        
+                        return {
+                            id: validId, 
+                            date: o.date,
+                            store: o.store,
+                            product: o.product,
+                            brand: o.brand,
+                            supplier: o.supplier,
+                            unit_measure: o.unitMeasure,
+                            unit_value: o.unitValue,
+                            quantity: o.quantity,
+                            total_value: o.totalValue,
+                            delivery_date: o.deliveryDate,
+                            type: o.type || 'Variável',
+                            category: o.category
+                        };
+                    });
 
                     // Processar em chunks de 100 para não estourar payload
                     const CHUNK_SIZE = 100;
+                    let errorCount = 0;
                     for (let i = 0; i < dbOrders.length; i += CHUNK_SIZE) {
                         const chunk = dbOrders.slice(i, i + CHUNK_SIZE);
-                        const { error } = await supabase.from('orders').upsert(chunk);
-                        if (error) console.warn("Erro ao restaurar bloco de pedidos:", error.message);
+                        // Se tem ID, upsert. Se não, insert.
+                        const { error } = await supabase.from('orders').upsert(chunk, { ignoreDuplicates: false });
+                        if (error) {
+                            console.warn("Erro ao restaurar bloco de pedidos:", error.message);
+                            errorCount++;
+                        }
                     }
                 }
 
                 // 3. Restaurando 043
                 if (parsed.transactions043 && Array.isArray(parsed.transactions043)) {
                     for (const t of parsed.transactions043) {
-                        // Usa Upsert se tiver ID
-                        if(t.id) {
-                             await supabase.from('transactions_043').upsert({
-                                id: t.id, date: t.date, store: t.store, type: t.type, value: t.value, description: t.description
-                            });
-                        } else {
-                            await saveTransaction043(t);
-                        }
+                        const tData = {
+                             id: t.id && isValidUUID(t.id) ? t.id : undefined, 
+                             date: t.date, store: t.store, type: t.type, value: t.value, description: t.description
+                        };
+                        await supabase.from('transactions_043').upsert(tData);
                     }
                 }
 
@@ -865,7 +914,7 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                 if (parsed.saldoContas && Array.isArray(parsed.saldoContas)) {
                      for (const b of parsed.saldoContas) {
                         const balanceData = {
-                            id: b.id, // Use ID if available
+                            id: b.id && isValidUUID(b.id) ? b.id : undefined, 
                             store: b.store, year: b.year, month: b.month,
                             caixa_economica: b.caixaEconomica, cofre: b.cofre, loteria: b.loteria,
                             pagbank_h: b.pagbankH, pagbank_d: b.pagbankD, investimentos: b.investimentos,
@@ -879,7 +928,7 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                  if (parsed.financeiro && Array.isArray(parsed.financeiro)) {
                      for (const f of parsed.financeiro) {
                          const finData = {
-                            id: f.id,
+                            id: f.id && isValidUUID(f.id) ? f.id : undefined, 
                             store: f.store, year: f.year, month: f.month,
                             credit_caixa: f.creditCaixa, credit_delta: f.creditDelta, credit_pagbank_h: f.creditPagBankH, credit_pagbank_d: f.creditPagBankD, credit_ifood: f.creditIfood,
                             total_revenues: f.totalRevenues,
@@ -895,7 +944,7 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                 if (parsed.users && Array.isArray(parsed.users)) {
                     for (const u of parsed.users) {
                         const userData = {
-                            id: u.id,
+                            id: u.id && isValidUUID(u.id) ? u.id : undefined,
                             name: u.name,
                             username: u.username,
                             password: u.password,

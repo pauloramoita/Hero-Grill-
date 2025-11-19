@@ -11,10 +11,12 @@ interface EditOrderModalProps {
 }
 
 export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, onSave }) => {
-    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     
     const [date, setDate] = useState(order.date);
     const [store, setStore] = useState(order.store);
+    const [type, setType] = useState(order.type || 'Variável');
+    const [category, setCategory] = useState(order.category || '');
     const [product, setProduct] = useState(order.product);
     const [brand, setBrand] = useState(order.brand);
     const [supplier, setSupplier] = useState(order.supplier);
@@ -39,7 +41,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, 
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!store || !product || !brand || !supplier || unitValue <= 0 || !unitMeasure || !quantity) {
+        if (!store || !product || !brand || !supplier || unitValue <= 0 || !unitMeasure || !quantity || !type) {
             alert('Por favor, preencha todos os campos obrigatórios.');
             return;
         }
@@ -48,6 +50,8 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, 
             ...order,
             date,
             store,
+            type,
+            category,
             product,
             brand,
             supplier,
@@ -65,7 +69,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, 
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center p-6 border-b border-gray-200">
-                    <h3 className="text-xl font-bold text-heroBlack">Editar Pedido</h3>
+                    <h3 className="text-xl font-bold text-heroBlack">Editar Cadastro</h3>
                     <button type="button" onClick={onClose} className="text-gray-500 hover:text-red-600">
                         <X size={24} />
                     </button>
@@ -73,7 +77,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, 
 
                 <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Data do Pedido</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Data</label>
                         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-2 border rounded"/>
                     </div>
                     
@@ -81,6 +85,21 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, 
                         <label className="block text-sm font-bold text-gray-700 mb-1">Loja</label>
                         <select value={store} onChange={(e) => setStore(e.target.value)} className="w-full p-2 border rounded">
                             {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Tipo</label>
+                        <select value={type} onChange={(e) => setType(e.target.value)} className="w-full p-2 border rounded">
+                            {appData.types.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+
+                     <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Categoria</label>
+                        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full p-2 border rounded">
+                            <option value="">Selecione...</option>
+                            {appData.categories.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
 
@@ -139,7 +158,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, 
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Data Entrega</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Data Vencimento</label>
                         <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="w-full p-2 border rounded"/>
                     </div>
 

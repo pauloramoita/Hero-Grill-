@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { getOrders, getAppData, updateOrder, deleteOrder, exportToXML, formatCurrency, getTodayLocalISO, formatDateBr } from '../../services/storageService';
 import { AppData, Order } from '../../types';
@@ -7,7 +8,7 @@ import { EditOrderModal } from './EditOrderModal';
 export const ConsultaPedidos: React.FC = () => {
     const [allOrders, setAllOrders] = useState<Order[]>([]);
     const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
-    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loading, setLoading] = useState(true);
     
     const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -23,7 +24,9 @@ export const ConsultaPedidos: React.FC = () => {
         store: '',
         product: '',
         brand: '',
-        supplier: ''
+        supplier: '',
+        type: '',
+        category: ''
     });
     const [onlyPending, setOnlyPending] = useState(false);
 
@@ -46,7 +49,9 @@ export const ConsultaPedidos: React.FC = () => {
                    (filters.store === '' || o.store === filters.store) &&
                    (filters.product === '' || o.product === filters.product) &&
                    (filters.brand === '' || o.brand === filters.brand) &&
-                   (filters.supplier === '' || o.supplier === filters.supplier);
+                   (filters.supplier === '' || o.supplier === filters.supplier) &&
+                   (filters.type === '' || o.type === filters.type) &&
+                   (filters.category === '' || o.category === filters.category);
         });
 
         if (onlyPending) {
@@ -57,6 +62,7 @@ export const ConsultaPedidos: React.FC = () => {
 
     const quickDeliver = async (order: Order, e: React.MouseEvent) => {
         e.stopPropagation();
+        // Considera a ação rápida como "Pago/Resolvido na data atual"
         const updated = { ...order, deliveryDate: getTodayLocalISO() };
         await updateOrder(updated);
         setAllOrders(prev => prev.map(o => o.id === order.id ? updated : o));
@@ -76,7 +82,7 @@ export const ConsultaPedidos: React.FC = () => {
         setAllOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
     };
 
-    const handleExport = () => exportToXML(filteredOrders, 'relatorio_pedidos');
+    const handleExport = () => exportToXML(filteredOrders, 'relatorio_cadastro');
 
     const totalValue = filteredOrders.reduce((acc, o) => acc + o.totalValue, 0);
     
@@ -85,7 +91,7 @@ export const ConsultaPedidos: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Data Início</label>
                         <input type="date" value={filters.dateStart} onChange={e => setFilters({...filters, dateStart: e.target.value})} className="w-full border p-2 rounded"/>
@@ -99,6 +105,20 @@ export const ConsultaPedidos: React.FC = () => {
                         <select value={filters.store} onChange={e => setFilters({...filters, store: e.target.value})} className="w-full border p-2 rounded">
                             <option value="">Todas</option>
                             {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Tipo</label>
+                        <select value={filters.type} onChange={e => setFilters({...filters, type: e.target.value})} className="w-full border p-2 rounded">
+                            <option value="">Todos</option>
+                            {appData.types.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Categoria</label>
+                        <select value={filters.category} onChange={e => setFilters({...filters, category: e.target.value})} className="w-full border p-2 rounded">
+                            <option value="">Todas</option>
+                            {appData.categories.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                      <div>
@@ -129,7 +149,7 @@ export const ConsultaPedidos: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-gray-50 p-4 rounded border flex flex-col">
-                    <span className="text-gray-500 font-bold text-xs uppercase flex items-center gap-2"><Package size={14}/> Total Pedidos</span>
+                    <span className="text-gray-500 font-bold text-xs uppercase flex items-center gap-2"><Package size={14}/> Total Itens</span>
                     <div className="text-2xl font-black">{filteredOrders.length}</div>
                 </div>
                 <div className="bg-blue-50 p-4 rounded border flex flex-col">
@@ -142,7 +162,7 @@ export const ConsultaPedidos: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            {['Data', 'Loja', 'Produto', 'Marca', 'Valor', 'Qtd', 'Total', 'Entrega', 'Ações'].map(h => (
+                            {['Data', 'Loja', 'Tipo', 'Produto', 'Valor', 'Total', 'Vencimento', 'Ações'].map(h => (
                                 <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">{h}</th>
                             ))}
                         </tr>
@@ -152,10 +172,15 @@ export const ConsultaPedidos: React.FC = () => {
                             <tr key={order.id} className="hover:bg-gray-50 break-inside-avoid">
                                 <td className="px-4 py-2 text-sm">{formatDateBr(order.date)}</td>
                                 <td className="px-4 py-2 text-sm">{order.store}</td>
-                                <td className="px-4 py-2 text-sm font-medium">{order.product}</td>
-                                <td className="px-4 py-2 text-sm">{order.brand}</td>
+                                <td className="px-4 py-2 text-sm">
+                                    <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">{order.type}</span>
+                                    {order.category && <span className="block text-xs text-gray-500 mt-1">{order.category}</span>}
+                                </td>
+                                <td className="px-4 py-2 text-sm font-medium">
+                                    {order.product}
+                                    <div className="text-xs text-gray-400">{order.brand}</div>
+                                </td>
                                 <td className="px-4 py-2 text-sm">{formatCurrency(order.unitValue)}</td>
-                                <td className="px-4 py-2 text-sm">{order.quantity}</td>
                                 <td className="px-4 py-2 text-sm font-bold">{formatCurrency(order.totalValue)}</td>
                                 <td className="px-4 py-2 text-sm">
                                     {order.deliveryDate ? <span className="text-green-600">{formatDateBr(order.deliveryDate)}</span> : <span className="text-orange-500">Pendente</span>}

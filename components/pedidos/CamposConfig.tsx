@@ -1,17 +1,20 @@
+
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { getAppData, saveAppData } from '../../services/storageService';
 import { AppData } from '../../types';
 
 export const CamposConfig: React.FC = () => {
-    const [data, setData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [data, setData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loading, setLoading] = useState(true);
     const [inputs, setInputs] = useState({
         stores: '',
         products: '',
         brands: '',
         suppliers: '',
-        units: ''
+        units: '',
+        types: '',
+        categories: ''
     });
 
     useEffect(() => {
@@ -51,6 +54,12 @@ export const CamposConfig: React.FC = () => {
     };
 
     const removeItem = async (key: keyof AppData, itemToRemove: string) => {
+        // Proteção para Tipos padrão
+        if (key === 'types' && (itemToRemove === 'Variável' || itemToRemove === 'Fixa')) {
+            alert('Este tipo padrão não pode ser removido.');
+            return;
+        }
+
         if(!window.confirm(`Deseja remover "${itemToRemove}"?`)) return;
 
         const updatedList = data[key].filter(item => item !== itemToRemove);
@@ -90,8 +99,9 @@ export const CamposConfig: React.FC = () => {
                             <button 
                                 onClick={() => removeItem(key, item)}
                                 className="text-red-500 hover:text-white hover:bg-red-600 p-2 rounded transition-colors"
+                                title="Remover"
                             >
-                                <Trash2 size={20} />
+                                <Trash2 size={16} />
                             </button>
                         </li>
                     ))}
@@ -103,6 +113,8 @@ export const CamposConfig: React.FC = () => {
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {renderSection("Tipos", "types", "Novo Tipo (Ex: Variável)")}
+            {renderSection("Categorias", "categories", "Nova Categoria (Ex: Limpeza)")}
             {renderSection("Lojas", "stores", "Nome da Loja")}
             {renderSection("Produtos", "products", "Nome do Produto")}
             {renderSection("Marcas", "brands", "Marca do Produto")}

@@ -8,7 +8,7 @@ import { EditOrderModal } from './EditOrderModal';
 
 export const RelatorioPedidos: React.FC = () => {
     const [allOrders, setAllOrders] = useState<Order[]>([]);
-    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [filteredData, setFilteredData] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     
@@ -86,7 +86,7 @@ export const RelatorioPedidos: React.FC = () => {
             alert("Gere o relatório antes de exportar.");
             return;
         }
-        exportToXML(filteredData, 'relatorio_pedidos_personalizado');
+        exportToXML(filteredData, 'relatorio_cadastro_personalizado');
     };
 
     const handlePrint = () => {
@@ -178,7 +178,7 @@ export const RelatorioPedidos: React.FC = () => {
                              <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        {['Data', 'Loja', 'Produto', 'Marca', 'Fornecedor', 'Vl. Unit.', 'Qtd', 'Total', 'Ações'].map(h => (
+                                        {['Data', 'Loja', 'Tipo', 'Produto', 'Vl. Unit.', 'Total', 'Vencimento', 'Ações'].map(h => (
                                             <th key={h} className={`px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider ${h === 'Ações' ? 'no-print' : ''}`}>{h}</th>
                                         ))}
                                     </tr>
@@ -188,12 +188,16 @@ export const RelatorioPedidos: React.FC = () => {
                                         <tr key={order.id} className="break-inside-avoid">
                                             <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{formatDateBr(order.date)}</td>
                                             <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.store}</td>
+                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">
+                                                {order.type} 
+                                                {order.category && <span className="text-xs text-gray-400 block">{order.category}</span>}
+                                            </td>
                                             <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 font-medium">{order.product}</td>
-                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.brand}</td>
-                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.supplier}</td>
                                             <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{formatCurrency(order.unitValue)}</td>
-                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.quantity.toFixed(3)}</td>
                                             <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 font-bold">{formatCurrency(order.totalValue)}</td>
+                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-600">
+                                                 {order.deliveryDate ? formatDateBr(order.deliveryDate) : '-'}
+                                            </td>
                                             <td className="px-6 py-2 whitespace-nowrap text-sm no-print">
                                                 <div className="flex gap-2">
                                                     <button 

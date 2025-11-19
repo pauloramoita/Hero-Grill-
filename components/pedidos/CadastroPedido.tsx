@@ -1,22 +1,25 @@
+
 import React, { useState, useEffect } from 'react';
 import { getAppData, saveOrder, getLastOrderForProduct, formatCurrency } from '../../services/storageService';
 import { AppData } from '../../types';
 import { Calendar, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 
 export const CadastroPedido: React.FC = () => {
-    const [data, setData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [data, setData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loadingData, setLoadingData] = useState(true);
     const [saving, setSaving] = useState(false);
     
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [store, setStore] = useState('');
+    const [type, setType] = useState('Variável');
+    const [category, setCategory] = useState('');
     const [product, setProduct] = useState('');
     const [brand, setBrand] = useState('');
     const [supplier, setSupplier] = useState('');
     const [unitValue, setUnitValue] = useState<number>(0);
     const [unitMeasure, setUnitMeasure] = useState('');
     const [quantity, setQuantity] = useState<string>('');
-    const [deliveryDate, setDeliveryDate] = useState('');
+    const [deliveryDate, setDeliveryDate] = useState(''); // Agora representa "Data Vencimento"
 
     const [errors, setErrors] = useState<Record<string, boolean>>({});
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -39,6 +42,8 @@ export const CadastroPedido: React.FC = () => {
                     if (!supplier) setSupplier(lastOrder.supplier);
                     setUnitMeasure(lastOrder.unitMeasure);
                     setUnitValue(lastOrder.unitValue);
+                    if (lastOrder.category) setCategory(lastOrder.category);
+                    if (lastOrder.type) setType(lastOrder.type);
                 }
             }
         };
@@ -84,7 +89,8 @@ export const CadastroPedido: React.FC = () => {
             supplier: !supplier,
             unitMeasure: !unitMeasure,
             unitValue: unitValue <= 0,
-            quantity: qtyFloat <= 0
+            quantity: qtyFloat <= 0,
+            type: !type
         };
 
         setErrors(newErrors);
@@ -99,7 +105,10 @@ export const CadastroPedido: React.FC = () => {
             await saveOrder({
                 id: '', // DB Generates
                 date, store, product, brand, supplier, unitValue, unitMeasure,
-                quantity: qtyFloat, totalValue: unitValue * qtyFloat, deliveryDate: deliveryDate || null
+                quantity: qtyFloat, totalValue: unitValue * qtyFloat, 
+                deliveryDate: deliveryDate || null,
+                type,
+                category
             });
 
             setProduct('');
@@ -108,8 +117,9 @@ export const CadastroPedido: React.FC = () => {
             setUnitValue(0);
             setQuantity('');
             setDeliveryDate('');
+            // Mantém Tipo e Categoria para agilizar
             setErrors({});
-            alert('Pedido cadastrado!');
+            alert('Cadastro realizado!');
         } catch (err: any) {
             setSubmitError(err.message);
         } finally {
@@ -124,7 +134,7 @@ export const CadastroPedido: React.FC = () => {
 
     return (
         <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-lg border border-gray-200 max-w-4xl mx-auto animate-fadeIn">
-            <h2 className="text-2xl font-bold text-heroBlack mb-6 border-b-2 border-heroRed pb-2">Novo Pedido</h2>
+            <h2 className="text-2xl font-bold text-heroBlack mb-6 border-b-2 border-heroRed pb-2">Novo Cadastro</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -138,6 +148,21 @@ export const CadastroPedido: React.FC = () => {
                         {data.stores.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
+
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Tipo {errors.type && '*'}</label>
+                    <select value={type} onChange={(e) => setType(e.target.value)} className={getInputClass(errors.type)}>
+                         {data.types.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Categoria</label>
+                    <select value={category} onChange={(e) => setCategory(e.target.value)} className={getInputClass(false)}>
+                        <option value="">Selecione...</option>
+                         {data.categories.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </div>
+
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1">Produto {errors.product && '*'}</label>
                     <select value={product} onChange={(e) => setProduct(e.target.value)} className={getInputClass(errors.product)}>
@@ -179,11 +204,8 @@ export const CadastroPedido: React.FC = () => {
                     <div className="text-2xl font-black text-gray-800 text-right">{calculateTotal()}</div>
                 </div>
                 <div>
-                     <label className="block text-sm font-bold text-gray-700 mb-1">Data Entrega</label>
-                     <div className="flex gap-2">
-                        <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="flex-1 p-3 border rounded"/>
-                        <button type="button" onClick={() => setDeliveryDate(new Date().toISOString().split('T')[0])} className="bg-blue-600 text-white p-3 rounded"><Calendar size={24} /></button>
-                     </div>
+                     <label className="block text-sm font-bold text-gray-700 mb-1">Data Vencimento</label>
+                     <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="w-full p-3 border rounded"/>
                 </div>
             </div>
 
