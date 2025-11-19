@@ -47,7 +47,6 @@ export const RelatorioPedidos: React.FC = () => {
         setFilteredData(sorted);
     };
 
-    // Re-generate report if data changes (e.g. after edit/delete)
     useEffect(() => {
         if (filteredData.length > 0 || allOrders.length > 0) {
             generateReport();
@@ -62,7 +61,6 @@ export const RelatorioPedidos: React.FC = () => {
     const confirmDelete = () => {
         if (deletingId) {
             deleteOrder(deletingId);
-            // Update local state immediately
             setAllOrders(prev => prev.filter(o => o.id !== deletingId));
             setDeletingId(null);
         }
@@ -76,7 +74,6 @@ export const RelatorioPedidos: React.FC = () => {
     const handleEditSave = (updatedOrder: Order) => {
         updateOrder(updatedOrder);
         setEditingOrder(null);
-        // Update local state immediately
         setAllOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
     };
 
@@ -93,42 +90,45 @@ export const RelatorioPedidos: React.FC = () => {
     };
 
     const chartData = filteredData.map(o => ({
-        // Use simple string slice to avoid timezone shifts on dates
-        date: formatDateBr(o.date).slice(0, 5), // dd/mm
+        date: formatDateBr(o.date).slice(0, 5),
         valorUnitario: o.unitValue,
         marca: o.brand
     }));
 
+    // Calc total for summary box
+    const totalValue = filteredData.reduce((acc, o) => acc + o.totalValue, 0);
+
     return (
         <div className="space-y-8">
-            {/* Filters */}
+            {/* Filters - Styled like Relatorio043 */}
             <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <h3 className="text-lg font-bold text-heroRed mb-4 border-b pb-2">Parâmetros do Relatório</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                     <div>
-                        <label className="block text-xs font-bold text-gray-600">Data Início</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Início</label>
                         <input type="date" value={filters.dateStart} onChange={e => setFilters({...filters, dateStart: e.target.value})} className="w-full border p-2 rounded"/>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600">Data Final</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Final</label>
                         <input type="date" value={filters.dateEnd} onChange={e => setFilters({...filters, dateEnd: e.target.value})} className="w-full border p-2 rounded"/>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600">Loja</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
                         <select value={filters.store} onChange={e => setFilters({...filters, store: e.target.value})} className="w-full border p-2 rounded">
                             <option value="">Todas</option>
                             {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600">Produto</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Produto</label>
                         <select value={filters.product} onChange={e => setFilters({...filters, product: e.target.value})} className="w-full border p-2 rounded">
-                            <option value="">Selecione (Obrigatório para gráfico preciso)</option>
+                            <option value="">Selecione (Opcional)</option>
                             {appData.products.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                 </div>
                 <div className="flex gap-3">
-                    <button onClick={generateReport} className="bg-heroRed text-white px-8 py-2 rounded font-bold hover:bg-red-800 flex items-center gap-2">
+                    <button onClick={generateReport} className="bg-heroBlack text-white px-8 py-3 rounded font-bold hover:bg-gray-800 flex items-center gap-2">
                         <FileText size={20} /> Gerar Relatório
                     </button>
                     {filteredData.length > 0 && (
@@ -146,7 +146,7 @@ export const RelatorioPedidos: React.FC = () => {
 
             {/* Chart */}
             {filteredData.length > 0 && filters.product && (
-                <div className="bg-white p-6 rounded-lg shadow border border-gray-200 h-96">
+                <div className="bg-white p-6 rounded-lg shadow border border-gray-200 h-96 break-inside-avoid">
                     <h3 className="text-lg font-bold text-heroBlack mb-4">Evolução de Preço Unitário: {filters.product}</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData}>
@@ -163,54 +163,64 @@ export const RelatorioPedidos: React.FC = () => {
 
             {/* Detailed List */}
             {filteredData.length > 0 && (
-                <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                        <h3 className="text-lg font-bold text-gray-800">Detalhamento do Período</h3>
-                    </div>
-                    <div className="overflow-x-auto">
-                         <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    {['Data', 'Loja', 'Produto', 'Marca', 'Fornecedor', 'Vl. Unit.', 'Qtd', 'Total', 'Ações'].map(h => (
-                                        <th key={h} className={`px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider ${h === 'Ações' ? 'no-print' : ''}`}>{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {filteredData.map((order) => (
-                                    <tr key={order.id} className="break-inside-avoid">
-                                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{formatDateBr(order.date)}</td>
-                                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.store}</td>
-                                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 font-medium">{order.product}</td>
-                                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.brand}</td>
-                                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.supplier}</td>
-                                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{formatCurrency(order.unitValue)}</td>
-                                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.quantity.toFixed(3)}</td>
-                                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 font-bold">{formatCurrency(order.totalValue)}</td>
-                                        <td className="px-6 py-2 whitespace-nowrap text-sm no-print">
-                                            <div className="flex gap-2">
-                                                <button 
-                                                    type="button"
-                                                    onClick={(e) => handleEditClick(order, e)}
-                                                    className="text-gray-600 hover:text-gray-900 p-1 cursor-pointer"
-                                                    title="Editar"
-                                                >
-                                                    <Edit size={18} />
-                                                </button>
-                                                <button 
-                                                    type="button"
-                                                    onClick={(e) => handleDeleteClick(order.id, e)}
-                                                    className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
-                                                    title="Excluir"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
-                                            </div>
-                                        </td>
+                <div className="space-y-4 animate-fadeIn">
+                    <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                            <h3 className="text-lg font-bold text-gray-800">Detalhamento do Período</h3>
+                        </div>
+                        <div className="overflow-x-auto">
+                             <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        {['Data', 'Loja', 'Produto', 'Marca', 'Fornecedor', 'Vl. Unit.', 'Qtd', 'Total', 'Ações'].map(h => (
+                                            <th key={h} className={`px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider ${h === 'Ações' ? 'no-print' : ''}`}>{h}</th>
+                                        ))}
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {filteredData.map((order) => (
+                                        <tr key={order.id} className="break-inside-avoid">
+                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{formatDateBr(order.date)}</td>
+                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.store}</td>
+                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 font-medium">{order.product}</td>
+                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.brand}</td>
+                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.supplier}</td>
+                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{formatCurrency(order.unitValue)}</td>
+                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.quantity.toFixed(3)}</td>
+                                            <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 font-bold">{formatCurrency(order.totalValue)}</td>
+                                            <td className="px-6 py-2 whitespace-nowrap text-sm no-print">
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={(e) => handleEditClick(order, e)}
+                                                        className="text-gray-600 hover:text-gray-900 p-1 cursor-pointer"
+                                                        title="Editar"
+                                                    >
+                                                        <Edit size={18} />
+                                                    </button>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={(e) => handleDeleteClick(order.id, e)}
+                                                        className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
+                                                        title="Excluir"
+                                                    >
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Final Summary Box - New Addition */}
+                    <div className="flex justify-end">
+                        <div className="p-6 rounded-lg shadow-lg border w-full md:w-1/3 text-center bg-blue-600 border-blue-700 text-white">
+                            <h4 className="text-sm font-bold uppercase opacity-90 mb-2">Valor Total do Período</h4>
+                            <span className="text-4xl font-black tracking-tight">{formatCurrency(totalValue)}</span>
+                        </div>
                     </div>
                 </div>
             )}
@@ -223,7 +233,6 @@ export const RelatorioPedidos: React.FC = () => {
                 />
             )}
 
-            {/* Delete Confirmation Modal */}
             {deletingId && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] no-print">
                     <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4 border-l-4 border-heroRed animate-fadeIn">

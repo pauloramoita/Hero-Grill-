@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getFinancialRecords, getAppData, formatCurrency, deleteFinancialRecord, updateFinancialRecord, exportFinancialToXML } from '../../services/storageService';
 import { AppData, FinancialRecord } from '../../types';
-import { Search, Trash2, Edit, FileSpreadsheet, Printer, TrendingUp, TrendingDown, Layers } from 'lucide-react';
+import { Search, Trash2, Edit, FileSpreadsheet, Printer, TrendingUp, TrendingDown, Layers, DollarSign, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { EditFinanceiroModal } from './EditFinanceiroModal';
 
 interface FinancialRecordWithAgg extends FinancialRecord {
@@ -139,9 +139,14 @@ export const ConsultaFinanceiro: React.FC = () => {
     const years = (Array.from(new Set(rawRecords.map(r => r.year))) as number[]).sort((a, b) => b - a);
     const getMonthName = (m: string) => monthNames.find(mn => mn.value === m)?.label || m;
 
+    // Calculate Totals for Banner
+    const totalRevenues = displayRecords.reduce((acc, r) => acc + r.totalRevenues, 0);
+    const totalExpenses = displayRecords.reduce((acc, r) => acc + r.totalExpenses, 0);
+    const totalNet = totalRevenues - totalExpenses;
+
     return (
         <div className="space-y-6">
-             {/* Filters */}
+             {/* Filters - Style match Controle 043 */}
              <div className="bg-white p-6 rounded-lg shadow border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
                 <div>
                     <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
@@ -166,16 +171,32 @@ export const ConsultaFinanceiro: React.FC = () => {
                         ))}
                     </select>
                 </div>
+                
+                {/* Action Buttons Inside Panel */}
+                <div className="md:col-span-3 flex justify-end gap-2 border-t pt-4 mt-2">
+                    <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">
+                        <FileSpreadsheet size={18}/> Excel
+                    </button>
+                    <button onClick={handlePrint} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow-sm">
+                        <Printer size={18}/> Imprimir / PDF
+                    </button>
+                </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex justify-end gap-2 no-print">
-                <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-                    <FileSpreadsheet size={18}/> Excel
-                </button>
-                <button onClick={handlePrint} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                    <Printer size={18}/> Imprimir / PDF
-                </button>
+            {/* Totals Banner */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-green-50 p-4 rounded border border-green-200 flex flex-col">
+                    <span className="text-green-600 font-bold text-xs uppercase flex items-center gap-2"><ArrowUpCircle size={14}/> Receitas Totais</span>
+                    <div className="text-2xl font-black text-green-800">{formatCurrency(totalRevenues)}</div>
+                </div>
+                <div className="bg-red-50 p-4 rounded border border-red-200 flex flex-col">
+                    <span className="text-red-600 font-bold text-xs uppercase flex items-center gap-2"><ArrowDownCircle size={14}/> Despesas Totais</span>
+                    <div className="text-2xl font-black text-red-800">{formatCurrency(totalExpenses)}</div>
+                </div>
+                <div className={`p-4 rounded border flex flex-col ${totalNet >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-red-100 border-red-300'}`}>
+                    <span className={`font-bold text-xs uppercase flex items-center gap-2 ${totalNet >= 0 ? 'text-blue-600' : 'text-red-700'}`}><DollarSign size={14}/> Saldo Líquido</span>
+                    <div className={`text-2xl font-black ${totalNet >= 0 ? 'text-blue-800' : 'text-red-800'}`}>{formatCurrency(totalNet)}</div>
+                </div>
             </div>
 
             {/* Table */}

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getOrders, getAppData, updateOrder, deleteOrder, exportToXML, formatCurrency, getTodayLocalISO, formatDateBr } from '../../services/storageService';
 import { AppData, Order } from '../../types';
-import { CheckCircle, Search, AlertTriangle, Download, Trash2, Edit, Printer } from 'lucide-react';
+import { CheckCircle, Search, AlertTriangle, Download, Trash2, Edit, Printer, Package, DollarSign } from 'lucide-react';
 import { EditOrderModal } from './EditOrderModal';
 
 export const ConsultaPedidos: React.FC = () => {
@@ -29,7 +29,6 @@ export const ConsultaPedidos: React.FC = () => {
         supplier: ''
     });
     
-    // Add persistent state for "Pending Only" mode
     const [onlyPending, setOnlyPending] = useState(false);
 
     useEffect(() => {
@@ -41,7 +40,6 @@ export const ConsultaPedidos: React.FC = () => {
         setAppData(getAppData());
     };
 
-    // Re-apply filters when data OR filter state changes
     useEffect(() => {
         handleFilter();
     }, [allOrders, onlyPending, filters]);
@@ -66,28 +64,22 @@ export const ConsultaPedidos: React.FC = () => {
 
     const quickDeliver = (order: Order, e: React.MouseEvent) => {
         e.stopPropagation();
-        // Immediate update without confirmation dialog as requested
         const todayISO = getTodayLocalISO();
         const updated = { ...order, deliveryDate: todayISO };
-        
         updateOrder(updated);
-        
-        // Optimistically update local state to reflect change immediately in UI
         setAllOrders(prev => prev.map(o => o.id === order.id ? updated : o));
     };
 
     const handleDeleteClick = (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        // Open the confirmation modal
         setDeletingId(id);
     };
 
     const confirmDelete = () => {
         if (deletingId) {
             deleteOrder(deletingId);
-            // Optimistically update local state
             setAllOrders(prev => prev.filter(o => o.id !== deletingId));
-            setDeletingId(null); // Close modal
+            setDeletingId(null);
         }
     };
 
@@ -99,7 +91,6 @@ export const ConsultaPedidos: React.FC = () => {
     const handleEditSave = (updatedOrder: Order) => {
         updateOrder(updatedOrder);
         setEditingOrder(null);
-        // Update state to reflect edits
         setAllOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
     };
 
@@ -115,71 +106,88 @@ export const ConsultaPedidos: React.FC = () => {
         window.print();
     };
 
-    const hiddenCount = allOrders.length - filteredOrders.length;
+    // Totals Calculation
+    const totalValue = filteredOrders.reduce((acc, o) => acc + o.totalValue, 0);
+    const totalItems = filteredOrders.length;
+    const pendingItems = filteredOrders.filter(o => !o.deliveryDate).length;
 
     return (
         <div className="space-y-6">
-            {/* Filters */}
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 no-print">
-                <div>
-                    <label className="block text-xs font-bold text-gray-600">Data Início</label>
-                    <input type="date" value={filters.dateStart} onChange={e => setFilters({...filters, dateStart: e.target.value})} className="w-full border p-2 rounded"/>
+            {/* Filters Panel - Style match Controle 043 */}
+            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Início</label>
+                        <input type="date" value={filters.dateStart} onChange={e => setFilters({...filters, dateStart: e.target.value})} className="w-full border p-2 rounded"/>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Final</label>
+                        <input type="date" value={filters.dateEnd} onChange={e => setFilters({...filters, dateEnd: e.target.value})} className="w-full border p-2 rounded"/>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
+                        <select value={filters.store} onChange={e => setFilters({...filters, store: e.target.value})} className="w-full border p-2 rounded">
+                            <option value="">Todas</option>
+                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Produto</label>
+                        <select value={filters.product} onChange={e => setFilters({...filters, product: e.target.value})} className="w-full border p-2 rounded">
+                            <option value="">Todos</option>
+                            {appData.products.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Marca</label>
+                        <select value={filters.brand} onChange={e => setFilters({...filters, brand: e.target.value})} className="w-full border p-2 rounded">
+                            <option value="">Todas</option>
+                            {appData.brands.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                     <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
+                        <select value={filters.supplier} onChange={e => setFilters({...filters, supplier: e.target.value})} className="w-full border p-2 rounded">
+                            <option value="">Todos</option>
+                            {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
                 </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-600">Data Final</label>
-                    <input type="date" value={filters.dateEnd} onChange={e => setFilters({...filters, dateEnd: e.target.value})} className="w-full border p-2 rounded"/>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-600">Loja</label>
-                    <select value={filters.store} onChange={e => setFilters({...filters, store: e.target.value})} className="w-full border p-2 rounded">
-                        <option value="">Todas</option>
-                        {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-600">Produto</label>
-                    <select value={filters.product} onChange={e => setFilters({...filters, product: e.target.value})} className="w-full border p-2 rounded">
-                        <option value="">Todos</option>
-                        {appData.products.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-600">Marca</label>
-                    <select value={filters.brand} onChange={e => setFilters({...filters, brand: e.target.value})} className="w-full border p-2 rounded">
-                        <option value="">Todas</option>
-                        {appData.brands.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                </div>
-                 <div>
-                    <label className="block text-xs font-bold text-gray-600">Fornecedor</label>
-                    <select value={filters.supplier} onChange={e => setFilters({...filters, supplier: e.target.value})} className="w-full border p-2 rounded">
-                        <option value="">Todos</option>
-                        {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+
+                {/* Actions Row inside Filter Panel */}
+                <div className="flex flex-wrap justify-between items-center gap-4 border-t pt-4 mt-2">
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => setOnlyPending(!onlyPending)} 
+                            className={`flex items-center gap-2 px-4 py-2 rounded text-sm font-bold transition-colors ${onlyPending ? 'bg-orange-100 text-orange-700 border border-orange-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
+                        >
+                            <AlertTriangle size={16}/> {onlyPending ? 'Mostrando Apenas Pendentes' : 'Mostrar Pendentes'}
+                        </button>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors shadow-sm">
+                            <Download size={18}/> Excel
+                        </button>
+                        <button onClick={handlePrint} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors shadow-sm">
+                            <Printer size={18}/> Imprimir / PDF
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex flex-wrap gap-4 no-print">
-                <button 
-                    onClick={() => setOnlyPending(false)} 
-                    className={`flex items-center gap-2 px-6 py-2 rounded hover:bg-gray-800 transition-colors ${!onlyPending ? 'bg-heroBlack text-white' : 'bg-gray-200 text-gray-700'}`}
-                >
-                    <Search size={18}/> Pesquisar Todos
-                </button>
-                <button 
-                    onClick={() => setOnlyPending(true)} 
-                    className={`flex items-center gap-2 px-6 py-2 rounded hover:bg-orange-700 transition-colors ${onlyPending ? 'bg-orange-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-                >
-                    <AlertTriangle size={18}/> Pedidos Não Entregues
-                </button>
-                <div className="ml-auto flex gap-2">
-                    <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-                        <Download size={18}/> Excel
-                    </button>
-                    <button onClick={handlePrint} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                        <Printer size={18}/> Imprimir / PDF
-                    </button>
+            {/* Totals Banner - New Addition matching 043 style */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-gray-50 p-4 rounded border border-gray-200 flex flex-col">
+                    <span className="text-gray-500 font-bold text-xs uppercase flex items-center gap-2"><Package size={14}/> Total de Pedidos</span>
+                    <div className="text-2xl font-black text-gray-800">{totalItems}</div>
+                </div>
+                <div className="bg-orange-50 p-4 rounded border border-orange-200 flex flex-col">
+                    <span className="text-orange-600 font-bold text-xs uppercase flex items-center gap-2"><AlertTriangle size={14}/> Pendentes</span>
+                    <div className="text-2xl font-black text-orange-800">{pendingItems}</div>
+                </div>
+                <div className="bg-blue-50 p-4 rounded border border-blue-200 flex flex-col">
+                    <span className="text-blue-600 font-bold text-xs uppercase flex items-center gap-2"><DollarSign size={14}/> Valor Total</span>
+                    <div className="text-2xl font-black text-blue-800">{formatCurrency(totalValue)}</div>
                 </div>
             </div>
 
@@ -247,22 +255,7 @@ export const ConsultaPedidos: React.FC = () => {
                         {filteredOrders.length === 0 && (
                             <tr>
                                 <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
-                                    {hiddenCount > 0 ? (
-                                        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg inline-block">
-                                            <p className="font-bold text-orange-700 flex items-center justify-center gap-2 mb-1">
-                                                <AlertTriangle size={20}/> Atenção!
-                                            </p>
-                                            <p className="text-orange-800">
-                                                Existem <span className="font-black text-lg">{hiddenCount}</span> pedidos registrados no banco de dados, 
-                                                mas eles estão ocultos pelos filtros atuais (Datas ou Campos).
-                                            </p>
-                                            <p className="text-sm text-orange-600 mt-2">
-                                                Verifique se a <strong>Data Final</strong> está correta para visualizar os dados importados.
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        "Nenhum pedido encontrado."
-                                    )}
+                                    Nenhum pedido encontrado.
                                 </td>
                             </tr>
                         )}
@@ -270,7 +263,6 @@ export const ConsultaPedidos: React.FC = () => {
                 </table>
             </div>
 
-            {/* Edit Modal */}
             {editingOrder && (
                 <EditOrderModal 
                     order={editingOrder} 
@@ -279,13 +271,12 @@ export const ConsultaPedidos: React.FC = () => {
                 />
             )}
 
-            {/* Delete Confirmation Modal */}
             {deletingId && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] no-print">
                     <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4 border-l-4 border-heroRed animate-fadeIn">
                         <h3 className="text-xl font-bold text-heroBlack mb-2">Confirmar Exclusão</h3>
                         <p className="text-gray-600 mb-6">
-                            Tem certeza que deseja excluir este lançamento? <br/>
+                            Tem certeza que deseja excluir este pedido? <br/>
                             <span className="text-sm text-red-500 font-semibold">Esta ação não pode ser desfeita.</span>
                         </p>
                         <div className="flex justify-end gap-3">

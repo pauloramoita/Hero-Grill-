@@ -39,7 +39,6 @@ export const RelatorioFinanceiro: React.FC = () => {
         const raw = getFinancialRecords();
         const uniqueYears = Array.from(new Set(raw.map(r => r.year.toString()))).sort().reverse();
         setYears(uniqueYears);
-        // Default to most recent year if available
         if (uniqueYears.length > 0) setYearFilter(uniqueYears[0]);
     }, []);
 
@@ -48,7 +47,6 @@ export const RelatorioFinanceiro: React.FC = () => {
         let processed: FinancialChartData[] = [];
 
         if (storeFilter === '') {
-            // Aggregation
             const grouped: Record<string, FinancialChartData> = {};
             rawRecords.forEach(r => {
                 const key = `${r.year}-${r.month}`;
@@ -81,13 +79,11 @@ export const RelatorioFinanceiro: React.FC = () => {
                 });
         }
 
-        // Filter
         processed = processed.filter(r => {
             return (yearFilter === '' || r.year.toString() === yearFilter) &&
                    (monthFilter === '' || r.month === monthFilter);
         });
 
-        // Sort Oldest to Newest for Chart
         processed.sort((a, b) => {
             if (a.year !== b.year) return a.year - b.year;
             return a.month.localeCompare(b.month);
@@ -129,10 +125,13 @@ export const RelatorioFinanceiro: React.FC = () => {
         return null;
     };
 
+    const totalNetResult = filteredData.reduce((acc, curr) => acc + curr.netResult, 0);
+
     return (
         <div className="space-y-8">
-             {/* Filters */}
+             {/* Filters - Match Relatorio043 */}
              <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
+                <h3 className="text-lg font-bold text-heroRed mb-4 border-b pb-2">Parâmetros do Relatório</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
@@ -159,7 +158,7 @@ export const RelatorioFinanceiro: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex gap-3">
-                    <button onClick={generateReport} className="bg-gray-800 text-white px-8 py-3 rounded font-bold hover:bg-black flex items-center gap-2 w-full md:w-auto justify-center">
+                    <button onClick={generateReport} className="bg-heroBlack text-white px-8 py-3 rounded font-bold hover:bg-gray-800 flex items-center gap-2">
                         <FileText size={20} /> Gerar Relatório
                     </button>
                     {filteredData.length > 0 && (
@@ -224,6 +223,14 @@ export const RelatorioFinanceiro: React.FC = () => {
                                 <Bar dataKey="totalExpenses" name="Despesas" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={40} />
                             </BarChart>
                         </ResponsiveContainer>
+                    </div>
+
+                    {/* Final Summary Box */}
+                    <div className="flex justify-end">
+                        <div className={`p-6 rounded-lg shadow-lg border w-full md:w-1/3 text-center ${totalNetResult >= 0 ? 'bg-blue-600 border-blue-700 text-white' : 'bg-red-600 border-red-700 text-white'}`}>
+                            <h4 className="text-sm font-bold uppercase opacity-90 mb-2">Resultado Final Acumulado</h4>
+                            <span className="text-4xl font-black tracking-tight">{formatCurrency(totalNetResult)}</span>
+                        </div>
                     </div>
                 </div>
             ) : (

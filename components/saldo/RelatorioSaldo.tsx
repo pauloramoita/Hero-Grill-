@@ -18,7 +18,6 @@ export const RelatorioSaldo: React.FC = () => {
     const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
     const [monthFilter, setMonthFilter] = useState('');
 
-    // Available Years
     const [years, setYears] = useState<string[]>([]);
 
     const monthNames = [
@@ -48,8 +47,6 @@ export const RelatorioSaldo: React.FC = () => {
         let processed: BalanceWithVariation[] = [];
 
         if (storeFilter === '') {
-            // === AGGREGATION MODE (ALL STORES) ===
-            // 1. Group by Year-Month
             const grouped: Record<string, AccountBalance> = {};
 
             rawBalances.forEach(b => {
@@ -60,27 +57,17 @@ export const RelatorioSaldo: React.FC = () => {
                         id: `agg-${key}`,
                         store: 'Todas as Lojas (Consolidado)',
                         totalBalance: 0,
-                        // Zero out others just in case
                         caixaEconomica: 0, cofre: 0, loteria: 0, pagbankH: 0, pagbankD: 0, investimentos: 0,
                     };
                 }
                 grouped[key].totalBalance += b.totalBalance;
-                // Also sum components if needed for export
-                grouped[key].caixaEconomica += b.caixaEconomica;
-                grouped[key].cofre += b.cofre;
-                grouped[key].loteria += b.loteria;
-                grouped[key].pagbankH += b.pagbankH;
-                grouped[key].pagbankD += b.pagbankD;
-                grouped[key].investimentos += b.investimentos;
             });
 
-            // 2. Convert to array and Sort by Date (Oldest -> Newest)
             const aggregatedList = Object.values(grouped).sort((a, b) => {
                 if (a.year !== b.year) return a.year - b.year;
                 return a.month.localeCompare(b.month);
             });
 
-            // 3. Calculate Variation
             for (let i = 0; i < aggregatedList.length; i++) {
                 const current = aggregatedList[i];
                 let variation = 0;
@@ -98,8 +85,6 @@ export const RelatorioSaldo: React.FC = () => {
             }
 
         } else {
-            // === INDIVIDUAL STORE MODE ===
-            // Sort: Store -> Year -> Month
             rawBalances.sort((a, b) => {
                 if (a.store !== b.store) return a.store.localeCompare(b.store);
                 if (a.year !== b.year) return a.year - b.year;
@@ -110,7 +95,6 @@ export const RelatorioSaldo: React.FC = () => {
                 const current = rawBalances[i];
                 let variation = 0;
 
-                // Only compare if same store
                 if (i > 0 && rawBalances[i-1].store === current.store) {
                     variation = current.totalBalance - rawBalances[i-1].totalBalance;
                 }
@@ -125,9 +109,8 @@ export const RelatorioSaldo: React.FC = () => {
             }
         }
 
-        // Apply Filters
         const result = processed.filter(b => {
-            return (storeFilter === '' || b.store === storeFilter) && // Note: store name was changed to 'Todas...' in agg mode, so this works because filter is ''
+            return (storeFilter === '' || b.store === storeFilter) &&
                    (yearFilter === '' || b.year.toString() === yearFilter) &&
                    (monthFilter === '' || b.month === monthFilter);
         });
@@ -162,10 +145,13 @@ export const RelatorioSaldo: React.FC = () => {
         return null;
     };
 
+    const totalVariation = filteredData.reduce((acc, curr) => acc + curr.variation, 0);
+
     return (
         <div className="space-y-8">
-            {/* Filters */}
+            {/* Filters - Match Relatorio043 */}
             <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
+                <h3 className="text-lg font-bold text-heroRed mb-4 border-b pb-2">Parâmetros do Relatório</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
@@ -192,7 +178,7 @@ export const RelatorioSaldo: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex gap-3">
-                    <button onClick={generateReport} className="bg-heroBlack text-white px-8 py-3 rounded font-bold hover:bg-gray-800 flex items-center gap-2 w-full md:w-auto justify-center">
+                    <button onClick={generateReport} className="bg-heroBlack text-white px-8 py-3 rounded font-bold hover:bg-gray-800 flex items-center gap-2">
                         <FileText size={20} /> Gerar Relatório
                     </button>
                     {filteredData.length > 0 && (
@@ -212,7 +198,6 @@ export const RelatorioSaldo: React.FC = () => {
             {filteredData.length > 0 ? (
                 <div className="space-y-8 animate-fadeIn">
                     
-                    {/* Table */}
                     <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
                         <div className="p-4 bg-gray-50 border-b font-bold text-gray-700">Histórico de Variação {storeFilter ? ` - ${storeFilter}` : ' (Consolidado)'}</div>
                          <table className="min-w-full divide-y divide-gray-200">
@@ -239,7 +224,6 @@ export const RelatorioSaldo: React.FC = () => {
                         </table>
                     </div>
 
-                    {/* Chart */}
                     <div className="bg-white p-6 rounded-lg shadow border border-gray-200 h-96 break-inside-avoid">
                         <h3 className="text-lg font-bold text-heroBlack mb-6 text-center uppercase tracking-wider">
                             Evolução do Total (Lucro/Prejuízo)
@@ -259,11 +243,15 @@ export const RelatorioSaldo: React.FC = () => {
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
-                        <p className="text-center text-xs text-gray-400 mt-4">
-                            *Barras Verdes representam aumento de saldo em relação ao mês anterior. Barras Vermelhas representam diminuição.
-                        </p>
                     </div>
 
+                     {/* Final Summary Box */}
+                     <div className="flex justify-end">
+                        <div className={`p-6 rounded-lg shadow-lg border w-full md:w-1/3 text-center ${totalVariation >= 0 ? 'bg-blue-600 border-blue-700 text-white' : 'bg-red-600 border-red-700 text-white'}`}>
+                            <h4 className="text-sm font-bold uppercase opacity-90 mb-2">Variação Acumulada no Período</h4>
+                            <span className="text-4xl font-black tracking-tight">{formatCurrency(totalVariation)}</span>
+                        </div>
+                    </div>
                 </div>
             ) : (
                 <div className="text-center text-gray-400 py-12 border-2 border-dashed border-gray-200 rounded-lg">

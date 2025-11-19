@@ -46,7 +46,6 @@ export const ConsultaSaldo: React.FC = () => {
         setRawBalances(loaded);
     };
 
-    // Effect to process data whenever filters or raw data changes
     useEffect(() => {
         processData();
     }, [rawBalances, storeFilter, yearFilter, monthFilter]);
@@ -55,64 +54,43 @@ export const ConsultaSaldo: React.FC = () => {
         let processed: BalanceWithVariation[] = [];
 
         if (storeFilter === '') {
-            // === AGGREGATION MODE (ALL STORES) ===
-            // 1. Group by Year-Month
             const grouped: Record<string, AccountBalance> = {};
 
             rawBalances.forEach(b => {
                 const key = `${b.year}-${b.month}`;
                 if (!grouped[key]) {
-                    // Create a base object for the month
                     grouped[key] = {
                         ...b,
-                        id: `agg-${key}`, // Artificial ID
+                        id: `agg-${key}`,
                         store: 'Todas as Lojas (Consolidado)',
                         caixaEconomica: 0, cofre: 0, loteria: 0, pagbankH: 0, pagbankD: 0, investimentos: 0,
                         totalBalance: 0
                     };
                 }
-                // Sum values
                 grouped[key].totalBalance += b.totalBalance;
-                // (Optional: Sum individual accounts if we wanted to show them detailed)
-                grouped[key].caixaEconomica += b.caixaEconomica;
-                grouped[key].cofre += b.cofre;
-                grouped[key].loteria += b.loteria;
-                grouped[key].pagbankH += b.pagbankH;
-                grouped[key].pagbankD += b.pagbankD;
-                grouped[key].investimentos += b.investimentos;
             });
 
-            // 2. Convert to array and Sort by Date (Oldest -> Newest) for variation calculation
             const aggregatedList = Object.values(grouped).sort((a, b) => {
                 if (a.year !== b.year) return a.year - b.year;
                 return a.month.localeCompare(b.month);
             });
 
-            // 3. Calculate Variation on the Aggregated Data
             for (let i = 0; i < aggregatedList.length; i++) {
                 const current = aggregatedList[i];
                 let variation = 0;
-                
-                // Compare with previous month in the aggregated list
                 if (i > 0) {
                     variation = current.totalBalance - aggregatedList[i-1].totalBalance;
                 }
-                
                 processed.push({ ...current, variation, isAggregated: true });
             }
 
         } else {
-            // === INDIVIDUAL STORE MODE ===
-            // 1. Filter by store first
             const storeData = rawBalances.filter(b => b.store === storeFilter);
-            
-            // 2. Sort by Date
             storeData.sort((a, b) => {
                 if (a.year !== b.year) return a.year - b.year;
                 return a.month.localeCompare(b.month);
             });
 
-            // 3. Calculate Variation
             for (let i = 0; i < storeData.length; i++) {
                 const current = storeData[i];
                 let variation = 0;
@@ -123,24 +101,19 @@ export const ConsultaSaldo: React.FC = () => {
             }
         }
 
-        // 4. Apply Date Filters (Year/Month) AFTER variation calculation to keep history context
-        // If we filter before, we might lose the "previous month" needed for the first visible row's calculation.
-        // However, for strict filtering matching the UI dropdowns:
         let result = processed.filter(b => {
             return (yearFilter === '' || b.year.toString() === yearFilter) &&
                    (monthFilter === '' || b.month === monthFilter);
         });
 
-        // 5. Reverse for Display (Newest First)
         result.reverse();
-
         setDisplayBalances(result);
     };
 
     const handleDelete = (id: string) => {
         if (window.confirm('Tem certeza que deseja excluir este registro?')) {
             deleteAccountBalance(id);
-            loadData(); // Reload raw data
+            loadData();
         }
     };
 
@@ -167,46 +140,46 @@ export const ConsultaSaldo: React.FC = () => {
     };
 
     const years = (Array.from(new Set(rawBalances.map(b => b.year))) as number[]).sort((a, b) => b - a);
-
     const getMonthName = (m: string) => monthNames.find(mn => mn.value === m)?.label || m;
 
     return (
         <div className="space-y-6">
-            {/* Filters */}
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
-                <div>
-                    <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
-                    <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)} className="w-full border p-2 rounded">
-                        <option value="">Todas as Lojas (Consolidado)</option>
-                        {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+            {/* Filters Panel - Style match Controle 043 */}
+            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
+                        <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)} className="w-full border p-2 rounded">
+                            <option value="">Todas as Lojas (Consolidado)</option>
+                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Ano</label>
+                        <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} className="w-full border p-2 rounded">
+                            <option value="">Todos os Anos</option>
+                            {years.map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Mês</label>
+                        <select value={monthFilter} onChange={e => setMonthFilter(e.target.value)} className="w-full border p-2 rounded">
+                            <option value="">Todos os Meses</option>
+                            {monthNames.map((m) => (
+                                <option key={m.value} value={m.value}>{m.label}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-600 mb-1">Ano</label>
-                    <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} className="w-full border p-2 rounded">
-                        <option value="">Todos os Anos</option>
-                        {years.map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
+                {/* Actions Inside Panel */}
+                <div className="flex justify-end gap-2 border-t pt-4 mt-2">
+                    <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">
+                        <FileSpreadsheet size={18}/> Excel
+                    </button>
+                    <button onClick={handlePrint} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow-sm">
+                        <Printer size={18}/> Imprimir / PDF
+                    </button>
                 </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-600 mb-1">Mês</label>
-                    <select value={monthFilter} onChange={e => setMonthFilter(e.target.value)} className="w-full border p-2 rounded">
-                        <option value="">Todos os Meses</option>
-                        {monthNames.map((m) => (
-                            <option key={m.value} value={m.value}>{m.label}</option>
-                        ))}
-                    </select>
-                </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex justify-end gap-2 no-print">
-                <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-                    <FileSpreadsheet size={18}/> Excel
-                </button>
-                <button onClick={handlePrint} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                    <Printer size={18}/> Imprimir / PDF
-                </button>
             </div>
 
             {/* Table */}
