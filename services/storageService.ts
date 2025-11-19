@@ -342,6 +342,35 @@ export const deleteUser = async (id: string) => {
     if (error) throw new Error(error.message);
 };
 
+export const changeUserPassword = async (userId: string, currentPass: string, newPass: string) => {
+    // Não permite alterar o master
+    if (userId === 'master-001') {
+        throw new Error("A senha do Administrador Mestre é fixa e não pode ser alterada por esta tela.");
+    }
+
+    // 1. Verificar senha atual
+    const { data, error } = await supabase
+        .from('system_users')
+        .select('id')
+        .eq('id', userId)
+        .eq('password', currentPass)
+        .single();
+
+    if (error || !data) {
+        throw new Error("A senha atual informada está incorreta.");
+    }
+
+    // 2. Atualizar para nova senha
+    const { error: updateError } = await supabase
+        .from('system_users')
+        .update({ password: newPass })
+        .eq('id', userId);
+
+    if (updateError) {
+        throw new Error("Erro ao atualizar senha: " + updateError.message);
+    }
+};
+
 
 // === ORDERS ===
 

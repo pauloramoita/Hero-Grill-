@@ -8,12 +8,14 @@ import { SaldoModule } from './components/saldo/SaldoModule';
 import { FinanceiroModule } from './components/financeiro/FinanceiroModule';
 import { AdminModule } from './components/admin/AdminModule';
 import { LoginScreen } from './components/LoginScreen';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { View, User } from './types';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Grid, LogOut, Settings } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Grid, LogOut, Settings, KeyRound } from 'lucide-react';
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
     const [currentView, setCurrentView] = useState<View>('home');
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
 
     // Efeito para carregar sessão (opcional, por enquanto limpa no refresh por segurança conforme pedido "sempre pedir login")
     // Se quiser persistir: useEffect(() => { const saved = localStorage.getItem('hero_user'); if(saved) setUser(JSON.parse(saved)); }, []);
@@ -89,13 +91,23 @@ const App: React.FC = () => {
         <div className="min-h-screen bg-gray-50 flex flex-col">
             <div className="relative">
                 <Header onHomeClick={() => setCurrentView('home')} />
-                <button 
-                    onClick={handleLogout} 
-                    className="absolute top-6 right-6 text-gray-500 hover:text-heroRed flex items-center gap-2 text-sm font-bold transition-colors"
-                    title="Sair"
-                >
-                    <LogOut size={18} /> SAIR
-                </button>
+                <div className="absolute top-6 right-6 flex items-center gap-4">
+                    <button 
+                        onClick={() => setShowPasswordModal(true)}
+                        className="text-gray-500 hover:text-heroBlack flex items-center gap-2 text-sm font-bold transition-colors bg-white/80 px-3 py-1 rounded hover:shadow-sm"
+                        title="Alterar minha senha"
+                    >
+                        <KeyRound size={16} /> <span className="hidden md:inline">SENHA</span>
+                    </button>
+                    <div className="h-4 w-px bg-gray-300 hidden md:block"></div>
+                    <button 
+                        onClick={handleLogout} 
+                        className="text-gray-500 hover:text-heroRed flex items-center gap-2 text-sm font-bold transition-colors bg-white/80 px-3 py-1 rounded hover:shadow-sm"
+                        title="Sair do sistema"
+                    >
+                        <LogOut size={18} /> SAIR
+                    </button>
+                </div>
             </div>
             
             <main className="flex-grow py-8">
@@ -111,9 +123,16 @@ const App: React.FC = () => {
             <footer className="bg-heroBlack text-white text-center py-6 mt-auto">
                 <p className="text-sm opacity-50">
                     &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados. 
-                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v1.14.0 (Auth)</span>
+                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v1.15.0 (Pwd)</span>
                 </p>
             </footer>
+
+            {showPasswordModal && (
+                <ChangePasswordModal 
+                    user={user} 
+                    onClose={() => setShowPasswordModal(false)} 
+                />
+            )}
         </div>
     );
 };
