@@ -184,13 +184,13 @@ export const DashboardModule: React.FC = () => {
             ...metrics.monthTrans.map(t => ({ 
                 name: t.description || t.category || 'Despesa Diversa', 
                 val: t.value, 
-                type: 'Fixa', // Assuming manual transactions as Fixed for visualization if not specified
+                type: t.classification || 'Fixa', // Usa a classificação do banco, ou Fixa se vazio
                 origin: 'Financeiro'
             }))
         ];
 
         const fixed = allExpenses.filter(e => e.type === 'Fixa');
-        const variable = allExpenses.filter(e => e.type !== 'Fixa');
+        const variable = allExpenses.filter(e => e.type !== 'Fixa'); // Todo o resto é variável
 
         return {
             fixedAlpha: [...fixed].sort((a, b) => a.name.localeCompare(b.name)),
