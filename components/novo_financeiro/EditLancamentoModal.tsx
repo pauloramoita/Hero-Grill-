@@ -75,7 +75,7 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
             paymentMethod,
             product: type !== 'Transferência' ? product : '',
             category: type !== 'Transferência' ? category : '',
-            supplier: type !== 'Transferência' ? supplier : '',
+            supplier: (type === 'Despesa' && type !== 'Transferência') ? supplier : '',
             value,
             status,
             description,
@@ -204,13 +204,17 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
                                         {appData.categories.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
-                                    <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-2 border rounded">
-                                        <option value="">Selecione...</option>
-                                        {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </div>
+                                
+                                {type === 'Despesa' && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
+                                        <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-2 border rounded">
+                                            <option value="">Selecione...</option>
+                                            {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                    </div>
+                                )}
+
                                 <div>
                                     <label className="block text-xs font-bold text-gray-600 mb-1">Produto</label>
                                     <select value={product} onChange={e => setProduct(e.target.value)} className="w-full p-2 border rounded">
