@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Loader2, Edit, Save, X } from 'lucide-react';
 import { getFinancialAccounts, saveFinancialAccount, updateFinancialAccount, deleteFinancialAccount, getAppData, formatCurrency } from '../../services/storageService';
@@ -29,8 +28,13 @@ export const CamposFinanceiro: React.FC = () => {
     };
 
     const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const rawValue = e.target.value.replace(/\D/g, '');
-        const floatValue = rawValue ? parseInt(rawValue, 10) / 100 : 0;
+        const rawValue = e.target.value;
+        const isNegative = rawValue.includes('-');
+        const cleanValue = rawValue.replace(/\D/g, '');
+        let floatValue = cleanValue ? parseInt(cleanValue, 10) / 100 : 0;
+        
+        if (isNegative) floatValue = floatValue * -1;
+        
         setInitialBalance(floatValue);
     };
 
@@ -119,7 +123,7 @@ export const CamposFinanceiro: React.FC = () => {
                             type="text" 
                             value={formatCurrency(initialBalance)} 
                             onChange={handleCurrencyChange} 
-                            className="w-full p-2 border rounded text-right"
+                            className={`w-full p-2 border rounded text-right ${initialBalance < 0 ? 'text-red-600' : ''}`}
                         />
                     </div>
                 </div>
@@ -156,7 +160,7 @@ export const CamposFinanceiro: React.FC = () => {
                                 <tr key={acc.id} className={`hover:bg-gray-50 ${editingId === acc.id ? 'bg-yellow-50' : ''}`}>
                                     <td className="px-6 py-2 text-sm font-bold text-gray-800">{acc.store}</td>
                                     <td className="px-6 py-2 text-sm text-gray-600">{acc.name}</td>
-                                    <td className="px-6 py-2 text-sm text-right font-mono">{formatCurrency(acc.initialBalance)}</td>
+                                    <td className={`px-6 py-2 text-sm text-right font-mono ${acc.initialBalance < 0 ? 'text-red-600' : ''}`}>{formatCurrency(acc.initialBalance)}</td>
                                     <td className="px-6 py-2 text-center">
                                         <div className="flex justify-center gap-2">
                                             <button onClick={() => handleEdit(acc)} className="text-blue-600 hover:text-blue-800 p-1" title="Editar">
