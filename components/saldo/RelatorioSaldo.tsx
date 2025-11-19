@@ -45,36 +45,82 @@ export const RelatorioSaldo: React.FC = () => {
 
     const generateReport = () => {
         const rawBalances = getAccountBalances();
-        
-        // Sort: Store -> Year -> Month (Crucial for variation)
-        rawBalances.sort((a, b) => {
-            if (a.store !== b.store) return a.store.localeCompare(b.store);
-            if (a.year !== b.year) return a.year - b.year;
-            return a.month.localeCompare(b.month);
-        });
+        let processed: BalanceWithVariation[] = [];
 
-        const processed: BalanceWithVariation[] = [];
-        for (let i = 0; i < rawBalances.length; i++) {
-            const current = rawBalances[i];
-            let variation = 0;
+        if (storeFilter === '') {
+            // === AGGREGATION MODE (ALL STORES) ===
+            // 1. Group by Year-Month
+            const grouped: Record<string, AccountBalance> = {};
 
-            if (i > 0 && rawBalances[i-1].store === current.store) {
-                variation = current.totalBalance - rawBalances[i-1].totalBalance;
-            }
-            
-            // Find label name
-            const mName = monthNames.find(m => m.value === current.month)?.label || current.month;
-
-            processed.push({ 
-                ...current, 
-                variation,
-                monthLabel: `${mName.substring(0,3)}/${current.year}`
+            rawBalances.forEach(b => {
+                const key = `${b.year}-${b.month}`;
+                if (!grouped[key]) {
+                    grouped[key] = {
+                        ...b,
+                        id: `agg-${key}`,
+                        store: 'Todas as Lojas (Consolidado)',
+                        totalBalance: 0,
+                        // Zero out others just in case
+                        caixaEconomica: 0, cofre: 0, loteria: 0, pagbankH: 0, pagbankD: 0, investimentos: 0,
+                    };
+                }
+                grouped[key].totalBalance += b.totalBalance;
             });
+
+            // 2. Convert to array and Sort by Date (Oldest -> Newest)
+            const aggregatedList = Object.values(grouped).sort((a, b) => {
+                if (a.year !== b.year) return a.year - b.year;
+                return a.month.localeCompare(b.month);
+            });
+
+            // 3. Calculate Variation
+            for (let i = 0; i < aggregatedList.length; i++) {
+                const current = aggregatedList[i];
+                let variation = 0;
+                if (i > 0) {
+                    variation = current.totalBalance - aggregatedList[i-1].totalBalance;
+                }
+                
+                const mName = monthNames.find(m => m.value === current.month)?.label || current.month;
+
+                processed.push({ 
+                    ...current, 
+                    variation,
+                    monthLabel: `${mName.substring(0,3)}/${current.year}`
+                });
+            }
+
+        } else {
+            // === INDIVIDUAL STORE MODE ===
+            // Sort: Store -> Year -> Month
+            rawBalances.sort((a, b) => {
+                if (a.store !== b.store) return a.store.localeCompare(b.store);
+                if (a.year !== b.year) return a.year - b.year;
+                return a.month.localeCompare(b.month);
+            });
+
+            for (let i = 0; i < rawBalances.length; i++) {
+                const current = rawBalances[i];
+                let variation = 0;
+
+                // Only compare if same store
+                if (i > 0 && rawBalances[i-1].store === current.store) {
+                    variation = current.totalBalance - rawBalances[i-1].totalBalance;
+                }
+                
+                const mName = monthNames.find(m => m.value === current.month)?.label || current.month;
+
+                processed.push({ 
+                    ...current, 
+                    variation,
+                    monthLabel: `${mName.substring(0,3)}/${current.year}`
+                });
+            }
         }
 
-        // Apply Filters AFTER calculation (so previous month logic still worked for the calc)
+        // Apply Filters
         const result = processed.filter(b => {
-            return (storeFilter === '' || b.store === storeFilter) &&
+            return (storeFilter === '' || b.store === storeFilter) && // Note: store name was changed to 'Todas...' in agg mode, so this works because filter is ''
                    (yearFilter === '' || b.year.toString() === yearFilter) &&
                    (monthFilter === '' || b.month === monthFilter);
         });
@@ -105,7 +151,7 @@ export const RelatorioSaldo: React.FC = () => {
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
                         <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)} className="w-full border p-2 rounded">
-                            <option value="">Todas as Lojas</option>
+                            <option value="">Todas as Lojas (Consolidado)</option>
                             {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
@@ -137,7 +183,7 @@ export const RelatorioSaldo: React.FC = () => {
                     
                     {/* Table */}
                     <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
-                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700">Histórico de Variação</div>
+                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700">Histórico de Variação {storeFilter ? ` - ${storeFilter}` : ' (Consolidado)'}</div>
                          <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-100">
                                 <tr>

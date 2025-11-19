@@ -2,15 +2,17 @@
 import React, { useState, useEffect } from 'react';
 import { getAccountBalances, getAppData, formatCurrency, deleteAccountBalance, updateAccountBalance } from '../../services/storageService';
 import { AppData, AccountBalance } from '../../types';
-import { Search, Trash2, Edit, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Search, Trash2, Edit, TrendingUp, TrendingDown, Minus, Layers } from 'lucide-react';
 import { EditSaldoModal } from './EditSaldoModal';
 
 interface BalanceWithVariation extends AccountBalance {
     variation: number;
+    isAggregated?: boolean;
 }
 
 export const ConsultaSaldo: React.FC = () => {
-    const [balances, setBalances] = useState<BalanceWithVariation[]>([]);
+    const [rawBalances, setRawBalances] = useState<AccountBalance[]>([]);
+    const [displayBalances, setDisplayBalances] = useState<BalanceWithVariation[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
     
     const [storeFilter, setStoreFilter] = useState('');
@@ -40,39 +42,105 @@ export const ConsultaSaldo: React.FC = () => {
 
     const loadData = () => {
         setAppData(getAppData());
-        const rawBalances = getAccountBalances();
-        
-        // Sort by Store, then Year, then Month to calculate variation accurately
-        rawBalances.sort((a, b) => {
-            if (a.store !== b.store) return a.store.localeCompare(b.store);
-            if (a.year !== b.year) return a.year - b.year;
-            return a.month.localeCompare(b.month);
-        });
+        const loaded = getAccountBalances();
+        setRawBalances(loaded);
+    };
 
-        // Calculate variations dynamically
-        const processed: BalanceWithVariation[] = [];
-        for (let i = 0; i < rawBalances.length; i++) {
-            const current = rawBalances[i];
-            let variation = 0;
+    // Effect to process data whenever filters or raw data changes
+    useEffect(() => {
+        processData();
+    }, [rawBalances, storeFilter, yearFilter, monthFilter]);
 
-            // Find previous record for same store
-            // Since it's sorted, we check if previous index exists and matches store
-            if (i > 0 && rawBalances[i-1].store === current.store) {
-                const prev = rawBalances[i-1];
-                variation = current.totalBalance - prev.totalBalance;
+    const processData = () => {
+        let processed: BalanceWithVariation[] = [];
+
+        if (storeFilter === '') {
+            // === AGGREGATION MODE (ALL STORES) ===
+            // 1. Group by Year-Month
+            const grouped: Record<string, AccountBalance> = {};
+
+            rawBalances.forEach(b => {
+                const key = `${b.year}-${b.month}`;
+                if (!grouped[key]) {
+                    // Create a base object for the month
+                    grouped[key] = {
+                        ...b,
+                        id: `agg-${key}`, // Artificial ID
+                        store: 'Todas as Lojas (Consolidado)',
+                        caixaEconomica: 0, cofre: 0, loteria: 0, pagbankH: 0, pagbankD: 0, investimentos: 0,
+                        totalBalance: 0
+                    };
+                }
+                // Sum values
+                grouped[key].totalBalance += b.totalBalance;
+                // (Optional: Sum individual accounts if we wanted to show them detailed)
+                grouped[key].caixaEconomica += b.caixaEconomica;
+                grouped[key].cofre += b.cofre;
+                grouped[key].loteria += b.loteria;
+                grouped[key].pagbankH += b.pagbankH;
+                grouped[key].pagbankD += b.pagbankD;
+                grouped[key].investimentos += b.investimentos;
+            });
+
+            // 2. Convert to array and Sort by Date (Oldest -> Newest) for variation calculation
+            const aggregatedList = Object.values(grouped).sort((a, b) => {
+                if (a.year !== b.year) return a.year - b.year;
+                return a.month.localeCompare(b.month);
+            });
+
+            // 3. Calculate Variation on the Aggregated Data
+            for (let i = 0; i < aggregatedList.length; i++) {
+                const current = aggregatedList[i];
+                let variation = 0;
+                
+                // Compare with previous month in the aggregated list
+                if (i > 0) {
+                    variation = current.totalBalance - aggregatedList[i-1].totalBalance;
+                }
+                
+                processed.push({ ...current, variation, isAggregated: true });
             }
 
-            processed.push({ ...current, variation });
+        } else {
+            // === INDIVIDUAL STORE MODE ===
+            // 1. Filter by store first
+            const storeData = rawBalances.filter(b => b.store === storeFilter);
+            
+            // 2. Sort by Date
+            storeData.sort((a, b) => {
+                if (a.year !== b.year) return a.year - b.year;
+                return a.month.localeCompare(b.month);
+            });
+
+            // 3. Calculate Variation
+            for (let i = 0; i < storeData.length; i++) {
+                const current = storeData[i];
+                let variation = 0;
+                if (i > 0) {
+                    variation = current.totalBalance - storeData[i-1].totalBalance;
+                }
+                processed.push({ ...current, variation, isAggregated: false });
+            }
         }
 
-        // Reverse for display (Newest first)
-        setBalances(processed.reverse());
+        // 4. Apply Date Filters (Year/Month) AFTER variation calculation to keep history context
+        // If we filter before, we might lose the "previous month" needed for the first visible row's calculation.
+        // However, for strict filtering matching the UI dropdowns:
+        let result = processed.filter(b => {
+            return (yearFilter === '' || b.year.toString() === yearFilter) &&
+                   (monthFilter === '' || b.month === monthFilter);
+        });
+
+        // 5. Reverse for Display (Newest First)
+        result.reverse();
+
+        setDisplayBalances(result);
     };
 
     const handleDelete = (id: string) => {
         if (window.confirm('Tem certeza que deseja excluir este registro?')) {
             deleteAccountBalance(id);
-            loadData(); // Reload to recalc variations
+            loadData(); // Reload raw data
         }
     };
 
@@ -86,13 +154,7 @@ export const ConsultaSaldo: React.FC = () => {
         loadData();
     };
 
-    const filteredBalances = balances.filter(b => {
-        return (storeFilter === '' || b.store === storeFilter) &&
-               (yearFilter === '' || b.year.toString() === yearFilter) &&
-               (monthFilter === '' || b.month === monthFilter);
-    });
-
-    const years = (Array.from(new Set(balances.map(b => b.year))) as number[]).sort((a, b) => b - a);
+    const years = (Array.from(new Set(rawBalances.map(b => b.year))) as number[]).sort((a, b) => b - a);
 
     const getMonthName = (m: string) => monthNames.find(mn => mn.value === m)?.label || m;
 
@@ -103,7 +165,7 @@ export const ConsultaSaldo: React.FC = () => {
                 <div>
                     <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
                     <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)} className="w-full border p-2 rounded">
-                        <option value="">Todas as Lojas</option>
+                        <option value="">Todas as Lojas (Consolidado)</option>
                         {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
@@ -138,13 +200,19 @@ export const ConsultaSaldo: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredBalances.map((b) => (
+                        {displayBalances.map((b) => (
                             <tr key={b.id} className="hover:bg-gray-50">
                                 <td className="px-4 py-3 text-sm text-gray-900 font-medium capitalize">
                                     {getMonthName(b.month)} / {b.year}
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-600">
-                                    {b.store}
+                                    {b.isAggregated ? (
+                                        <span className="font-bold text-heroBlack flex items-center gap-2">
+                                            <Layers size={16} /> {b.store}
+                                        </span>
+                                    ) : (
+                                        b.store
+                                    )}
                                 </td>
                                 <td className={`px-4 py-3 text-sm text-right font-mono font-bold bg-blue-50 ${b.totalBalance < 0 ? 'text-red-800' : 'text-blue-800'}`}>
                                     {formatCurrency(b.totalBalance)}
@@ -156,24 +224,30 @@ export const ConsultaSaldo: React.FC = () => {
                                     </div>
                                 </td>
                                 <td className="px-4 py-3 text-center whitespace-nowrap">
-                                    <button 
-                                        onClick={() => handleEditClick(b)} 
-                                        className="text-gray-600 hover:text-gray-900 p-1 mr-2" 
-                                        title="Editar"
-                                    >
-                                        <Edit size={18} />
-                                    </button>
-                                    <button 
-                                        onClick={() => handleDelete(b.id)}
-                                        className="text-red-400 hover:text-red-600 p-1"
-                                        title="Excluir"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
+                                    {b.isAggregated ? (
+                                        <span className="text-xs text-gray-400 italic">Consolidado</span>
+                                    ) : (
+                                        <div className="flex items-center justify-center gap-2">
+                                            <button 
+                                                onClick={() => handleEditClick(b)} 
+                                                className="text-gray-600 hover:text-gray-900 p-1" 
+                                                title="Editar"
+                                            >
+                                                <Edit size={18} />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDelete(b.id)}
+                                                className="text-red-400 hover:text-red-600 p-1"
+                                                title="Excluir"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
+                                    )}
                                 </td>
                             </tr>
                         ))}
-                        {filteredBalances.length === 0 && (
+                        {displayBalances.length === 0 && (
                             <tr>
                                 <td colSpan={5} className="px-4 py-8 text-center text-gray-500">Nenhum registro encontrado.</td>
                             </tr>
