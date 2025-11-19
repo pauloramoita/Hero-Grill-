@@ -21,8 +21,10 @@ export const PedidosModule: React.FC<PedidosModuleProps> = ({ user }) => {
         { id: 'relatorios', label: 'Relatórios', icon: <BarChart2 size={20} /> },
     ];
 
-    // Adiciona a aba "Campos!" apenas se for o Administrador Mestre
-    if (user.isMaster) {
+    // Adiciona a aba "Campos!" se for Administrador Mestre OU tiver a permissão específica
+    const canConfigCampos = user.isMaster || user.permissions.modules?.includes('config_campos');
+
+    if (canConfigCampos) {
         tabs.push({ id: 'campos', label: 'Campos!', icon: <Settings size={20} /> });
     }
 
@@ -55,8 +57,7 @@ export const PedidosModule: React.FC<PedidosModuleProps> = ({ user }) => {
                 {activeTab === 'cadastrar' && <CadastroPedido />}
                 {activeTab === 'consulta' && <ConsultaPedidos />}
                 {activeTab === 'relatorios' && <RelatorioPedidos />}
-                {/* Garante que o componente não renderize se o usuário não for master, mesmo manipulando estado */}
-                {activeTab === 'campos' && user.isMaster && <CamposConfig />}
+                {activeTab === 'campos' && canConfigCampos && <CamposConfig />}
             </div>
         </div>
     );

@@ -1,19 +1,27 @@
 
 import React, { useState } from 'react';
-import { NovoFinanceiroSubView } from '../../types';
+import { NovoFinanceiroSubView, User } from '../../types';
 import { LancamentosFinanceiro } from './LancamentosFinanceiro';
 import { CamposFinanceiro } from './CamposFinanceiro';
 import { ClipboardList, Search, BarChart2, Settings, Landmark } from 'lucide-react';
 
-export const NovoFinanceiroModule: React.FC = () => {
+interface NovoFinanceiroModuleProps {
+    user: User;
+}
+
+export const NovoFinanceiroModule: React.FC<NovoFinanceiroModuleProps> = ({ user }) => {
     const [activeTab, setActiveTab] = useState<NovoFinanceiroSubView>('lancamentos');
 
-    const tabs: { id: NovoFinanceiroSubView, label: string, icon: React.ReactNode, disabled?: boolean }[] = [
+    const tabs: { id: NovoFinanceiroSubView, label: string, icon: React.ReactNode, disabled?: boolean, requiredPerm?: string }[] = [
         { id: 'lancamentos', label: 'Lançamentos', icon: <ClipboardList size={20} /> },
         { id: 'consulta', label: 'Consultas', icon: <Search size={20} />, disabled: true },
         { id: 'relatorios', label: 'Relatórios', icon: <BarChart2 size={20} />, disabled: true },
-        { id: 'campos', label: 'Campos Financeiro!', icon: <Settings size={20} /> },
+        // Campos financeiro também pode ser restrito pela permissão config_campos, mas o padrão atual é mostrar
+        { id: 'campos', label: 'Campos Financeiro!', icon: <Settings size={20} />, requiredPerm: 'config_campos' },
     ];
+
+    // Filter tabs based on permission for 'Campos!'
+    const canConfig = user.isMaster || user.permissions.modules?.includes('config_campos');
 
     return (
         <div className="w-full max-w-7xl mx-auto p-4">
@@ -31,29 +39,34 @@ export const NovoFinanceiroModule: React.FC = () => {
 
             {/* Tabs */}
             <div className="flex flex-wrap gap-2 mb-8 border-b border-gray-200 pb-1">
-                {tabs.map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => !tab.disabled && setActiveTab(tab.id)}
-                        disabled={tab.disabled}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-t-lg font-bold transition-all ${
-                            activeTab === tab.id 
-                            ? 'bg-green-700 text-white shadow-lg transform -translate-y-1' 
-                            : tab.disabled 
-                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : 'bg-white text-gray-600 hover:bg-gray-100'
-                        }`}
-                    >
-                        {tab.icon}
-                        {tab.label}
-                        {tab.disabled && <span className="text-[10px] ml-1 bg-gray-200 px-1 rounded">Em Breve</span>}
-                    </button>
-                ))}
+                {tabs.map(tab => {
+                    // Hide if required permission is missing
+                    if (tab.requiredPerm && !canConfig) return null;
+
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => !tab.disabled && setActiveTab(tab.id)}
+                            disabled={tab.disabled}
+                            className={`flex items-center gap-2 px-6 py-3 rounded-t-lg font-bold transition-all ${
+                                activeTab === tab.id 
+                                ? 'bg-green-700 text-white shadow-lg transform -translate-y-1' 
+                                : tab.disabled 
+                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    : 'bg-white text-gray-600 hover:bg-gray-100'
+                            }`}
+                        >
+                            {tab.icon}
+                            {tab.label}
+                            {tab.disabled && <span className="text-[10px] ml-1 bg-gray-200 px-1 rounded">Em Breve</span>}
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Content */}
             <div className="animate-fadeIn">
-                {activeTab === 'lancamentos' && <LancamentosFinanceiro />}
+                {activeTab === 'lancamentos' && <LancamentosFinanceiro user={user} />}
                 {activeTab === 'campos' && <CamposFinanceiro />}
                 {(activeTab === 'consulta' || activeTab === 'relatorios') && (
                     <div className="p-10 text-center text-gray-400 bg-gray-50 border border-dashed rounded-lg">

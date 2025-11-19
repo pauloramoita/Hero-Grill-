@@ -2,11 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { User, AppData } from '../../types';
 import { getUsers, saveUser, deleteUser, getAppData } from '../../services/storageService';
-import { Save, Trash2, UserPlus, CheckSquare, Square, Loader2, Shield, AlertCircle } from 'lucide-react';
+import { Save, Trash2, UserPlus, CheckSquare, Square, Loader2, Shield, AlertCircle, Users } from 'lucide-react';
 
 export const UserManagement: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
-    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -21,10 +21,13 @@ export const UserManagement: React.FC = () => {
     const [selectedStores, setSelectedStores] = useState<string[]>([]);
 
     const modulesList = [
-        { id: 'pedidos', label: 'Pedidos' },
+        { id: 'pedidos', label: 'Pedidos (Cadastro)' },
+        { id: 'config_campos', label: '⚙️ Configurar Campos (Campos!)' }, // Novo
         { id: 'controle043', label: 'Controle 043' },
         { id: 'saldo', label: 'Saldo Contas' },
-        { id: 'financeiro', label: 'Financeiro' },
+        { id: 'financeiro', label: 'Entradas e Saídas (Antigo)' },
+        { id: 'novo_financeiro', label: 'Financeiro (Caixa/Lançamentos)' },
+        { id: 'view_balances', label: '💰 Visualizar Saldos Bancários' }, // Novo
         { id: 'backup', label: 'Backup' },
         { id: 'admin', label: 'Administração (Admin)' },
     ];
@@ -54,7 +57,7 @@ export const UserManagement: React.FC = () => {
         setEditingId(user.id);
         setName(user.name);
         setUsername(user.username);
-        setPassword(user.password || ''); // Password comes back for simple auth, secure in real app
+        setPassword(user.password || ''); 
         setSelectedModules(user.permissions.modules || []);
         setSelectedStores(user.permissions.stores || []);
     };
@@ -78,6 +81,26 @@ export const UserManagement: React.FC = () => {
         );
     };
 
+    const applyProfile = (type: 'gerente' | 'operador') => {
+        if (type === 'gerente') {
+            // Gerente tem acesso a operações, visualização de saldos e configuração de campos
+            setSelectedModules([
+                'pedidos', 'config_campos', 
+                'novo_financeiro', 'view_balances', 
+                'financeiro', 'controle043', 'saldo'
+            ]);
+            // Seleciona todas as lojas por padrão para gerente
+            setSelectedStores(appData.stores);
+        } else {
+            // Operador tem acesso apenas a lançamentos básicos, sem configurar campos e sem ver saldos totais
+            setSelectedModules([
+                'pedidos', 
+                'novo_financeiro'
+            ]);
+            setSelectedStores([]);
+        }
+    };
+
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name || !username || !password) {
@@ -88,7 +111,7 @@ export const UserManagement: React.FC = () => {
         setSaving(true);
         try {
             const userData: User = {
-                id: editingId || '', // DB handles ID on insert
+                id: editingId || '', 
                 name,
                 username,
                 password,
@@ -121,16 +144,22 @@ export const UserManagement: React.FC = () => {
             <div className="bg-blue-50 border-l-4 border-blue-500 p-4 text-sm text-blue-800 flex items-center gap-3">
                  <AlertCircle size={20} />
                  <div>
-                    <strong>Dica de Administração:</strong> Certifique-se de que o banco de dados está atualizado. 
-                    Se encontrar erros ao salvar, verifique o módulo de Backup.
+                    <strong>Dica de Administração:</strong> Utilize os botões de "Perfil Rápido" abaixo para configurar Gerentes ou Operadores padrão.
                  </div>
             </div>
 
             {/* Form Card */}
             <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-200">
-                <div className="flex items-center gap-3 mb-6 border-b pb-2">
-                    <div className="bg-heroBlack p-2 rounded text-white"><UserPlus size={24} /></div>
-                    <h2 className="text-2xl font-bold text-gray-800">{editingId ? 'Editar Usuário' : 'Novo Usuário'}</h2>
+                <div className="flex items-center justify-between mb-6 border-b pb-2">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-heroBlack p-2 rounded text-white"><UserPlus size={24} /></div>
+                        <h2 className="text-2xl font-bold text-gray-800">{editingId ? 'Editar Usuário' : 'Novo Usuário'}</h2>
+                    </div>
+                    <div className="flex gap-2">
+                        <span className="text-xs font-bold text-gray-500 uppercase self-center mr-2">Perfil Rápido:</span>
+                        <button onClick={() => applyProfile('gerente')} className="bg-purple-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-purple-700 flex items-center gap-1"><Users size={12}/> Gerente</button>
+                        <button onClick={() => applyProfile('operador')} className="bg-gray-500 text-white px-3 py-1 rounded text-xs font-bold hover:bg-gray-600 flex items-center gap-1"><Users size={12}/> Operador</button>
+                    </div>
                 </div>
                 
                 <form onSubmit={handleSave}>
@@ -152,7 +181,7 @@ export const UserManagement: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                         {/* Módulos */}
                         <div className="bg-gray-50 p-4 rounded border">
-                            <h3 className="font-bold text-heroBlack mb-3 flex items-center gap-2"><Shield size={16}/> Permissões de Módulos</h3>
+                            <h3 className="font-bold text-heroBlack mb-3 flex items-center gap-2"><Shield size={16}/> Permissões de Acesso</h3>
                             <div className="space-y-2">
                                 {modulesList.map(m => (
                                     <div key={m.id} onClick={() => toggleModule(m.id)} className="flex items-center gap-3 cursor-pointer hover:bg-gray-200 p-2 rounded transition-colors">
@@ -194,7 +223,7 @@ export const UserManagement: React.FC = () => {
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Nome</th>
                             <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Login</th>
-                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Módulos</th>
+                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Permissões Especiais</th>
                             <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Ações</th>
                         </tr>
                     </thead>
@@ -205,9 +234,9 @@ export const UserManagement: React.FC = () => {
                                 <td className="px-6 py-4 whitespace-nowrap text-gray-600 font-mono bg-gray-50">{user.username}</td>
                                 <td className="px-6 py-4">
                                     <div className="flex flex-wrap gap-1">
-                                        {user.permissions.modules?.map(m => (
-                                            <span key={m} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded border border-blue-200">{m}</span>
-                                        ))}
+                                        {user.permissions.modules?.includes('config_campos') && <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded border border-purple-200">Config. Campos</span>}
+                                        {user.permissions.modules?.includes('view_balances') && <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded border border-green-200">Ver Saldos</span>}
+                                        {(!user.permissions.modules?.includes('config_campos') && !user.permissions.modules?.includes('view_balances')) && <span className="text-xs text-gray-400">-</span>}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-center whitespace-nowrap">

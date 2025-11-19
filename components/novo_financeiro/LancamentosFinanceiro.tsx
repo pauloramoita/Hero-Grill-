@@ -11,11 +11,15 @@ import {
     formatDateBr,
     getOrders
 } from '../../services/storageService';
-import { AppData, FinancialAccount, DailyTransaction, Order } from '../../types';
-import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, AlertCircle } from 'lucide-react';
+import { AppData, FinancialAccount, DailyTransaction, Order, User } from '../../types';
+import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, AlertCircle, EyeOff } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 
-export const LancamentosFinanceiro: React.FC = () => {
+interface LancamentosFinanceiroProps {
+    user: User;
+}
+
+export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ user }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     
@@ -44,6 +48,9 @@ export const LancamentosFinanceiro: React.FC = () => {
     // Filter State
     const [filterStart, setFilterStart] = useState(getTodayLocalISO());
     const [filterEnd, setFilterEnd] = useState(getTodayLocalISO());
+
+    // Permission Check
+    const canViewBalances = user.isMaster || user.permissions.modules?.includes('view_balances');
 
     useEffect(() => {
         loadData();
@@ -209,16 +216,24 @@ export const LancamentosFinanceiro: React.FC = () => {
 
     return (
         <div className="space-y-8 pb-20">
-            {/* Top Section: Account Balances */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 overflow-x-auto pb-2">
-                {accounts.filter(a => !store || a.store === store).map(acc => (
-                    <div key={acc.id} className="bg-white p-4 rounded shadow border border-gray-200 min-w-[200px]">
-                        <div className="text-xs text-gray-500 font-bold uppercase">{acc.store}</div>
-                        <div className="font-bold text-gray-800 truncate">{acc.name}</div>
-                        <div className="text-xl font-black text-green-700 mt-1">{formatCurrency(getAccountCurrentBalance(acc))}</div>
-                    </div>
-                ))}
-            </div>
+            {/* Top Section: Account Balances (Restricted) */}
+            {canViewBalances ? (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 overflow-x-auto pb-2">
+                    {accounts.filter(a => !store || a.store === store).map(acc => (
+                        <div key={acc.id} className="bg-white p-4 rounded shadow border border-gray-200 min-w-[200px]">
+                            <div className="text-xs text-gray-500 font-bold uppercase">{acc.store}</div>
+                            <div className="font-bold text-gray-800 truncate">{acc.name}</div>
+                            <div className="text-xl font-black text-green-700 mt-1">{formatCurrency(getAccountCurrentBalance(acc))}</div>
+                        </div>
+                    ))}
+                    {accounts.length === 0 && <div className="text-gray-400 italic p-4">Nenhuma conta cadastrada em Campos!</div>}
+                </div>
+            ) : (
+                <div className="bg-gray-100 border border-gray-200 rounded p-4 flex items-center justify-center gap-2 text-gray-500">
+                    <EyeOff size={20} />
+                    <span className="text-sm font-bold">Visualização de saldos restrita ao Gerente/Administrador.</span>
+                </div>
+            )}
 
             {/* Input Form */}
             <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
