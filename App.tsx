@@ -51,9 +51,15 @@ const App: React.FC = () => {
 
     const renderHome = () => (
         <div className="max-w-6xl mx-auto p-8">
-            <div className="text-center mb-12">
+            <div className="text-center mb-12 animate-fadeIn">
                 <h2 className="text-4xl font-bold text-gray-800 mb-2">Olá, {user.name}</h2>
                 <p className="text-gray-500">Selecione um módulo para começar</p>
+                <button 
+                    onClick={() => setShowPasswordModal(true)}
+                    className="mt-3 text-sm text-gray-400 hover:text-heroRed underline decoration-dotted flex items-center justify-center gap-1 mx-auto transition-colors"
+                >
+                    <KeyRound size={14} /> Alterar minha senha de acesso
+                </button>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -92,14 +98,15 @@ const App: React.FC = () => {
             <div className="relative">
                 <Header onHomeClick={() => setCurrentView('home')} />
                 <div className="absolute top-6 right-6 flex items-center gap-4">
-                    <button 
-                        onClick={() => setShowPasswordModal(true)}
-                        className="text-gray-500 hover:text-heroBlack flex items-center gap-2 text-sm font-bold transition-colors bg-white/80 px-3 py-1 rounded hover:shadow-sm"
-                        title="Alterar minha senha"
-                    >
-                        <KeyRound size={16} /> <span className="hidden md:inline">SENHA</span>
-                    </button>
-                    <div className="h-4 w-px bg-gray-300 hidden md:block"></div>
+                    <div className="hidden md:flex items-center">
+                        <button 
+                            onClick={() => setShowPasswordModal(true)}
+                            className="text-gray-400 hover:text-gray-600 text-xs font-bold mr-4 transition-colors"
+                        >
+                            SENHA
+                        </button>
+                        <div className="h-4 w-px bg-gray-300 mr-4"></div>
+                    </div>
                     <button 
                         onClick={handleLogout} 
                         className="text-gray-500 hover:text-heroRed flex items-center gap-2 text-sm font-bold transition-colors bg-white/80 px-3 py-1 rounded hover:shadow-sm"
@@ -123,7 +130,7 @@ const App: React.FC = () => {
             <footer className="bg-heroBlack text-white text-center py-6 mt-auto">
                 <p className="text-sm opacity-50">
                     &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados. 
-                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v1.15.0 (Pwd)</span>
+                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v1.16.0 (Home Pwd)</span>
                 </p>
             </footer>
 
