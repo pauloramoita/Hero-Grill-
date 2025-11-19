@@ -9,11 +9,11 @@ import {
     formatCurrency, 
     getTodayLocalISO,
     formatDateBr,
-    getOrders,
-    updateOrder
+    getOrders
 } from '../../services/storageService';
 import { AppData, FinancialAccount, DailyTransaction, Order } from '../../types';
-import { CheckCircle, Trash2, Loader2, ArrowUpCircle, ArrowDownCircle, Calendar, Search, Edit, DollarSign } from 'lucide-react';
+import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, AlertCircle } from 'lucide-react';
+import { EditLancamentoModal } from './EditLancamentoModal';
 
 export const LancamentosFinanceiro: React.FC = () => {
     const [loading, setLoading] = useState(true);
@@ -23,22 +23,25 @@ export const LancamentosFinanceiro: React.FC = () => {
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
     const [transactions, setTransactions] = useState<DailyTransaction[]>([]);
-    const [orders, setOrders] = useState<Order[]>([]); // To merge into list
+    const [orders, setOrders] = useState<Order[]>([]);
 
     // Form State
     const [date, setDate] = useState(getTodayLocalISO()); // Data Vencimento
     const [paymentDate, setPaymentDate] = useState(getTodayLocalISO()); // Data Pagamento
     const [store, setStore] = useState('');
-    const [type, setType] = useState<'Receita' | 'Despesa' | 'Transferência'>('Despesa');
+    const [type, setType] = useState<'Receita' | 'Despesa' | 'Transferência'>('Despesa'); // Default Despesa
     const [accountId, setAccountId] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState('Dinheiro');
+    const [paymentMethod, setPaymentMethod] = useState('Boleto'); // Default Boleto
     const [product, setProduct] = useState('');
     const [category, setCategory] = useState('');
     const [supplier, setSupplier] = useState('');
     const [value, setValue] = useState(0);
     const [status, setStatus] = useState<'Pago' | 'Pendente'>('Pendente');
 
-    // Filter State (For List)
+    // Edit State
+    const [editingItem, setEditingItem] = useState<DailyTransaction | null>(null);
+
+    // Filter State
     const [filterStart, setFilterStart] = useState(getTodayLocalISO());
     const [filterEnd, setFilterEnd] = useState(getTodayLocalISO());
 
@@ -111,11 +114,39 @@ export const LancamentosFinanceiro: React.FC = () => {
         }
     };
 
-    const markAsPaid = async (t: DailyTransaction) => {
-        const updated = { ...t, status: 'Pago', paymentDate: getTodayLocalISO() } as DailyTransaction;
-        await saveDailyTransaction(updated);
-        loadData();
+    // Lógica Pagar: Só paga se tiver Conta e Método preenchidos
+    const handlePay = async (t: DailyTransaction) => {
+        if (!t.accountId || !t.paymentMethod || t.paymentMethod === '-' || !t.store) {
+            alert("Para realizar o pagamento, é necessário preencher 'Conta' e 'Método de Pagamento'.\n\nClique no botão Editar (lápis) para completar o cadastro.");
+            return;
+        }
+
+        if (window.confirm(`Confirmar pagamento de ${formatCurrency(t.value)}?`)) {
+             // Ao pagar, consolidamos como transação manual (financeira)
+            const updated: DailyTransaction = { 
+                ...t, 
+                status: 'Pago', 
+                paymentDate: getTodayLocalISO(),
+                origin: 'manual' 
+            };
+            await saveDailyTransaction(updated);
+            loadData();
+        }
     };
+
+    const handleEditClick = (item: DailyTransaction) => {
+        setEditingItem(item);
+    }
+
+    const handleModalSave = async (updated: DailyTransaction) => {
+        try {
+            await saveDailyTransaction(updated);
+            setEditingItem(null);
+            loadData();
+        } catch (e: any) {
+            alert('Erro ao salvar: ' + e.message);
+        }
+    }
 
     // Helper to get Account Name
     const getAccountName = (id: string | null) => {
@@ -123,50 +154,50 @@ export const LancamentosFinanceiro: React.FC = () => {
         return accounts.find(a => a.id === id)?.name || 'Conta Removida';
     };
 
-    // Filtered List merging Transactions and Orders
+    // Lista Combinada e Filtrada
     const getFilteredList = () => {
-        // 1. Filter Daily Transactions
+        // 1. Transações Financeiras já existentes
         const filteredTrans = transactions.filter(t => t.date >= filterStart && t.date <= filterEnd);
         
-        // 2. Filter Orders (Map to display structure)
-        const filteredOrders = orders.filter(o => {
-             // Use deliveryDate as due date
-             const dDate = o.deliveryDate || o.date; 
-             return dDate >= filterStart && dDate <= filterEnd;
-        }).map(o => ({
-            id: o.id,
-            date: o.deliveryDate || o.date,
-            paymentDate: null, // Orders don't track payment date strictly yet
-            store: o.store,
-            type: 'Despesa' as const, // Usually orders are expenses
-            accountId: null,
-            paymentMethod: '-',
-            product: o.product,
-            category: o.category || '-',
-            supplier: o.supplier,
-            value: o.totalValue,
-            status: o.deliveryDate ? 'Pendente' : 'Pendente', // Logic check: deliveryDate in Orders usually means "Due Date".
-            origin: 'pedido' as const
-        }));
+        // 2. Pedidos do Cadastro (que ainda não viraram transações financeiras)
+        // Verificamos se já existe uma transação com o MESMO ID do pedido. 
+        // (Assumindo que ao editar/pagar um pedido, mantemos o ID dele na tabela daily_transactions)
+        const existingIds = new Set(transactions.map(t => t.id));
 
-        // 3. Merge and Sort
-        // We only show Orders in the list for visibility. Editing them implies managing them in "Cadastro" or importing them (future feature).
-        // For now, users asked to "Search for launches made in Cadastro".
-        
+        const filteredOrders = orders
+            .filter(o => {
+                const dDate = o.deliveryDate || o.date; 
+                return dDate >= filterStart && dDate <= filterEnd;
+            })
+            .filter(o => !existingIds.has(o.id)) // Remove se já existir no financeiro
+            .map(o => ({
+                id: o.id,
+                date: o.deliveryDate || o.date,
+                paymentDate: null,
+                store: o.store,
+                type: 'Despesa' as const,
+                accountId: null,
+                paymentMethod: 'Boleto', // Padrão visual para sugestão
+                product: o.product,
+                category: o.category || '-',
+                supplier: o.supplier,
+                value: o.totalValue,
+                status: 'Pendente' as const,
+                origin: 'pedido' as const
+            }));
+
+        // 3. Merge e Sort
         const merged = [...filteredTrans, ...filteredOrders].sort((a, b) => b.date.localeCompare(a.date));
         return merged;
     };
 
     // Calculate Account Balances (Dynamic)
     const getAccountCurrentBalance = (acc: FinancialAccount) => {
-        // Start with initial
         let balance = acc.initialBalance;
-        // Apply all PAID transactions
         transactions.forEach(t => {
             if (t.accountId === acc.id && t.status === 'Pago') {
                 if (t.type === 'Receita') balance += t.value;
                 if (t.type === 'Despesa') balance -= t.value;
-                // Transfer needs "From" and "To". Simplified here as simple debit/credit.
             }
         });
         return balance;
@@ -221,9 +252,9 @@ export const LancamentosFinanceiro: React.FC = () => {
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Método Pagamento</label>
                         <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full p-2 border rounded">
-                            <option value="Dinheiro">Dinheiro</option>
-                            <option value="PiX">PiX</option>
                             <option value="Boleto">Boleto</option>
+                            <option value="PiX">PiX</option>
+                            <option value="Dinheiro">Dinheiro</option>
                             <option value="Cartão">Cartão</option>
                         </select>
                     </div>
@@ -319,6 +350,7 @@ export const LancamentosFinanceiro: React.FC = () => {
                                 <th className="px-4 py-3 text-left">Origem</th>
                                 <th className="px-4 py-3 text-left">Categoria/Prod</th>
                                 <th className="px-4 py-3 text-left">Conta</th>
+                                <th className="px-4 py-3 text-left">Método</th>
                                 <th className="px-4 py-3 text-right">Valor</th>
                                 <th className="px-4 py-3 text-center">Status</th>
                                 <th className="px-4 py-3 text-center">Ações</th>
@@ -326,7 +358,7 @@ export const LancamentosFinanceiro: React.FC = () => {
                         </thead>
                         <tbody className="divide-y divide-gray-200 text-sm">
                             {filteredList.map((item, idx) => (
-                                <tr key={idx} className={`hover:bg-gray-50 ${item.origin === 'pedido' ? 'bg-blue-50/30' : ''}`}>
+                                <tr key={item.id} className={`hover:bg-gray-50 ${item.origin === 'pedido' ? 'bg-blue-50/30' : ''}`}>
                                     <td className="px-4 py-3">{formatDateBr(item.date)}</td>
                                     <td className="px-4 py-3">{item.store}</td>
                                     <td className="px-4 py-3">
@@ -340,7 +372,10 @@ export const LancamentosFinanceiro: React.FC = () => {
                                         <div className="font-bold text-gray-700">{item.category || item.supplier}</div>
                                         <div className="text-xs text-gray-500">{item.product}</div>
                                     </td>
-                                    <td className="px-4 py-3">{getAccountName(item.accountId)}</td>
+                                    <td className="px-4 py-3">
+                                        {item.accountId ? getAccountName(item.accountId) : <span className="text-red-400 text-xs italic font-bold">Definir Conta</span>}
+                                    </td>
+                                    <td className="px-4 py-3">{item.paymentMethod}</td>
                                     <td className={`px-4 py-3 text-right font-bold ${item.type === 'Receita' ? 'text-green-600' : 'text-red-600'}`}>
                                         {item.type === 'Receita' ? '+' : '-'}{formatCurrency(item.value)}
                                     </td>
@@ -352,31 +387,52 @@ export const LancamentosFinanceiro: React.FC = () => {
                                         )}
                                     </td>
                                     <td className="px-4 py-3 text-center">
-                                        {item.origin === 'manual' && (
-                                            <div className="flex justify-center gap-2">
-                                                {item.status === 'Pendente' && (
-                                                    <button onClick={() => markAsPaid(item as DailyTransaction)} className="text-green-600 hover:bg-green-100 p-1 rounded" title="Pagar">
-                                                        <DollarSign size={16}/>
-                                                    </button>
-                                                )}
-                                                <button onClick={() => handleDelete(item.id)} className="text-red-500 hover:bg-red-100 p-1 rounded">
-                                                    <Trash2 size={16}/>
+                                        <div className="flex justify-center gap-2">
+                                            {/* Botão Pagar */}
+                                            {item.status === 'Pendente' && (
+                                                <button 
+                                                    onClick={() => handlePay(item as DailyTransaction)} 
+                                                    className="text-green-600 hover:bg-green-100 p-1 rounded transition-colors" 
+                                                    title={!item.accountId ? "Preencha a conta para pagar" : "Confirmar Pagamento"}
+                                                >
+                                                    <DollarSign size={16}/>
                                                 </button>
-                                            </div>
-                                        )}
-                                        {item.origin === 'pedido' && (
-                                            <span className="text-gray-400 text-xs italic">Gerenciar em Cadastro</span>
-                                        )}
+                                            )}
+                                            {/* Botão Editar */}
+                                            <button 
+                                                onClick={() => handleEditClick(item as DailyTransaction)} 
+                                                className="text-blue-600 hover:bg-blue-100 p-1 rounded transition-colors"
+                                                title="Editar / Completar Cadastro"
+                                            >
+                                                <Edit size={16} />
+                                            </button>
+                                            {/* Botão Excluir */}
+                                            <button 
+                                                onClick={() => handleDelete(item.id)} 
+                                                className="text-red-500 hover:bg-red-100 p-1 rounded transition-colors"
+                                                title="Excluir"
+                                            >
+                                                <Trash2 size={16}/>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
                              {filteredList.length === 0 && (
-                                <tr><td colSpan={8} className="p-6 text-center text-gray-500">Nenhum lançamento encontrado.</td></tr>
+                                <tr><td colSpan={9} className="p-6 text-center text-gray-500">Nenhum lançamento encontrado.</td></tr>
                             )}
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            {editingItem && (
+                <EditLancamentoModal 
+                    transaction={editingItem} 
+                    onClose={() => setEditingItem(null)} 
+                    onSave={handleModalSave} 
+                />
+            )}
         </div>
     );
 };
