@@ -282,7 +282,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                             <div key={acc.id} className="bg-white p-4 rounded shadow border border-gray-200 min-w-[200px]">
                                 <div className="text-xs text-gray-500 font-bold uppercase">{acc.store}</div>
                                 <div className="font-bold text-gray-800 truncate">{acc.name}</div>
-                                <div className={`text-xl font-black mt-1 ${currentBal < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                                <div className={`text-xl font-black mt-1 ${currentBal < 0 ? 'text-heroRed' : 'text-green-700'}`}>
                                     {formatCurrency(currentBal)}
                                 </div>
                             </div>
