@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAccountBalances, getAppData, formatCurrency, exportBalancesToXML } from '../../services/storageService';
 import { AppData, AccountBalance } from '../../types';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine } from 'recharts';
 import { FileText, FileSpreadsheet, Printer, Loader2 } from 'lucide-react';
 
 interface BalanceWithVariation extends AccountBalance {
@@ -249,7 +249,7 @@ export const RelatorioSaldo: React.FC = () => {
                                 <ReferenceLine y={0} stroke="#000" />
                                 <Bar dataKey="variation" name="Variação Mensal (Total)" fill="#8884d8">
                                     {filteredData.map((entry, index) => (
-                                        <cell key={`cell-${index}`} fill={entry.variation >= 0 ? '#10B981' : '#EF4444'} />
+                                        <Cell key={`cell-${index}`} fill={entry.variation >= 0 ? '#10B981' : '#EF4444'} />
                                     ))}
                                 </Bar>
                             </BarChart>

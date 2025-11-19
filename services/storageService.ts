@@ -7,7 +7,7 @@ import { AppData, Order, Transaction043, AccountBalance, FinancialRecord } from 
 let supabaseUrl = '';
 let supabaseKey = '';
 
-// Leitura segura das variáveis de ambiente para evitar Crash se import.meta.env for undefined
+// Leitura segura das variáveis de ambiente
 try {
     // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -20,7 +20,7 @@ try {
     console.warn("Ambiente não suporta import.meta.env ou acesso falhou.");
 }
 
-// Fallback para process.env (caso esteja rodando em ambiente Node/Legacy)
+// Fallback para process.env
 if (!supabaseUrl && typeof process !== 'undefined' && process.env) {
     try {
         // @ts-ignore
@@ -49,12 +49,12 @@ export const checkConnection = async (): Promise<{ status: 'ok' | 'error' | 'con
         return { 
             status: 'config_missing', 
             message: 'Variáveis não detectadas no ambiente.',
-            details: 'Certifique-se de ter criado o arquivo .env na raiz e reiniciado o servidor (npm run dev).'
+            details: 'Certifique-se de ter criado o arquivo .env na raiz e reiniciado o servidor.'
         };
     }
 
     try {
-        // Tenta uma query leve (HEAD) apenas para testar conexão e permissão
+        // Tenta uma query leve (HEAD)
         const { count, error } = await supabase.from('app_configurations').select('*', { count: 'exact', head: true });
         
         if (error) {
@@ -67,7 +67,6 @@ export const checkConnection = async (): Promise<{ status: 'ok' | 'error' | 'con
     }
 };
 
-// Expor status para UI de Debug
 export const getConfigStatus = () => ({
     urlConfigured: !!supabaseUrl,
     keyConfigured: !!supabaseKey,
@@ -103,7 +102,6 @@ export const getAppData = async (): Promise<AppData> => {
         if (row.category === 'units') appData.units = row.items || [];
     });
 
-    // Sort function
     const sortList = (list: string[]) => [...list].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
     return {
@@ -116,7 +114,6 @@ export const getAppData = async (): Promise<AppData> => {
 };
 
 export const saveAppData = async (data: AppData) => {
-    // Upsert each category
     const categories = [
         { category: 'stores', items: data.stores },
         { category: 'products', items: data.products },
@@ -186,7 +183,7 @@ export const getLastOrderForProduct = async (productName: string): Promise<Order
 
 export const saveOrder = async (order: Order) => {
     const dbOrder = {
-        // id: order.id, // Let DB generate UUID
+        // id: order.id, // DB Generate UUID on insert
         date: order.date,
         store: order.store,
         product: order.product,
@@ -464,8 +461,7 @@ export const deleteFinancialRecord = async (id: string) => {
     if (error) throw new Error(error.message);
 };
 
-
-// === HELPERS (Mantidos iguais pois são puros) ===
+// === HELPERS ===
 
 export const formatCurrency = (value: number): string => {
     const safeValue = typeof value === 'number' && !isNaN(value) ? value : 0;
@@ -506,33 +502,15 @@ const getExcelHeader = () => {
     xml += ' xmlns:x="urn:schemas-microsoft-com:office:excel"\n';
     xml += ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"\n';
     xml += ' xmlns:html="http://www.w3.org/TR/REC-html40">\n';
-    
     xml += ' <Styles>\n';
-    xml += '  <Style ss:ID="Default" ss:Name="Normal">\n';
-    xml += '   <Alignment ss:Vertical="Bottom"/>\n';
-    xml += '   <Borders/>\n';
-    xml += '   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>\n';
-    xml += '   <Interior/>\n';
-    xml += '   <NumberFormat/>\n';
-    xml += '   <Protection/>\n';
-    xml += '  </Style>\n';
-    
     xml += '  <Style ss:ID="HeaderStyle">\n';
     xml += '   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>\n';
-    xml += '   <Borders>\n';
-    xml += '    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
-    xml += '    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
-    xml += '    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
-    xml += '    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
-    xml += '   </Borders>\n';
     xml += '   <Font ss:FontName="Calibri" ss:Size="12" ss:Color="#FFFFFF" ss:Bold="1"/>\n';
     xml += '   <Interior ss:Color="#D32F2F" ss:Pattern="Solid"/>\n';
     xml += '  </Style>\n';
-
     xml += '  <Style ss:ID="CurrencyStyle">\n';
     xml += '   <NumberFormat ss:Format="Currency"/>\n';
     xml += '  </Style>\n';
-    
     xml += '  <Style ss:ID="CenterStyle">\n';
     xml += '   <Alignment ss:Horizontal="Center"/>\n';
     xml += '  </Style>\n';
@@ -547,11 +525,9 @@ const downloadXml = (content: string, filename: string) => {
         const url = URL.createObjectURL(blob);
         link.setAttribute('href', url);
         link.setAttribute('download', `${filename}.xls`);
-        link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        URL.revokeObjectURL(url);
     }
 };
 
@@ -559,20 +535,9 @@ export const exportToXML = (orders: Order[], filename: string) => {
     const escapeXml = (unsafe: string) => unsafe.replace(/[<>&'"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','\'':'&apos;','"':'&quot;'}[c] || c));
     let xmlContent = getExcelHeader();
     xmlContent += ' <Worksheet ss:Name="Relatorio Pedidos">\n';
-    xmlContent += '  <Table x:FullColumns="1" x:FullRows="1" ss:DefaultRowHeight="15">\n';
+    xmlContent += '  <Table x:FullColumns="1" x:FullRows="1">\n';
     
-    xmlContent += '   <Column ss:Width="80"/>\n';
-    xmlContent += '   <Column ss:Width="120"/>\n';
-    xmlContent += '   <Column ss:Width="150"/>\n';
-    xmlContent += '   <Column ss:Width="100"/>\n';
-    xmlContent += '   <Column ss:Width="100"/>\n';
-    xmlContent += '   <Column ss:Width="80"/>\n';
-    xmlContent += '   <Column ss:Width="50" ss:StyleID="CenterStyle"/>\n';
-    xmlContent += '   <Column ss:Width="60" ss:StyleID="CenterStyle"/>\n';
-    xmlContent += '   <Column ss:Width="90"/>\n';
-    xmlContent += '   <Column ss:Width="90" ss:StyleID="CenterStyle"/>\n';
-
-    xmlContent += '   <Row ss:Height="25">\n';
+    xmlContent += '   <Row>\n';
     const headers = ['Data', 'Loja', 'Produto', 'Marca', 'Fornecedor', 'Valor Unit.', 'Un.', 'Qtd', 'Total', 'Entrega'];
     headers.forEach(h => { xmlContent += `    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${h}</Data></Cell>\n`; });
     xmlContent += '   </Row>\n';
@@ -629,32 +594,37 @@ export const exportFinancialToXML = (records: any[], filename: string) => {
 // === BACKUP ===
 
 export const createBackup = async () => {
-    const appData = await getAppData();
-    const orders = await getOrders();
-    const transactions043 = await getTransactions043();
-    const saldoContas = await getAccountBalances();
-    const financeiro = await getFinancialRecords();
+    try {
+        const appData = await getAppData();
+        const orders = await getOrders();
+        const transactions043 = await getTransactions043();
+        const saldoContas = await getAccountBalances();
+        const financeiro = await getFinancialRecords();
 
-    const backupObj = {
-        version: 5,
-        timestamp: new Date().toISOString(),
-        source: 'supabase_cloud',
-        appData,
-        orders,
-        transactions043,
-        saldoContas,
-        financeiro
-    };
+        const backupObj = {
+            version: 6, // Version bump for robustness
+            timestamp: new Date().toISOString(),
+            source: 'supabase_cloud',
+            appData,
+            orders,
+            transactions043,
+            saldoContas,
+            financeiro
+        };
 
-    const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `HERO_GRILL_BACKUP_${getTodayLocalISO().replace(/-/g, '')}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+        const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `HERO_GRILL_BACKUP_${getTodayLocalISO().replace(/-/g, '')}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    } catch (e: any) {
+        console.error("Backup creation failed", e);
+        throw new Error("Falha ao gerar backup: " + e.message);
+    }
 };
 
 export const restoreBackup = async (file: File): Promise<{success: boolean, message: string}> => {
@@ -665,30 +635,81 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                 const content = e.target?.result as string;
                 const parsed = JSON.parse(content);
                 
-                // Restaurando Configurações
+                // 1. Restaurando Configurações
                 if (parsed.appData) await saveAppData(parsed.appData);
 
-                // Restaurando Pedidos (Iterando um a um para evitar payload muito grande)
+                // 2. Restaurando Pedidos (Upsert em Lotes para performance e anti-duplicidade)
                 if (parsed.orders && Array.isArray(parsed.orders)) {
-                    for (const o of parsed.orders) {
-                         await supabase.from('orders').insert({
-                            date: o.date, store: o.store, product: o.product, brand: o.brand,
-                            supplier: o.supplier, unit_measure: o.unitMeasure, unit_value: o.unitValue,
-                            quantity: o.quantity, total_value: o.totalValue, delivery_date: o.deliveryDate
-                        });
+                    const dbOrders = parsed.orders.map((o: any) => ({
+                        id: o.id, // Importante: Preservar ID para fazer UPSERT e não duplicar
+                        date: o.date,
+                        store: o.store,
+                        product: o.product,
+                        brand: o.brand,
+                        supplier: o.supplier,
+                        unit_measure: o.unitMeasure,
+                        unit_value: o.unitValue,
+                        quantity: o.quantity,
+                        total_value: o.totalValue,
+                        delivery_date: o.deliveryDate
+                    }));
+
+                    // Processar em chunks de 100 para não estourar payload
+                    const CHUNK_SIZE = 100;
+                    for (let i = 0; i < dbOrders.length; i += CHUNK_SIZE) {
+                        const chunk = dbOrders.slice(i, i + CHUNK_SIZE);
+                        const { error } = await supabase.from('orders').upsert(chunk);
+                        if (error) console.warn("Erro ao restaurar bloco de pedidos:", error.message);
                     }
                 }
 
-                // Restaurando 043
-                 if (parsed.transactions043 && Array.isArray(parsed.transactions043)) {
+                // 3. Restaurando 043
+                if (parsed.transactions043 && Array.isArray(parsed.transactions043)) {
                     for (const t of parsed.transactions043) {
-                        await saveTransaction043(t);
+                        // Usa Upsert se tiver ID
+                        if(t.id) {
+                             await supabase.from('transactions_043').upsert({
+                                id: t.id, date: t.date, store: t.store, type: t.type, value: t.value, description: t.description
+                            });
+                        } else {
+                            await saveTransaction043(t);
+                        }
                     }
                 }
+
+                // 4. Restaurando Saldos (Upsert)
+                if (parsed.saldoContas && Array.isArray(parsed.saldoContas)) {
+                     for (const b of parsed.saldoContas) {
+                        const balanceData = {
+                            id: b.id, // Use ID if available
+                            store: b.store, year: b.year, month: b.month,
+                            caixa_economica: b.caixaEconomica, cofre: b.cofre, loteria: b.loteria,
+                            pagbank_h: b.pagbankH, pagbank_d: b.pagbankD, investimentos: b.investimentos,
+                            total_balance: b.totalBalance
+                        };
+                        await supabase.from('account_balances').upsert(balanceData);
+                     }
+                }
+
+                 // 5. Restaurando Financeiro (Upsert)
+                 if (parsed.financeiro && Array.isArray(parsed.financeiro)) {
+                     for (const f of parsed.financeiro) {
+                         const finData = {
+                            id: f.id,
+                            store: f.store, year: f.year, month: f.month,
+                            credit_caixa: f.creditCaixa, credit_delta: f.creditDelta, credit_pagbank_h: f.creditPagBankH, credit_pagbank_d: f.creditPagBankD, credit_ifood: f.creditIfood,
+                            total_revenues: f.totalRevenues,
+                            debit_caixa: f.debitCaixa, debit_pagbank_h: f.debitPagBankH, debit_pagbank_d: f.debitPagBankD, debit_loteria: f.debitLoteria,
+                            total_expenses: f.totalExpenses,
+                            net_result: f.netResult
+                         };
+                         await supabase.from('financial_records').upsert(finData);
+                     }
+                }
                 
-                resolve({ success: true, message: "Backup restaurado para a nuvem com sucesso! Recarregue a página." });
+                resolve({ success: true, message: "Backup restaurado com sucesso! Dados atualizados." });
             } catch (err: any) {
-                resolve({ success: false, message: err.message });
+                resolve({ success: false, message: `Erro no processamento: ${err.message}` });
             }
         };
         reader.readAsText(file);
@@ -697,14 +718,13 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
 
 export const generateMockData = async () => {
     if (!isConfigured) {
-        alert("Erro: Supabase não configurado. Verifique se o arquivo .env existe e se o servidor foi reiniciado.");
+        alert("Erro: Supabase não configurado.");
         return;
     }
-    const confirm = window.confirm("Isso irá INSERIR dados de teste (Lojas e Produtos) no banco Supabase conectado. Continuar?");
+    const confirm = window.confirm("Isso irá INSERIR dados de teste. Continuar?");
     if(!confirm) return;
 
     try {
-        // Insert basic store config to test write access
         const { error } = await supabase.from('app_configurations').upsert({
             category: 'stores',
             items: ['Loja Teste A', 'Loja Teste B']
@@ -712,7 +732,7 @@ export const generateMockData = async () => {
         
         if(error) throw error;
 
-        alert("Sucesso! Dados de teste inseridos. O banco de dados está conectado e respondendo.");
+        alert("Sucesso! Dados de teste inseridos.");
         window.location.reload();
     } catch (err: any) {
         alert("Erro ao escrever no banco: " + err.message);

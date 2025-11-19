@@ -6,6 +6,7 @@ import { createBackup, restoreBackup, generateMockData, checkConnection, getConf
 export const BackupModule: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [loading, setLoading] = useState(false);
+    const [exporting, setExporting] = useState(false);
     
     // Diagnostic State
     const [connectionStatus, setConnectionStatus] = useState<'checking' | 'ok' | 'error' | 'config_missing'>('checking');
@@ -18,14 +19,27 @@ export const BackupModule: React.FC = () => {
 
     const runDiagnostic = async () => {
         setConnectionStatus('checking');
+        setConnectionMessage('Iniciando verificação...');
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         setConfigInfo(getConfigStatus());
         const result = await checkConnection();
+        
         setConnectionStatus(result.status);
-        setConnectionMessage(result.message + (result.details ? ` (${result.details})` : ''));
+        const time = new Date().toLocaleTimeString();
+        setConnectionMessage(`[${time}] ${result.message}` + (result.details ? ` (${result.details})` : ''));
     };
 
-    const handleExport = () => {
-        createBackup();
+    const handleExport = async () => {
+        setExporting(true);
+        try {
+            await createBackup();
+        } catch (error: any) {
+            alert(`Erro ao exportar backup: ${error.message}\nVerifique sua conexão com a internet.`);
+        } finally {
+            setExporting(false);
+        }
     };
 
     const handleImportClick = () => {
@@ -152,11 +166,18 @@ export const BackupModule: React.FC = () => {
                         </p>
                         <button 
                             onClick={handleExport}
-                            disabled={loading || connectionStatus !== 'ok'}
-                            className={`w-full py-4 px-6 font-bold rounded-lg flex items-center justify-center gap-3 transition-colors shadow-md ${loading || connectionStatus !== 'ok' ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                            disabled={loading || exporting || connectionStatus !== 'ok'}
+                            className={`w-full py-4 px-6 font-bold rounded-lg flex items-center justify-center gap-3 transition-colors shadow-md ${loading || exporting || connectionStatus !== 'ok' ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
                         >
-                            <Download size={24} />
-                            DOWNLOAD BACKUP
+                            {exporting ? (
+                                <>
+                                    <Loader2 size={24} className="animate-spin" /> Gerando...
+                                </>
+                            ) : (
+                                <>
+                                    <Download size={24} /> DOWNLOAD BACKUP
+                                </>
+                            )}
                         </button>
                     </div>
 
@@ -176,7 +197,7 @@ export const BackupModule: React.FC = () => {
                         <div className="bg-red-50 border border-red-100 rounded p-2 mb-6 w-full">
                             <span className="text-red-600 font-bold text-xs flex items-center justify-center gap-1">
                                 <AlertTriangle size={14} /> 
-                                Substitui dados atuais!
+                                Atualiza/Substitui dados!
                             </span>
                         </div>
                         
@@ -189,8 +210,8 @@ export const BackupModule: React.FC = () => {
                         />
                         <button 
                             onClick={handleImportClick}
-                            disabled={loading || connectionStatus !== 'ok'}
-                            className={`w-full py-4 px-6 font-bold rounded-lg flex items-center justify-center gap-3 transition-colors shadow-md ${loading || connectionStatus !== 'ok' ? 'bg-gray-400 cursor-not-allowed' : 'bg-heroBlack hover:bg-gray-800 text-white'}`}
+                            disabled={loading || exporting || connectionStatus !== 'ok'}
+                            className={`w-full py-4 px-6 font-bold rounded-lg flex items-center justify-center gap-3 transition-colors shadow-md ${loading || exporting || connectionStatus !== 'ok' ? 'bg-gray-400 cursor-not-allowed' : 'bg-heroBlack hover:bg-gray-800 text-white'}`}
                         >
                             {loading ? (
                                 <>
@@ -216,6 +237,7 @@ export const BackupModule: React.FC = () => {
                         Inserir Dados de Teste no Supabase
                     </button>
                     <p className="text-xs text-gray-400 mt-2">Use isso se o banco estiver vazio para confirmar que a escrita está funcionando.</p>
+                    <p className="text-xs text-gray-300 mt-2">v1.12.5 (Bundled Fix)</p>
                 </div>
             </div>
         </div>
