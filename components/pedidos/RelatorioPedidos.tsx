@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
-import { getOrders, getAppData, formatCurrency, deleteOrder, updateOrder, formatDateBr } from '../../services/storageService';
+import { getOrders, getAppData, formatCurrency, deleteOrder, updateOrder, formatDateBr, exportToXML } from '../../services/storageService';
 import { AppData, Order } from '../../types';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { FileText, Edit, Trash2 } from 'lucide-react';
+import { FileText, Edit, Trash2, FileSpreadsheet, Printer } from 'lucide-react';
 import { EditOrderModal } from './EditOrderModal';
 
 export const RelatorioPedidos: React.FC = () => {
@@ -79,6 +80,18 @@ export const RelatorioPedidos: React.FC = () => {
         setAllOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
     };
 
+    const handleExport = () => {
+        if (filteredData.length === 0) {
+            alert("Gere o relatório antes de exportar.");
+            return;
+        }
+        exportToXML(filteredData, 'relatorio_pedidos_personalizado');
+    };
+
+    const handlePrint = () => {
+        window.print();
+    };
+
     const chartData = filteredData.map(o => ({
         // Use simple string slice to avoid timezone shifts on dates
         date: formatDateBr(o.date).slice(0, 5), // dd/mm
@@ -89,7 +102,7 @@ export const RelatorioPedidos: React.FC = () => {
     return (
         <div className="space-y-8">
             {/* Filters */}
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                     <div>
                         <label className="block text-xs font-bold text-gray-600">Data Início</label>
@@ -114,9 +127,21 @@ export const RelatorioPedidos: React.FC = () => {
                         </select>
                     </div>
                 </div>
-                <button onClick={generateReport} className="bg-heroRed text-white px-8 py-2 rounded font-bold hover:bg-red-800 flex items-center gap-2">
-                    <FileText size={20} /> Gerar Relatório
-                </button>
+                <div className="flex gap-3">
+                    <button onClick={generateReport} className="bg-heroRed text-white px-8 py-2 rounded font-bold hover:bg-red-800 flex items-center gap-2">
+                        <FileText size={20} /> Gerar Relatório
+                    </button>
+                    {filteredData.length > 0 && (
+                        <>
+                            <button onClick={handleExport} className="bg-green-600 text-white px-6 py-2 rounded font-bold hover:bg-green-700 flex items-center gap-2">
+                                <FileSpreadsheet size={20} /> Excel
+                            </button>
+                            <button onClick={handlePrint} className="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 flex items-center gap-2">
+                                <Printer size={20} /> Imprimir/PDF
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
 
             {/* Chart */}
@@ -147,13 +172,13 @@ export const RelatorioPedidos: React.FC = () => {
                             <thead className="bg-gray-50">
                                 <tr>
                                     {['Data', 'Loja', 'Produto', 'Marca', 'Fornecedor', 'Vl. Unit.', 'Qtd', 'Total', 'Ações'].map(h => (
-                                        <th key={h} className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
+                                        <th key={h} className={`px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider ${h === 'Ações' ? 'no-print' : ''}`}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {filteredData.map((order) => (
-                                    <tr key={order.id}>
+                                    <tr key={order.id} className="break-inside-avoid">
                                         <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{formatDateBr(order.date)}</td>
                                         <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.store}</td>
                                         <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 font-medium">{order.product}</td>
@@ -162,7 +187,7 @@ export const RelatorioPedidos: React.FC = () => {
                                         <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{formatCurrency(order.unitValue)}</td>
                                         <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-500">{order.quantity.toFixed(3)}</td>
                                         <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900 font-bold">{formatCurrency(order.totalValue)}</td>
-                                        <td className="px-6 py-2 whitespace-nowrap text-sm">
+                                        <td className="px-6 py-2 whitespace-nowrap text-sm no-print">
                                             <div className="flex gap-2">
                                                 <button 
                                                     type="button"
@@ -200,7 +225,7 @@ export const RelatorioPedidos: React.FC = () => {
 
             {/* Delete Confirmation Modal */}
             {deletingId && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] no-print">
                     <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4 border-l-4 border-heroRed animate-fadeIn">
                         <h3 className="text-xl font-bold text-heroBlack mb-2">Confirmar Exclusão</h3>
                         <p className="text-gray-600 mb-6">

@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { getTransactions043, getAppData, formatCurrency, formatDateBr, getMonthLocalISO, getTodayLocalISO, deleteTransaction043, updateTransaction043 } from '../../services/storageService';
+import { getTransactions043, getAppData, formatCurrency, formatDateBr, getMonthLocalISO, getTodayLocalISO, deleteTransaction043, updateTransaction043, exportTransactionsToXML } from '../../services/storageService';
 import { AppData, Transaction043 } from '../../types';
-import { Search, Trash2, TrendingUp, TrendingDown, Edit } from 'lucide-react';
+import { Search, Trash2, TrendingUp, TrendingDown, Edit, FileSpreadsheet, Printer } from 'lucide-react';
 import { EditTransactionModal } from './EditTransactionModal';
 
 export const Consulta043: React.FC = () => {
@@ -75,6 +75,18 @@ export const Consulta043: React.FC = () => {
         setEditingTransaction(null);
     };
 
+    const handleExport = () => {
+        if (filteredTransactions.length === 0) {
+            alert('Sem dados para exportar.');
+            return;
+        }
+        exportTransactionsToXML(filteredTransactions, 'controle_043_export');
+    };
+
+    const handlePrint = () => {
+        window.print();
+    };
+
     // Calculate Totals
     const totalDebit = filteredTransactions.filter(t => t.type === 'DEBIT').reduce((acc, t) => acc + t.value, 0);
     const totalCredit = filteredTransactions.filter(t => t.type === 'CREDIT').reduce((acc, t) => acc + t.value, 0);
@@ -83,7 +95,7 @@ export const Consulta043: React.FC = () => {
     return (
         <div className="space-y-6">
             {/* Filters Panel */}
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-4">
                     
                     {/* Visão */}
@@ -146,6 +158,14 @@ export const Consulta043: React.FC = () => {
                         )}
                     </div>
                 </div>
+                <div className="flex gap-3 justify-end">
+                     <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                        <FileSpreadsheet size={18}/> Excel
+                    </button>
+                    <button onClick={handlePrint} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                        <Printer size={18}/> Imprimir / PDF
+                    </button>
+                </div>
             </div>
 
             {/* Totals Banner */}
@@ -177,12 +197,12 @@ export const Consulta043: React.FC = () => {
                                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Tipo</th>
                                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Descrição</th>
                                 <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Valor</th>
-                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Ações</th>
+                                <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase no-print">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                             {filteredTransactions.map((t) => (
-                                <tr key={t.id} className="hover:bg-gray-50">
+                                <tr key={t.id} className="hover:bg-gray-50 break-inside-avoid">
                                     <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">{formatDateBr(t.date)}</td>
                                     <td className="px-6 py-4 text-sm text-gray-600">{t.store}</td>
                                     <td className="px-6 py-4 text-sm">
@@ -202,7 +222,7 @@ export const Consulta043: React.FC = () => {
                                     <td className="px-6 py-4 text-sm text-right font-mono font-bold text-gray-800">
                                         {formatCurrency(t.value)}
                                     </td>
-                                    <td className="px-6 py-4 text-center whitespace-nowrap">
+                                    <td className="px-6 py-4 text-center whitespace-nowrap no-print">
                                         <button 
                                             onClick={() => handleEditClick(t)} 
                                             className="text-gray-600 hover:text-gray-900 p-1 mr-2" 

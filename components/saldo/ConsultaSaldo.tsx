@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { getAccountBalances, getAppData, formatCurrency, deleteAccountBalance, updateAccountBalance } from '../../services/storageService';
+import { getAccountBalances, getAppData, formatCurrency, deleteAccountBalance, updateAccountBalance, exportBalancesToXML } from '../../services/storageService';
 import { AppData, AccountBalance } from '../../types';
-import { Search, Trash2, Edit, TrendingUp, TrendingDown, Minus, Layers } from 'lucide-react';
+import { Search, Trash2, Edit, TrendingUp, TrendingDown, Minus, Layers, FileSpreadsheet, Printer } from 'lucide-react';
 import { EditSaldoModal } from './EditSaldoModal';
 
 interface BalanceWithVariation extends AccountBalance {
@@ -154,6 +154,18 @@ export const ConsultaSaldo: React.FC = () => {
         loadData();
     };
 
+    const handleExport = () => {
+        if (displayBalances.length === 0) {
+            alert('Sem dados para exportar.');
+            return;
+        }
+        exportBalancesToXML(displayBalances, 'relatorio_saldos');
+    };
+
+    const handlePrint = () => {
+        window.print();
+    };
+
     const years = (Array.from(new Set(rawBalances.map(b => b.year))) as number[]).sort((a, b) => b - a);
 
     const getMonthName = (m: string) => monthNames.find(mn => mn.value === m)?.label || m;
@@ -161,7 +173,7 @@ export const ConsultaSaldo: React.FC = () => {
     return (
         <div className="space-y-6">
             {/* Filters */}
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
                 <div>
                     <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
                     <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)} className="w-full border p-2 rounded">
@@ -187,6 +199,16 @@ export const ConsultaSaldo: React.FC = () => {
                 </div>
             </div>
 
+            {/* Actions */}
+            <div className="flex justify-end gap-2 no-print">
+                <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                    <FileSpreadsheet size={18}/> Excel
+                </button>
+                <button onClick={handlePrint} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                    <Printer size={18}/> Imprimir / PDF
+                </button>
+            </div>
+
             {/* Table */}
             <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -196,12 +218,12 @@ export const ConsultaSaldo: React.FC = () => {
                             <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Loja</th>
                             <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase text-blue-600">Saldo do Mês</th>
                             <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">Total (Variação)</th>
-                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase">Ações</th>
+                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase no-print">Ações</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {displayBalances.map((b) => (
-                            <tr key={b.id} className="hover:bg-gray-50">
+                            <tr key={b.id} className="hover:bg-gray-50 break-inside-avoid">
                                 <td className="px-4 py-3 text-sm text-gray-900 font-medium capitalize">
                                     {getMonthName(b.month)} / {b.year}
                                 </td>
@@ -223,7 +245,7 @@ export const ConsultaSaldo: React.FC = () => {
                                         {formatCurrency(b.variation)}
                                     </div>
                                 </td>
-                                <td className="px-4 py-3 text-center whitespace-nowrap">
+                                <td className="px-4 py-3 text-center whitespace-nowrap no-print">
                                     {b.isAggregated ? (
                                         <span className="text-xs text-gray-400 italic">Consolidado</span>
                                     ) : (

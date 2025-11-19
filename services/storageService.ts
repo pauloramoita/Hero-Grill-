@@ -241,37 +241,7 @@ export const ensureIsoDate = (dateStr: any): string => {
     return getTodayLocalISO();
 };
 
-export const exportToCSV = (orders: Order[], filename: string) => {
-    const headers = ['ID', 'Data Pedido', 'Loja', 'Produto', 'Marca', 'Fornecedor', 'Valor UN', 'Unidade', 'Qtd', 'Total', 'Data Entrega'];
-    const csvContent = [
-        headers.join(','),
-        ...orders.map(o => [
-            o.id,
-            formatDateBr(o.date),
-            `"${o.store}"`,
-            `"${o.product}"`,
-            `"${o.brand}"`,
-            `"${o.supplier}"`,
-            o.unitValue.toFixed(2).replace('.', ','),
-            o.unitMeasure,
-            o.quantity.toFixed(3).replace('.', ','),
-            o.totalValue.toFixed(2).replace('.', ','),
-            o.deliveryDate ? formatDateBr(o.deliveryDate) : 'Pendente'
-        ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `${filename}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-};
+// === EXPORT FUNCTIONS ===
 
 const escapeXml = (unsafe: string) => {
     return unsafe.replace(/[<>&'"]/g, (c) => {
@@ -286,47 +256,67 @@ const escapeXml = (unsafe: string) => {
     });
 };
 
-export const exportToXML = (orders: Order[], filename: string) => {
-    let xmlContent = '<?xml version="1.0"?>\n';
-    xmlContent += '<?mso-application progid="Excel.Sheet"?>\n';
-    xmlContent += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n';
-    xmlContent += ' xmlns:o="urn:schemas-microsoft-com:office:office"\n';
-    xmlContent += ' xmlns:x="urn:schemas-microsoft-com:office:excel"\n';
-    xmlContent += ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"\n';
-    xmlContent += ' xmlns:html="http://www.w3.org/TR/REC-html40">\n';
+// SHARED HEADER FOR XML EXCEL
+const getExcelHeader = () => {
+    let xml = '<?xml version="1.0"?>\n';
+    xml += '<?mso-application progid="Excel.Sheet"?>\n';
+    xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n';
+    xml += ' xmlns:o="urn:schemas-microsoft-com:office:office"\n';
+    xml += ' xmlns:x="urn:schemas-microsoft-com:office:excel"\n';
+    xml += ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"\n';
+    xml += ' xmlns:html="http://www.w3.org/TR/REC-html40">\n';
     
     // Styles
-    xmlContent += ' <Styles>\n';
-    xmlContent += '  <Style ss:ID="Default" ss:Name="Normal">\n';
-    xmlContent += '   <Alignment ss:Vertical="Bottom"/>\n';
-    xmlContent += '   <Borders/>\n';
-    xmlContent += '   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>\n';
-    xmlContent += '   <Interior/>\n';
-    xmlContent += '   <NumberFormat/>\n';
-    xmlContent += '   <Protection/>\n';
-    xmlContent += '  </Style>\n';
+    xml += ' <Styles>\n';
+    xml += '  <Style ss:ID="Default" ss:Name="Normal">\n';
+    xml += '   <Alignment ss:Vertical="Bottom"/>\n';
+    xml += '   <Borders/>\n';
+    xml += '   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>\n';
+    xml += '   <Interior/>\n';
+    xml += '   <NumberFormat/>\n';
+    xml += '   <Protection/>\n';
+    xml += '  </Style>\n';
     
-    xmlContent += '  <Style ss:ID="HeaderStyle">\n';
-    xmlContent += '   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>\n';
-    xmlContent += '   <Borders>\n';
-    xmlContent += '    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
-    xmlContent += '    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
-    xmlContent += '    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
-    xmlContent += '    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
-    xmlContent += '   </Borders>\n';
-    xmlContent += '   <Font ss:FontName="Calibri" ss:Size="12" ss:Color="#FFFFFF" ss:Bold="1"/>\n';
-    xmlContent += '   <Interior ss:Color="#D32F2F" ss:Pattern="Solid"/>\n';
-    xmlContent += '  </Style>\n';
+    xml += '  <Style ss:ID="HeaderStyle">\n';
+    xml += '   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>\n';
+    xml += '   <Borders>\n';
+    xml += '    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
+    xml += '    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
+    xml += '    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
+    xml += '    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>\n';
+    xml += '   </Borders>\n';
+    xml += '   <Font ss:FontName="Calibri" ss:Size="12" ss:Color="#FFFFFF" ss:Bold="1"/>\n';
+    xml += '   <Interior ss:Color="#D32F2F" ss:Pattern="Solid"/>\n';
+    xml += '  </Style>\n';
 
-    xmlContent += '  <Style ss:ID="CurrencyStyle">\n';
-    xmlContent += '   <NumberFormat ss:Format="Currency"/>\n';
-    xmlContent += '  </Style>\n';
+    xml += '  <Style ss:ID="CurrencyStyle">\n';
+    xml += '   <NumberFormat ss:Format="Currency"/>\n';
+    xml += '  </Style>\n';
     
-    xmlContent += '  <Style ss:ID="CenterStyle">\n';
-    xmlContent += '   <Alignment ss:Horizontal="Center"/>\n';
-    xmlContent += '  </Style>\n';
-    xmlContent += ' </Styles>\n';
+    xml += '  <Style ss:ID="CenterStyle">\n';
+    xml += '   <Alignment ss:Horizontal="Center"/>\n';
+    xml += '  </Style>\n';
+    xml += ' </Styles>\n';
+    return xml;
+};
 
+const downloadXml = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'application/vnd.ms-excel' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${filename}.xls`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+};
+
+export const exportToXML = (orders: Order[], filename: string) => {
+    let xmlContent = getExcelHeader();
     xmlContent += ' <Worksheet ss:Name="Relatorio Pedidos">\n';
     xmlContent += '  <Table x:FullColumns="1" x:FullRows="1" ss:DefaultRowHeight="15">\n';
     
@@ -370,18 +360,102 @@ export const exportToXML = (orders: Order[], filename: string) => {
     xmlContent += ' </Worksheet>\n';
     xmlContent += '</Workbook>\n';
 
-    const blob = new Blob([xmlContent], { type: 'application/vnd.ms-excel' });
-    const link = document.createElement('a');
-    if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `${filename}.xls`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }
+    downloadXml(xmlContent, filename);
+};
+
+export const exportTransactionsToXML = (transactions: Transaction043[], filename: string) => {
+    let xmlContent = getExcelHeader();
+    xmlContent += ' <Worksheet ss:Name="Relatorio 043">\n';
+    xmlContent += '  <Table x:FullColumns="1" x:FullRows="1" ss:DefaultRowHeight="15">\n';
+    
+    // Columns
+    xmlContent += '   <Column ss:Width="80" ss:StyleID="CenterStyle"/>\n'; // Data
+    xmlContent += '   <Column ss:Width="150"/>\n'; // Loja
+    xmlContent += '   <Column ss:Width="80" ss:StyleID="CenterStyle"/>\n'; // Tipo
+    xmlContent += '   <Column ss:Width="200"/>\n'; // Descricao
+    xmlContent += '   <Column ss:Width="100"/>\n'; // Valor
+
+    // Header
+    xmlContent += '   <Row ss:Height="25">\n';
+    const headers = ['Data', 'Loja', 'Tipo', 'Descrição', 'Valor'];
+    headers.forEach(h => {
+        xmlContent += `    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${h}</Data></Cell>\n`;
+    });
+    xmlContent += '   </Row>\n';
+
+    // Rows
+    transactions.forEach(t => {
+        xmlContent += '   <Row>\n';
+        xmlContent += `    <Cell><Data ss:Type="String">${formatDateBr(t.date)}</Data></Cell>\n`;
+        xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(t.store)}</Data></Cell>\n`;
+        xmlContent += `    <Cell><Data ss:Type="String">${t.type === 'DEBIT' ? 'DÉBITO' : 'CRÉDITO'}</Data></Cell>\n`;
+        xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(t.description || '')}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${t.value}</Data></Cell>\n`;
+        xmlContent += '   </Row>\n';
+    });
+
+    xmlContent += '  </Table>\n';
+    xmlContent += ' </Worksheet>\n';
+    xmlContent += '</Workbook>\n';
+
+    downloadXml(xmlContent, filename);
+};
+
+export const exportBalancesToXML = (balances: any[], filename: string) => {
+    let xmlContent = getExcelHeader();
+    xmlContent += ' <Worksheet ss:Name="Relatorio Saldos">\n';
+    xmlContent += '  <Table x:FullColumns="1" x:FullRows="1" ss:DefaultRowHeight="15">\n';
+    
+    // Columns
+    xmlContent += '   <Column ss:Width="100" ss:StyleID="CenterStyle"/>\n'; // Data (Mês/Ano)
+    xmlContent += '   <Column ss:Width="150"/>\n'; // Loja
+    xmlContent += '   <Column ss:Width="100"/>\n'; // CX
+    xmlContent += '   <Column ss:Width="100"/>\n'; // Cofre
+    xmlContent += '   <Column ss:Width="100"/>\n'; // Loteria
+    xmlContent += '   <Column ss:Width="100"/>\n'; // PagH
+    xmlContent += '   <Column ss:Width="100"/>\n'; // PagD
+    xmlContent += '   <Column ss:Width="100"/>\n'; // Inv
+    xmlContent += '   <Column ss:Width="110"/>\n'; // Total
+    xmlContent += '   <Column ss:Width="110"/>\n'; // Variação
+
+    // Header
+    xmlContent += '   <Row ss:Height="25">\n';
+    const headers = ['Período', 'Loja', 'Caixa', 'Cofre', 'Loteria', 'PagBank H', 'PagBank D', 'Invest.', 'Saldo Total', 'Variação'];
+    headers.forEach(h => {
+        xmlContent += `    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${h}</Data></Cell>\n`;
+    });
+    xmlContent += '   </Row>\n';
+
+    const monthNames: Record<string, string> = {
+        '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril',
+        '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto',
+        '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro'
+    };
+
+    // Rows
+    balances.forEach(b => {
+        const monthName = monthNames[b.month] || b.month;
+        const period = `${monthName}/${b.year}`;
+        
+        xmlContent += '   <Row>\n';
+        xmlContent += `    <Cell><Data ss:Type="String">${period}</Data></Cell>\n`;
+        xmlContent += `    <Cell><Data ss:Type="String">${escapeXml(b.store)}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${b.caixaEconomica}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${b.cofre}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${b.loteria}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${b.pagbankH}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${b.pagbankD}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${b.investimentos}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${b.totalBalance}</Data></Cell>\n`;
+        xmlContent += `    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${b.variation}</Data></Cell>\n`;
+        xmlContent += '   </Row>\n';
+    });
+
+    xmlContent += '  </Table>\n';
+    xmlContent += ' </Worksheet>\n';
+    xmlContent += '</Workbook>\n';
+
+    downloadXml(xmlContent, filename);
 };
 
 // === BACKUP FUNCTIONS ===

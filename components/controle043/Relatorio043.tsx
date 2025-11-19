@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { getTransactions043, getAppData, formatCurrency, formatDateBr, getTodayLocalISO } from '../../services/storageService';
+import { getTransactions043, getAppData, formatCurrency, formatDateBr, getTodayLocalISO, exportTransactionsToXML } from '../../services/storageService';
 import { AppData, Transaction043 } from '../../types';
-import { FileText, TrendingUp, TrendingDown } from 'lucide-react';
+import { FileText, TrendingUp, TrendingDown, FileSpreadsheet, Printer } from 'lucide-react';
 
 export const Relatorio043: React.FC = () => {
     const [transactions, setTransactions] = useState<Transaction043[]>([]);
@@ -32,6 +32,18 @@ export const Relatorio043: React.FC = () => {
         setFilteredTransactions(filtered);
     };
 
+    const handleExport = () => {
+        if (filteredTransactions.length === 0) {
+            alert('Gere o relatório antes de exportar.');
+            return;
+        }
+        exportTransactionsToXML(filteredTransactions, 'relatorio_043');
+    };
+
+    const handlePrint = () => {
+        window.print();
+    };
+
     // Calculate Totals
     const totalDebit = filteredTransactions.filter(t => t.type === 'DEBIT').reduce((acc, t) => acc + t.value, 0);
     const totalCredit = filteredTransactions.filter(t => t.type === 'CREDIT').reduce((acc, t) => acc + t.value, 0);
@@ -40,7 +52,7 @@ export const Relatorio043: React.FC = () => {
     return (
         <div className="space-y-8">
             {/* Filters */}
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
                 <h3 className="text-lg font-bold text-heroRed mb-4 border-b pb-2">Parâmetros do Relatório</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div>
@@ -59,9 +71,21 @@ export const Relatorio043: React.FC = () => {
                         </select>
                     </div>
                 </div>
-                <button onClick={generateReport} className="bg-heroBlack text-white px-8 py-3 rounded font-bold hover:bg-gray-800 flex items-center gap-2 w-full md:w-auto justify-center">
-                    <FileText size={20} /> Gerar Relatório
-                </button>
+                <div className="flex gap-3">
+                    <button onClick={generateReport} className="bg-heroBlack text-white px-8 py-3 rounded font-bold hover:bg-gray-800 flex items-center gap-2">
+                        <FileText size={20} /> Gerar Relatório
+                    </button>
+                     {filteredTransactions.length > 0 && (
+                        <>
+                            <button onClick={handleExport} className="bg-green-600 text-white px-6 py-2 rounded font-bold hover:bg-green-700 flex items-center gap-2">
+                                <FileSpreadsheet size={20} /> Excel
+                            </button>
+                            <button onClick={handlePrint} className="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 flex items-center gap-2">
+                                <Printer size={20} /> Imprimir/PDF
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
 
             {/* Results */}
@@ -81,7 +105,7 @@ export const Relatorio043: React.FC = () => {
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {filteredTransactions.map(t => (
-                                    <tr key={t.id}>
+                                    <tr key={t.id} className="break-inside-avoid">
                                         <td className="px-6 py-2 text-sm text-gray-900">{formatDateBr(t.date)}</td>
                                         <td className="px-6 py-2 text-sm text-gray-600">{t.store}</td>
                                         <td className="px-6 py-2 text-sm text-gray-500 italic">{t.description || '-'}</td>

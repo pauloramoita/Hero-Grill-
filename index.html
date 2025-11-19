@@ -33,6 +33,37 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #555; 
         }
+        
+        /* Print Styles for PDF Generation */
+        @media print {
+            @page { margin: 1cm; size: landscape; }
+            body { 
+                background-color: white !important; 
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            header, footer, .no-print { 
+                display: none !important; 
+            }
+            #root { margin: 0; padding: 0; }
+            .shadow-md, .shadow-lg, .shadow-xl, .shadow, .border {
+                box-shadow: none !important;
+                border: none !important;
+            }
+            table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+                border: 1px solid #ccc !important;
+                font-size: 10pt;
+            }
+            th, td {
+                border: 1px solid #ccc !important;
+                padding: 4px !important;
+                color: black !important;
+            }
+            /* Ensure charts and tables break pages nicely */
+            .break-inside-avoid { page-break-inside: avoid; }
+        }
     </style>
 <script type="importmap">
 {

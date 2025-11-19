@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getOrders, getAppData, updateOrder, deleteOrder, exportToXML, formatCurrency, getTodayLocalISO, formatDateBr } from '../../services/storageService';
 import { AppData, Order } from '../../types';
-import { CheckCircle, Search, AlertTriangle, Download, Trash2, Edit } from 'lucide-react';
+import { CheckCircle, Search, AlertTriangle, Download, Trash2, Edit, Printer } from 'lucide-react';
 import { EditOrderModal } from './EditOrderModal';
 
 export const ConsultaPedidos: React.FC = () => {
@@ -111,12 +111,16 @@ export const ConsultaPedidos: React.FC = () => {
         exportToXML(filteredOrders, 'relatorio_pedidos');
     };
 
+    const handlePrint = () => {
+        window.print();
+    };
+
     const hiddenCount = allOrders.length - filteredOrders.length;
 
     return (
         <div className="space-y-6">
             {/* Filters */}
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 no-print">
                 <div>
                     <label className="block text-xs font-bold text-gray-600">Data Início</label>
                     <input type="date" value={filters.dateStart} onChange={e => setFilters({...filters, dateStart: e.target.value})} className="w-full border p-2 rounded"/>
@@ -156,7 +160,7 @@ export const ConsultaPedidos: React.FC = () => {
             </div>
 
             {/* Actions */}
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-wrap gap-4 no-print">
                 <button 
                     onClick={() => setOnlyPending(false)} 
                     className={`flex items-center gap-2 px-6 py-2 rounded hover:bg-gray-800 transition-colors ${!onlyPending ? 'bg-heroBlack text-white' : 'bg-gray-200 text-gray-700'}`}
@@ -169,9 +173,14 @@ export const ConsultaPedidos: React.FC = () => {
                 >
                     <AlertTriangle size={18}/> Pedidos Não Entregues
                 </button>
-                 <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 ml-auto">
-                    <Download size={18}/> Exportar Excel (XML)
-                </button>
+                <div className="ml-auto flex gap-2">
+                    <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                        <Download size={18}/> Excel
+                    </button>
+                    <button onClick={handlePrint} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                        <Printer size={18}/> Imprimir / PDF
+                    </button>
+                </div>
             </div>
 
             {/* Table */}
@@ -180,13 +189,13 @@ export const ConsultaPedidos: React.FC = () => {
                     <thead className="bg-gray-50">
                         <tr>
                             {['Data', 'Loja', 'Produto', 'Marca', 'Fornecedor', 'Un.', 'Valor', 'Qtd', 'Total', 'Entrega', 'Ações'].map(h => (
-                                <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
+                                <th key={h} className={`px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider ${h === 'Ações' ? 'no-print' : ''}`}>{h}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {filteredOrders.map((order) => (
-                            <tr key={order.id} className="hover:bg-gray-50">
+                            <tr key={order.id} className="hover:bg-gray-50 break-inside-avoid">
                                 <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">{formatDateBr(order.date)}</td>
                                 <td className="px-4 py-2 text-sm text-gray-600">{order.store}</td>
                                 <td className="px-4 py-2 text-sm text-gray-600 font-medium">{order.product}</td>
@@ -203,7 +212,7 @@ export const ConsultaPedidos: React.FC = () => {
                                         <span className="text-orange-500 font-medium">Pendente</span>
                                     )}
                                 </td>
-                                <td className="px-4 py-2 text-sm whitespace-nowrap">
+                                <td className="px-4 py-2 text-sm whitespace-nowrap no-print">
                                     <div className="flex items-center gap-2">
                                         {!order.deliveryDate && (
                                             <button 
@@ -272,7 +281,7 @@ export const ConsultaPedidos: React.FC = () => {
 
             {/* Delete Confirmation Modal */}
             {deletingId && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] no-print">
                     <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4 border-l-4 border-heroRed animate-fadeIn">
                         <h3 className="text-xl font-bold text-heroBlack mb-2">Confirmar Exclusão</h3>
                         <p className="text-gray-600 mb-6">

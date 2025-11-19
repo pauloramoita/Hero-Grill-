@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { getAccountBalances, getAppData, formatCurrency } from '../../services/storageService';
+import { getAccountBalances, getAppData, formatCurrency, exportBalancesToXML } from '../../services/storageService';
 import { AppData, AccountBalance } from '../../types';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine } from 'recharts';
-import { FileText } from 'lucide-react';
+import { FileText, FileSpreadsheet, Printer } from 'lucide-react';
 
 interface BalanceWithVariation extends AccountBalance {
     variation: number;
@@ -65,6 +65,13 @@ export const RelatorioSaldo: React.FC = () => {
                     };
                 }
                 grouped[key].totalBalance += b.totalBalance;
+                // Also sum components if needed for export
+                grouped[key].caixaEconomica += b.caixaEconomica;
+                grouped[key].cofre += b.cofre;
+                grouped[key].loteria += b.loteria;
+                grouped[key].pagbankH += b.pagbankH;
+                grouped[key].pagbankD += b.pagbankD;
+                grouped[key].investimentos += b.investimentos;
             });
 
             // 2. Convert to array and Sort by Date (Oldest -> Newest)
@@ -128,6 +135,18 @@ export const RelatorioSaldo: React.FC = () => {
         setFilteredData(result);
     };
 
+    const handleExport = () => {
+        if (filteredData.length === 0) {
+            alert('Gere o relatório antes de exportar.');
+            return;
+        }
+        exportBalancesToXML(filteredData, 'relatorio_evolucao_saldo');
+    };
+
+    const handlePrint = () => {
+        window.print();
+    };
+
     const CustomTooltip = ({ active, payload, label }: any) => {
         if (active && payload && payload.length) {
             const val = payload[0].value;
@@ -146,7 +165,7 @@ export const RelatorioSaldo: React.FC = () => {
     return (
         <div className="space-y-8">
             {/* Filters */}
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
@@ -172,9 +191,21 @@ export const RelatorioSaldo: React.FC = () => {
                         </select>
                     </div>
                 </div>
-                <button onClick={generateReport} className="bg-heroBlack text-white px-8 py-3 rounded font-bold hover:bg-gray-800 flex items-center gap-2 w-full md:w-auto justify-center">
-                    <FileText size={20} /> Gerar Relatório
-                </button>
+                <div className="flex gap-3">
+                    <button onClick={generateReport} className="bg-heroBlack text-white px-8 py-3 rounded font-bold hover:bg-gray-800 flex items-center gap-2 w-full md:w-auto justify-center">
+                        <FileText size={20} /> Gerar Relatório
+                    </button>
+                    {filteredData.length > 0 && (
+                        <>
+                            <button onClick={handleExport} className="bg-green-600 text-white px-6 py-2 rounded font-bold hover:bg-green-700 flex items-center gap-2">
+                                <FileSpreadsheet size={20} /> Excel
+                            </button>
+                            <button onClick={handlePrint} className="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 flex items-center gap-2">
+                                <Printer size={20} /> Imprimir/PDF
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
 
             {/* Results & Chart */}
@@ -195,7 +226,7 @@ export const RelatorioSaldo: React.FC = () => {
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {filteredData.map((item, idx) => (
-                                    <tr key={idx}>
+                                    <tr key={idx} className="break-inside-avoid">
                                         <td className="px-6 py-2 text-sm font-medium capitalize">{item.monthLabel}</td>
                                         <td className="px-6 py-2 text-sm text-gray-600">{item.store}</td>
                                         <td className={`px-6 py-2 text-sm text-right font-mono ${item.totalBalance < 0 ? 'text-red-800 font-bold' : ''}`}>{formatCurrency(item.totalBalance)}</td>
@@ -209,7 +240,7 @@ export const RelatorioSaldo: React.FC = () => {
                     </div>
 
                     {/* Chart */}
-                    <div className="bg-white p-6 rounded-lg shadow border border-gray-200 h-96">
+                    <div className="bg-white p-6 rounded-lg shadow border border-gray-200 h-96 break-inside-avoid">
                         <h3 className="text-lg font-bold text-heroBlack mb-6 text-center uppercase tracking-wider">
                             Evolução do Total (Lucro/Prejuízo)
                         </h3>
