@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getOrders, getAppData, updateOrder, deleteOrder, exportToXML, formatCurrency, getTodayLocalISO, formatDateBr } from '../../services/storageService';
 import { AppData, Order } from '../../types';
-import { CheckCircle, AlertTriangle, Download, Trash2, Edit, Printer, Package, DollarSign, Loader2 } from 'lucide-react';
+import { CheckCircle, Download, Trash2, Edit, Printer, Package, DollarSign, Loader2 } from 'lucide-react';
 import { EditOrderModal } from './EditOrderModal';
 
 export const ConsultaPedidos: React.FC = () => {
@@ -24,11 +24,10 @@ export const ConsultaPedidos: React.FC = () => {
         store: '',
         product: '',
         brand: '',
-        supplier: '',
+        supplier: '', // Usado no lugar de Tipo
         type: '',
         category: ''
     });
-    const [onlyPending, setOnlyPending] = useState(false);
 
     useEffect(() => {
         const load = async () => {
@@ -50,15 +49,14 @@ export const ConsultaPedidos: React.FC = () => {
                    (filters.product === '' || o.product === filters.product) &&
                    (filters.brand === '' || o.brand === filters.brand) &&
                    (filters.supplier === '' || o.supplier === filters.supplier) &&
-                   (filters.type === '' || o.type === filters.type) &&
                    (filters.category === '' || o.category === filters.category);
         });
 
-        if (onlyPending) {
-            result = result.filter(o => !o.deliveryDate);
-        }
+        // Ordenação: Mais recente para o mais antigo
+        result.sort((a, b) => b.date.localeCompare(a.date));
+
         setFilteredOrders(result);
-    }, [allOrders, onlyPending, filters]);
+    }, [allOrders, filters]);
 
     const quickDeliver = async (order: Order, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -108,10 +106,10 @@ export const ConsultaPedidos: React.FC = () => {
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Tipo</label>
-                        <select value={filters.type} onChange={e => setFilters({...filters, type: e.target.value})} className="w-full border p-2 rounded">
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
+                        <select value={filters.supplier} onChange={e => setFilters({...filters, supplier: e.target.value})} className="w-full border p-2 rounded">
                             <option value="">Todos</option>
-                            {appData.types.map(s => <option key={s} value={s}>{s}</option>)}
+                            {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                     <div>
@@ -130,12 +128,7 @@ export const ConsultaPedidos: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex flex-wrap justify-between items-center gap-4 border-t pt-4 mt-2">
-                    <div className="flex gap-2">
-                        <button onClick={() => setOnlyPending(!onlyPending)} className={`flex items-center gap-2 px-4 py-2 rounded text-sm font-bold ${onlyPending ? 'bg-orange-100 text-orange-700' : 'bg-gray-100'}`}>
-                            <AlertTriangle size={16}/> {onlyPending ? 'Mostrando Pendentes' : 'Mostrar Pendentes'}
-                        </button>
-                    </div>
+                <div className="flex flex-wrap justify-end items-center gap-4 border-t pt-4 mt-2">
                     <div className="flex gap-2">
                         <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
                             <Download size={18}/> Excel
@@ -162,7 +155,7 @@ export const ConsultaPedidos: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            {['Data', 'Loja', 'Tipo', 'Produto', 'Valor', 'Total', 'Vencimento', 'Ações'].map(h => (
+                            {['Data', 'Loja', 'Fornecedor', 'Produto', 'Valor', 'Total', 'Vencimento', 'Ações'].map(h => (
                                 <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">{h}</th>
                             ))}
                         </tr>
@@ -172,9 +165,8 @@ export const ConsultaPedidos: React.FC = () => {
                             <tr key={order.id} className="hover:bg-gray-50 break-inside-avoid">
                                 <td className="px-4 py-2 text-sm">{formatDateBr(order.date)}</td>
                                 <td className="px-4 py-2 text-sm">{order.store}</td>
-                                <td className="px-4 py-2 text-sm">
-                                    <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">{order.type}</span>
-                                    {order.category && <span className="block text-xs text-gray-500 mt-1">{order.category}</span>}
+                                <td className="px-4 py-2 text-sm text-gray-700 font-medium">
+                                    {order.supplier}
                                 </td>
                                 <td className="px-4 py-2 text-sm font-medium">
                                     {order.product}
