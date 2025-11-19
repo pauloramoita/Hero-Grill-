@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { AppData, Order, Transaction043, AccountBalance, FinancialRecord } from '../types';
+import { AppData, Order, Transaction043, AccountBalance, FinancialRecord, User } from '../types';
 
 // === CONFIGURAÇÃO SUPABASE ===
 
@@ -130,6 +130,96 @@ export const saveAppData = async (data: AppData) => {
         if (error) console.error(`Erro ao salvar ${cat.category}:`, error);
     }
 };
+
+// === AUTHENTICATION & USERS ===
+
+const MASTER_USER: User = {
+    id: 'master-001',
+    name: 'Administrador Mestre',
+    username: 'Administrador',
+    permissions: {
+        modules: ['pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin'],
+        stores: [] // Empty implies all for master logic
+    },
+    isMaster: true
+};
+
+export const loginUser = async (username: string, password: string): Promise<{success: boolean, user?: User, message?: string}> => {
+    // 1. Check Master User
+    if (username === 'Administrador' && password === 'Moita3033') {
+        return { success: true, user: MASTER_USER };
+    }
+
+    // 2. Check Database Users
+    try {
+        const { data, error } = await supabase
+            .from('system_users')
+            .select('*')
+            .eq('username', username)
+            .eq('password', password) // Note: In production, use hashing. Plaintext for simple requested scope.
+            .single();
+
+        if (error || !data) {
+            return { success: false, message: 'Usuário ou senha incorretos.' };
+        }
+
+        const user: User = {
+            id: data.id,
+            name: data.name,
+            username: data.username,
+            permissions: data.permissions || { modules: [], stores: [] }
+        };
+
+        return { success: true, user };
+    } catch (e) {
+        return { success: false, message: 'Erro ao conectar com banco de dados.' };
+    }
+};
+
+export const getUsers = async (): Promise<User[]> => {
+    const { data, error } = await supabase.from('system_users').select('*');
+    if (error) return [];
+    
+    return data.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        username: u.username,
+        password: u.password,
+        permissions: u.permissions
+    }));
+};
+
+export const saveUser = async (user: User) => {
+    // Não permite salvar o admin mestre no banco
+    if (user.username === 'Administrador') throw new Error("Nome de usuário reservado.");
+
+    const dbUser = {
+        name: user.name,
+        username: user.username,
+        password: user.password,
+        permissions: user.permissions
+    };
+
+    if (user.id) {
+        // Update
+        const { error } = await supabase.from('system_users').update(dbUser).eq('id', user.id);
+        if (error) throw new Error(error.message);
+    } else {
+        // Insert
+        // Check if exists
+        const { data: existing } = await supabase.from('system_users').select('id').eq('username', user.username);
+        if (existing && existing.length > 0) throw new Error("Usuário já existe.");
+
+        const { error } = await supabase.from('system_users').insert(dbUser);
+        if (error) throw new Error(error.message);
+    }
+};
+
+export const deleteUser = async (id: string) => {
+    const { error } = await supabase.from('system_users').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+};
+
 
 // === ORDERS ===
 
@@ -600,16 +690,18 @@ export const createBackup = async () => {
         const transactions043 = await getTransactions043();
         const saldoContas = await getAccountBalances();
         const financeiro = await getFinancialRecords();
+        const users = await getUsers();
 
         const backupObj = {
-            version: 6, // Version bump for robustness
+            version: 7, 
             timestamp: new Date().toISOString(),
             source: 'supabase_cloud',
             appData,
             orders,
             transactions043,
             saldoContas,
-            financeiro
+            financeiro,
+            users
         };
 
         const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
@@ -705,6 +797,20 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                          };
                          await supabase.from('financial_records').upsert(finData);
                      }
+                }
+
+                // 6. Restaurando Usuários
+                if (parsed.users && Array.isArray(parsed.users)) {
+                    for (const u of parsed.users) {
+                        const userData = {
+                            id: u.id,
+                            name: u.name,
+                            username: u.username,
+                            password: u.password,
+                            permissions: u.permissions
+                        };
+                        await supabase.from('system_users').upsert(userData);
+                    }
                 }
                 
                 resolve({ success: true, message: "Backup restaurado com sucesso! Dados atualizados." });

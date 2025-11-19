@@ -74,9 +74,24 @@ export interface FinancialRecord {
     netResult: number; // Revenues - Expenses
 }
 
-export type View = 'home' | 'pedidos' | 'controle043' | 'financeiro' | 'saldo' | 'backup';
+export interface UserPermissions {
+    modules: string[]; // 'pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin'
+    stores: string[]; // Lista de lojas permitidas
+}
+
+export interface User {
+    id: string;
+    name: string;
+    username: string;
+    password?: string; // Opcional na listagem para segurança
+    permissions: UserPermissions;
+    isMaster?: boolean; // Identifica o admin hardcoded
+}
+
+export type View = 'home' | 'pedidos' | 'controle043' | 'financeiro' | 'saldo' | 'backup' | 'admin';
 
 export type PedidosSubView = 'cadastrar' | 'consulta' | 'relatorios' | 'campos';
 export type Controle043SubView = 'cadastrar' | 'consulta' | 'relatorios';
 export type SaldoSubView = 'lancamentos' | 'consulta' | 'relatorios';
 export type FinanceiroSubView = 'lancamentos' | 'consulta' | 'relatorios';
+export type AdminSubView = 'usuarios';

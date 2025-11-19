@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useEffect } from 'react';
 import { Download, Upload, Database, AlertTriangle, Loader2, RefreshCw, CheckCircle, XCircle, Server } from 'lucide-react';
 import { createBackup, restoreBackup, generateMockData, checkConnection, getConfigStatus } from '../services/storageService';
@@ -237,7 +236,7 @@ export const BackupModule: React.FC = () => {
                         Inserir Dados de Teste no Supabase
                     </button>
                     <p className="text-xs text-gray-400 mt-2">Use isso se o banco estiver vazio para confirmar que a escrita está funcionando.</p>
-                    <p className="text-xs text-gray-300 mt-2">v1.12.5 (Bundled Fix)</p>
+                    <p className="text-xs text-gray-300 mt-2">v1.12.5 (Fix)</p>
                 </div>
             </div>
         </div>

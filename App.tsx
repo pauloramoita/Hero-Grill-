@@ -1,36 +1,63 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
 import { Controle043Module } from './components/controle043/Controle043Module';
 import { BackupModule } from './components/BackupModule';
 import { SaldoModule } from './components/saldo/SaldoModule';
 import { FinanceiroModule } from './components/financeiro/FinanceiroModule';
-import { View } from './types';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Grid } from 'lucide-react';
+import { AdminModule } from './components/admin/AdminModule';
+import { LoginScreen } from './components/LoginScreen';
+import { View, User } from './types';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Grid, LogOut, Settings } from 'lucide-react';
 
 const App: React.FC = () => {
+    const [user, setUser] = useState<User | null>(null);
     const [currentView, setCurrentView] = useState<View>('home');
 
-    const menuItems: { id: View, label: string, icon: React.ReactNode, color: string, disabled: boolean }[] = [
-        { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={48} />, color: 'bg-heroRed', disabled: false },
-        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={48} />, color: 'bg-heroBlack', disabled: false },
-        { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={48} />, color: 'bg-gray-800', disabled: false },
-        { id: 'financeiro', label: 'Financeiro', icon: <DollarSign size={48} />, color: 'bg-gray-700', disabled: false },
-        { id: 'backup', label: 'Backup', icon: <Database size={48} />, color: 'bg-gray-700', disabled: false },
-        { id: 'home', label: 'Extra', icon: <Grid size={48} />, color: 'bg-gray-800', disabled: true },
+    // Efeito para carregar sessão (opcional, por enquanto limpa no refresh por segurança conforme pedido "sempre pedir login")
+    // Se quiser persistir: useEffect(() => { const saved = localStorage.getItem('hero_user'); if(saved) setUser(JSON.parse(saved)); }, []);
+
+    const handleLogin = (loggedUser: User) => {
+        setUser(loggedUser);
+        setCurrentView('home');
+    };
+
+    const handleLogout = () => {
+        setUser(null);
+        setCurrentView('home');
+    };
+
+    if (!user) {
+        return <LoginScreen onLogin={handleLogin} />;
+    }
+
+    // Filtra módulos baseados nas permissões do usuário
+    const hasPermission = (moduleId: string) => {
+        if (user.isMaster) return true;
+        return user.permissions.modules?.includes(moduleId);
+    };
+
+    const menuItems: { id: View, label: string, icon: React.ReactNode, color: string, disabled: boolean, requiredPerm: string }[] = [
+        { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={48} />, color: 'bg-heroRed', disabled: false, requiredPerm: 'pedidos' },
+        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={48} />, color: 'bg-heroBlack', disabled: false, requiredPerm: 'controle043' },
+        { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={48} />, color: 'bg-gray-800', disabled: false, requiredPerm: 'saldo' },
+        { id: 'financeiro', label: 'Financeiro', icon: <DollarSign size={48} />, color: 'bg-gray-700', disabled: false, requiredPerm: 'financeiro' },
+        { id: 'backup', label: 'Backup', icon: <Database size={48} />, color: 'bg-gray-700', disabled: false, requiredPerm: 'backup' },
+        { id: 'admin', label: 'Administração', icon: <Settings size={48} />, color: 'bg-gray-900', disabled: false, requiredPerm: 'admin' },
     ];
 
     const renderHome = () => (
         <div className="max-w-6xl mx-auto p-8">
             <div className="text-center mb-12">
-                <h2 className="text-4xl font-bold text-gray-800 mb-2">Bem-vindo ao Painel de Gestão</h2>
+                <h2 className="text-4xl font-bold text-gray-800 mb-2">Olá, {user.name}</h2>
                 <p className="text-gray-500">Selecione um módulo para começar</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {menuItems.map((item) => {
-                    if (item.id === 'home') return null; 
+                    if (!hasPermission(item.requiredPerm)) return null;
+
                     return (
                     <button
                         key={item.id}
@@ -60,29 +87,31 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
-            <Header onHomeClick={() => setCurrentView('home')} />
+            <div className="relative">
+                <Header onHomeClick={() => setCurrentView('home')} />
+                <button 
+                    onClick={handleLogout} 
+                    className="absolute top-6 right-6 text-gray-500 hover:text-heroRed flex items-center gap-2 text-sm font-bold transition-colors"
+                    title="Sair"
+                >
+                    <LogOut size={18} /> SAIR
+                </button>
+            </div>
             
             <main className="flex-grow py-8">
                 {currentView === 'home' && renderHome()}
-                {currentView === 'pedidos' && <PedidosModule />}
-                {currentView === 'controle043' && <Controle043Module />}
-                {currentView === 'saldo' && <SaldoModule />}
-                {currentView === 'financeiro' && <FinanceiroModule />}
-                {currentView === 'backup' && <BackupModule />}
-                
-                {/* Fallback for undefined views */}
-                {currentView !== 'home' && currentView !== 'pedidos' && currentView !== 'controle043' && currentView !== 'saldo' && currentView !== 'financeiro' && currentView !== 'backup' && (
-                    <div className="text-center mt-20">
-                        <h2 className="text-3xl font-bold text-gray-400">Módulo em desenvolvimento...</h2>
-                        <button onClick={() => setCurrentView('home')} className="mt-4 text-blue-500 hover:underline">Voltar</button>
-                    </div>
-                )}
+                {currentView === 'pedidos' && hasPermission('pedidos') && <PedidosModule />}
+                {currentView === 'controle043' && hasPermission('controle043') && <Controle043Module />}
+                {currentView === 'saldo' && hasPermission('saldo') && <SaldoModule />}
+                {currentView === 'financeiro' && hasPermission('financeiro') && <FinanceiroModule />}
+                {currentView === 'backup' && hasPermission('backup') && <BackupModule />}
+                {currentView === 'admin' && hasPermission('admin') && <AdminModule />}
             </main>
 
             <footer className="bg-heroBlack text-white text-center py-6 mt-auto">
                 <p className="text-sm opacity-50">
                     &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados. 
-                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v1.13.0 (Finance)</span>
+                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v1.14.0 (Auth)</span>
                 </p>
             </footer>
         </div>
