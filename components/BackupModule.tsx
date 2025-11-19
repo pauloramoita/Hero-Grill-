@@ -1,10 +1,25 @@
-import React, { useRef, useState } from 'react';
-import { Download, Upload, Database, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
-import { createBackup, restoreBackup, generateMockData } from '../services/storageService';
+import React, { useRef, useState, useEffect } from 'react';
+import { Download, Upload, Database, AlertTriangle, Loader2, RefreshCw, CheckCircle, XCircle, HelpCircle } from 'lucide-react';
+import { createBackup, restoreBackup, generateMockData, checkConnection } from '../services/storageService';
 
 export const BackupModule: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [loading, setLoading] = useState(false);
+    
+    // Diagnostic State
+    const [connectionStatus, setConnectionStatus] = useState<'checking' | 'ok' | 'error' | 'config_missing'>('checking');
+    const [connectionMessage, setConnectionMessage] = useState('');
+
+    useEffect(() => {
+        runDiagnostic();
+    }, []);
+
+    const runDiagnostic = async () => {
+        setConnectionStatus('checking');
+        const result = await checkConnection();
+        setConnectionStatus(result.status);
+        setConnectionMessage(result.message);
+    };
 
     const handleExport = () => {
         createBackup();
@@ -31,13 +46,11 @@ export const BackupModule: React.FC = () => {
         if (window.confirm('ATENÇÃO: A importação substituirá TODOS os dados atuais do sistema (pedidos e cadastros). Deseja realmente continuar?')) {
             setLoading(true);
             try {
-                // Small delay to allow UI to update to loading state
                 await new Promise(resolve => setTimeout(resolve, 200));
                 
                 const result = await restoreBackup(file);
                 
                 if (result.success) {
-                    // Small delay to ensure localStorage is set before alert
                     setTimeout(() => {
                         alert(result.message);
                         window.location.reload();
@@ -65,6 +78,40 @@ export const BackupModule: React.FC = () => {
             </h1>
 
             <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn mt-8">
+                
+                {/* DIAGNOSTIC PANEL */}
+                <div className={`p-6 rounded-lg shadow-sm border-l-4 flex flex-col md:flex-row justify-between items-center gap-4 ${
+                    connectionStatus === 'ok' ? 'bg-green-50 border-green-500' : 
+                    connectionStatus === 'checking' ? 'bg-gray-50 border-gray-400' : 
+                    'bg-red-50 border-red-500'
+                }`}>
+                    <div className="flex items-start gap-4">
+                        <div className="mt-1">
+                            {connectionStatus === 'ok' && <CheckCircle className="text-green-600" size={28} />}
+                            {connectionStatus === 'error' && <XCircle className="text-red-600" size={28} />}
+                            {connectionStatus === 'config_missing' && <AlertTriangle className="text-orange-600" size={28} />}
+                            {connectionStatus === 'checking' && <Loader2 className="text-gray-600 animate-spin" size={28} />}
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-800">
+                                {connectionStatus === 'ok' ? 'Conexão com Supabase: Ativa' : 
+                                 connectionStatus === 'checking' ? 'Verificando Conexão...' : 
+                                 'Erro de Conexão'}
+                            </h3>
+                            <p className={`text-sm ${
+                                connectionStatus === 'ok' ? 'text-green-700' : 
+                                connectionStatus === 'checking' ? 'text-gray-500' : 
+                                'text-red-700 font-bold'
+                            }`}>
+                                {connectionMessage}
+                            </p>
+                        </div>
+                    </div>
+                    <button onClick={runDiagnostic} className="px-4 py-2 bg-white border border-gray-300 rounded shadow-sm text-sm font-bold hover:bg-gray-50">
+                        Testar Novamente
+                    </button>
+                </div>
+
                  <div className="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-r shadow-sm">
                     <div className="flex items-start">
                         <div className="flex-shrink-0 mt-1">
@@ -94,8 +141,8 @@ export const BackupModule: React.FC = () => {
                         </p>
                         <button 
                             onClick={handleExport}
-                            disabled={loading}
-                            className={`w-full py-4 px-6 font-bold rounded-lg flex items-center justify-center gap-3 transition-colors shadow-md ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                            disabled={loading || connectionStatus !== 'ok'}
+                            className={`w-full py-4 px-6 font-bold rounded-lg flex items-center justify-center gap-3 transition-colors shadow-md ${loading || connectionStatus !== 'ok' ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
                         >
                             <Download size={24} />
                             FAZER EXPORTAÇÃO
@@ -131,8 +178,8 @@ export const BackupModule: React.FC = () => {
                         />
                         <button 
                             onClick={handleImportClick}
-                            disabled={loading}
-                            className={`w-full py-4 px-6 font-bold rounded-lg flex items-center justify-center gap-3 transition-colors shadow-md ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-heroBlack hover:bg-gray-800 text-white'}`}
+                            disabled={loading || connectionStatus !== 'ok'}
+                            className={`w-full py-4 px-6 font-bold rounded-lg flex items-center justify-center gap-3 transition-colors shadow-md ${loading || connectionStatus !== 'ok' ? 'bg-gray-400 cursor-not-allowed' : 'bg-heroBlack hover:bg-gray-800 text-white'}`}
                         >
                             {loading ? (
                                 <>
@@ -148,16 +195,15 @@ export const BackupModule: React.FC = () => {
                 </div>
 
                 {/* Dev Helper */}
-                <div className="mt-8 border-t pt-8 text-center">
+                <div className="mt-8 border-t pt-8 text-center opacity-50 hover:opacity-100 transition-opacity">
                     <h4 className="text-gray-400 font-bold text-sm mb-4 uppercase tracking-widest">Área de Desenvolvimento</h4>
                     <button 
                         onClick={handleMockData}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-sm font-medium"
                     >
                         <RefreshCw size={16} />
-                        Gerar Dados de Teste (Repopular Banco)
+                        Debug: Mock Data Alert
                     </button>
-                    <p className="text-xs text-gray-400 mt-2">Use se o banco de dados sumir após recarregar a página.</p>
                 </div>
             </div>
         </div>

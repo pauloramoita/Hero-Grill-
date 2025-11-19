@@ -1,40 +1,63 @@
 import { createClient } from '@supabase/supabase-js';
 import { AppData, Order, Transaction043, AccountBalance, FinancialRecord } from '../types';
 
-// Helper seguro para acessar variáveis de ambiente (Vite ou Process)
-const getEnv = (key: string): string => {
-    try {
-        // @ts-ignore - Vite env
-        if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
-            // @ts-ignore
-            return import.meta.env[key];
-        }
-    } catch (e) { }
+// === CONFIGURAÇÃO SUPABASE ===
 
-    try {
-        // @ts-ignore - Node/Process fallback
-        if (typeof process !== 'undefined' && process.env && process.env[key]) {
-            // @ts-ignore
-            return process.env[key];
-        }
-    } catch (e) { }
+// O Vite substitui essas variáveis estaticamente em tempo de build.
+// Não podemos usar acesso dinâmico como import.meta.env[key].
+let supabaseUrl = '';
+let supabaseKey = '';
 
-    return '';
-};
-
-// Inicialização do Supabase
-const supabaseUrl = getEnv('VITE_SUPABASE_URL');
-const supabaseKey = getEnv('VITE_SUPABASE_ANON_KEY');
-
-if (!supabaseUrl || !supabaseKey) {
-    console.error("ERRO CRÍTICO: Variáveis de ambiente do Supabase não encontradas. Verifique se o arquivo .env existe na raiz e contém VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.");
+try {
+    // @ts-ignore
+    supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    // @ts-ignore
+    supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+} catch (e) {
+    console.warn("Falha ao ler import.meta.env (ambiente não-Vite?)");
 }
 
-// Inicializa com valores placeholder se falhar, para evitar crash imediato da aplicação
+// Fallback para process.env (caso esteja rodando em outro ambiente Node/Jest)
+if (!supabaseUrl && typeof process !== 'undefined' && process.env) {
+    // @ts-ignore
+    supabaseUrl = process.env.VITE_SUPABASE_URL;
+    // @ts-ignore
+    supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+}
+
+const isConfigured = !!supabaseUrl && !!supabaseKey && !supabaseUrl.includes('missing');
+
+if (!isConfigured) {
+    console.error("⚠️ AVISO: Credenciais do Supabase não encontradas. O sistema usará modo offline/mock ou falhará.");
+}
+
+// Inicializa cliente
 export const supabase = createClient(
     supabaseUrl || 'https://missing-url.supabase.co', 
     supabaseKey || 'missing-key'
 );
+
+// === DIAGNÓSTICO ===
+
+export const checkConnection = async (): Promise<{ status: 'ok' | 'error' | 'config_missing', message: string }> => {
+    if (!isConfigured) {
+        return { status: 'config_missing', message: 'Variáveis VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY não encontradas no .env' };
+    }
+
+    try {
+        // Tenta uma query leve (HEAD) apenas para testar conexão e permissão
+        const { count, error } = await supabase.from('app_configurations').select('*', { count: 'exact', head: true });
+        
+        if (error) {
+            return { status: 'error', message: `Erro Supabase: ${error.message} (Code: ${error.code})` };
+        }
+        
+        return { status: 'ok', message: 'Conectado ao Supabase com sucesso!' };
+    } catch (err: any) {
+        return { status: 'error', message: `Erro de Rede/Cliente: ${err.message}` };
+    }
+};
+
 
 // === APP DATA (CONFIGURAÇÕES) ===
 
@@ -87,7 +110,6 @@ export const saveAppData = async (data: AppData) => {
     ];
 
     for (const cat of categories) {
-        // Check if exists to update or insert (Supabase upsert works if we have unique constraint on category)
         const { error } = await supabase
             .from('app_configurations')
             .upsert({ category: cat.category, items: cat.items }, { onConflict: 'category' });
@@ -257,7 +279,6 @@ export const getAccountBalances = async (): Promise<AccountBalance[]> => {
 };
 
 export const saveAccountBalance = async (balance: AccountBalance) => {
-    // Check existence
     const { data: existing } = await supabase
         .from('account_balances')
         .select('id')
