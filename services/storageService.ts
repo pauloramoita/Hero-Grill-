@@ -159,6 +159,10 @@ CREATE TABLE IF NOT EXISTS daily_transactions (
   origin text DEFAULT 'manual',
   created_at timestamptz DEFAULT now()
 );
+
+-- MIGRAÇÃO AUTOMÁTICA (Para corrigir erro de colunas faltantes em bancos já criados)
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS destination_store text;
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS destination_account_id uuid REFERENCES financial_accounts(id);
 `;
 
 // === DIAGNÓSTICO ===
@@ -649,7 +653,7 @@ export const getAccountBalances = async (): Promise<AccountBalance[]> => {
         cofre: b.cofre,
         loteria: b.loteria,
         pagbankH: b.pagbank_h,
-        pagbankD: b.pagbank_d,
+        pagbank_d: b.pagbank_d,
         investimentos: b.investimentos,
         totalBalance: b.total_balance
     }));

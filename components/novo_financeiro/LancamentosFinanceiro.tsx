@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { 
     getAppData, 
@@ -55,6 +54,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [filterStart, setFilterStart] = useState(getTodayLocalISO());
     const [filterEnd, setFilterEnd] = useState(getTodayLocalISO());
     const [filterStore, setFilterStore] = useState('');
+    const [filterAccount, setFilterAccount] = useState(''); // Novo Filtro
     const [filterSupplier, setFilterSupplier] = useState('');
 
     // Permission Check
@@ -126,7 +126,13 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             alert('Lançamento Salvo!');
             loadData(); // Refresh list
         } catch (err: any) {
-            alert('Erro: ' + err.message);
+            console.error(err);
+            // Tratamento específico para erro de coluna inexistente (Migração pendente)
+            if (err.message && (err.message.includes('destination_account_id') || err.message.includes('destination_store') || err.message.includes('schema cache'))) {
+                alert('⚠️ ATENÇÃO: ATUALIZAÇÃO DE BANCO DE DADOS NECESSÁRIA\n\nO sistema detectou que as colunas de transferência ainda não foram criadas no seu banco de dados.\n\nSOLUÇÃO:\n1. Vá até o módulo "Backup".\n2. Clique em "Ver SQL de Instalação/Correção".\n3. Copie o código SQL.\n4. Cole e execute no "SQL Editor" do seu painel Supabase.\n\nIsso corrigirá o erro permanentemente.');
+            } else {
+                alert('Erro ao salvar: ' + err.message);
+            }
         } finally {
             setSaving(false);
         }
@@ -183,10 +189,21 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const getFilteredList = () => {
         // 1. Transações Financeiras já existentes
         const filteredTrans = transactions.filter(t => {
-            return t.date >= filterStart && 
-                   t.date <= filterEnd &&
-                   (!filterStore || t.store === filterStore) &&
-                   (!filterSupplier || t.supplier === filterSupplier);
+            const matchesDate = t.date >= filterStart && t.date <= filterEnd;
+            const matchesStore = !filterStore || t.store === filterStore;
+            const matchesSupplier = !filterSupplier || t.supplier === filterSupplier;
+            
+            let matchesAccount = true;
+            if (filterAccount) {
+                if (t.type === 'Transferência') {
+                    // Se for transferência, checa origem ou destino
+                    matchesAccount = t.accountId === filterAccount || t.destinationAccountId === filterAccount;
+                } else {
+                    matchesAccount = t.accountId === filterAccount;
+                }
+            }
+
+            return matchesDate && matchesStore && matchesSupplier && matchesAccount;
         });
         
         // 2. Pedidos do Cadastro (que ainda não viraram transações financeiras)
@@ -195,10 +212,12 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         const filteredOrders = orders
             .filter(o => {
                 const dDate = o.deliveryDate || o.date; 
-                return dDate >= filterStart && 
-                       dDate <= filterEnd &&
-                       (!filterStore || o.store === filterStore) &&
-                       (!filterSupplier || o.supplier === filterSupplier);
+                const matchesDate = dDate >= filterStart && dDate <= filterEnd;
+                const matchesStore = !filterStore || o.store === filterStore;
+                const matchesSupplier = !filterSupplier || o.supplier === filterSupplier;
+                const matchesAccount = !filterAccount; // Se filtrar por conta, esconde pedidos (pois não têm conta ainda)
+
+                return matchesDate && matchesStore && matchesSupplier && matchesAccount;
             })
             .filter(o => !existingIds.has(o.id)) // Remove se já existir no financeiro
             .map(o => ({
@@ -257,13 +276,18 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             {/* Top Section: Account Balances (Restricted) */}
             {canViewBalances ? (
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 overflow-x-auto pb-2">
-                    {accounts.filter(a => !store || a.store === store).map(acc => (
-                        <div key={acc.id} className="bg-white p-4 rounded shadow border border-gray-200 min-w-[200px]">
-                            <div className="text-xs text-gray-500 font-bold uppercase">{acc.store}</div>
-                            <div className="font-bold text-gray-800 truncate">{acc.name}</div>
-                            <div className="text-xl font-black text-green-700 mt-1">{formatCurrency(getAccountCurrentBalance(acc))}</div>
-                        </div>
-                    ))}
+                    {accounts.filter(a => !store || a.store === store).map(acc => {
+                        const currentBal = getAccountCurrentBalance(acc);
+                        return (
+                            <div key={acc.id} className="bg-white p-4 rounded shadow border border-gray-200 min-w-[200px]">
+                                <div className="text-xs text-gray-500 font-bold uppercase">{acc.store}</div>
+                                <div className="font-bold text-gray-800 truncate">{acc.name}</div>
+                                <div className={`text-xl font-black mt-1 ${currentBal < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                                    {formatCurrency(currentBal)}
+                                </div>
+                            </div>
+                        );
+                    })}
                     {accounts.length === 0 && <div className="text-gray-400 italic p-4">Nenhuma conta cadastrada em Campos!</div>}
                 </div>
             ) : (
@@ -280,7 +304,17 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Tipo</label>
-                        <select value={type} onChange={e => setType(e.target.value as any)} className="w-full p-2 border rounded bg-gray-50 font-bold">
+                        <select 
+                            value={type} 
+                            onChange={e => {
+                                const newType = e.target.value as any;
+                                setType(newType);
+                                if (newType === 'Transferência') {
+                                    setPaymentMethod('Transferência bancária');
+                                }
+                            }} 
+                            className="w-full p-2 border rounded bg-gray-50 font-bold"
+                        >
                             <option value="Despesa">Despesa</option>
                             <option value="Receita">Receita</option>
                             <option value="Transferência">Transferência</option>
@@ -456,6 +490,16 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
+                        <div className="md:col-span-1">
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Filtrar Conta</label>
+                            <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)} className="w-full border p-2 rounded text-sm">
+                                <option value="">Todas</option>
+                                {accounts
+                                    .filter(a => !filterStore || a.store === filterStore)
+                                    .map(a => <option key={a.id} value={a.id}>{a.name}</option>)
+                                }
+                            </select>
+                        </div>
                          <div className="md:col-span-1">
                             <label className="block text-xs font-bold text-gray-500 mb-1">Filtrar Fornecedor</label>
                             <select value={filterSupplier} onChange={e => setFilterSupplier(e.target.value)} className="w-full border p-2 rounded text-sm">
@@ -463,8 +507,8 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
-                        <div className="md:col-span-1 flex justify-end">
-                             <button onClick={() => {setFilterStore(''); setFilterSupplier(''); setFilterStart(getTodayLocalISO()); setFilterEnd(getTodayLocalISO());}} className="text-xs text-gray-500 hover:text-red-500 font-bold flex items-center gap-1">
+                        <div className="md:col-span-5 flex justify-end">
+                             <button onClick={() => {setFilterStore(''); setFilterAccount(''); setFilterSupplier(''); setFilterStart(getTodayLocalISO()); setFilterEnd(getTodayLocalISO());}} className="text-xs text-gray-500 hover:text-red-500 font-bold flex items-center gap-1">
                                 <Filter size={12}/> Limpar Filtros
                              </button>
                         </div>

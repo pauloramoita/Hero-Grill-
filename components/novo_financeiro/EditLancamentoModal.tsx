@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { AppData, FinancialAccount, DailyTransaction } from '../../types';
 import { getAppData, getFinancialAccounts, formatCurrency } from '../../services/storageService';
@@ -105,7 +104,17 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                          <div>
                             <label className="block text-xs font-bold text-gray-600 mb-1">Tipo</label>
-                            <select value={type} onChange={e => setType(e.target.value as any)} className="w-full p-2 border rounded font-bold">
+                            <select 
+                                value={type} 
+                                onChange={e => {
+                                    const newType = e.target.value as any;
+                                    setType(newType);
+                                    if (newType === 'Transferência') {
+                                        setPaymentMethod('Transferência bancária');
+                                    }
+                                }} 
+                                className="w-full p-2 border rounded font-bold"
+                            >
                                 <option value="Despesa">Despesa</option>
                                 <option value="Receita">Receita</option>
                                 <option value="Transferência">Transferência</option>
