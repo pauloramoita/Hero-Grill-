@@ -1,34 +1,39 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { AppData, Order, Transaction043, AccountBalance, FinancialRecord } from '../types';
 
 // === CONFIGURAÇÃO SUPABASE ===
 
-// O Vite substitui essas variáveis estaticamente em tempo de build.
-// Não podemos usar acesso dinâmico como import.meta.env[key].
 let supabaseUrl = '';
 let supabaseKey = '';
 
+// Leitura segura das variáveis de ambiente para evitar Crash se import.meta.env for undefined
 try {
     // @ts-ignore
-    supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    // @ts-ignore
-    supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+        // @ts-ignore
+        supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        // @ts-ignore
+        supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    }
 } catch (e) {
-    console.warn("Falha ao ler import.meta.env (ambiente não-Vite?)");
+    console.warn("Ambiente não suporta import.meta.env ou acesso falhou.");
 }
 
-// Fallback para process.env (caso esteja rodando em outro ambiente Node/Jest)
+// Fallback para process.env (caso esteja rodando em ambiente Node/Legacy)
 if (!supabaseUrl && typeof process !== 'undefined' && process.env) {
-    // @ts-ignore
-    supabaseUrl = process.env.VITE_SUPABASE_URL;
-    // @ts-ignore
-    supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+    try {
+        // @ts-ignore
+        supabaseUrl = process.env.VITE_SUPABASE_URL;
+        // @ts-ignore
+        supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+    } catch (e) {}
 }
 
 const isConfigured = !!supabaseUrl && !!supabaseKey && !supabaseUrl.includes('missing');
 
 if (!isConfigured) {
-    console.error("⚠️ AVISO: Credenciais do Supabase não encontradas. O sistema usará modo offline/mock ou falhará.");
+    console.error("⚠️ AVISO: Credenciais do Supabase não encontradas. O sistema usará URL placeholder e falhará nas requisições.");
 }
 
 // Inicializa cliente
@@ -39,9 +44,13 @@ export const supabase = createClient(
 
 // === DIAGNÓSTICO ===
 
-export const checkConnection = async (): Promise<{ status: 'ok' | 'error' | 'config_missing', message: string }> => {
+export const checkConnection = async (): Promise<{ status: 'ok' | 'error' | 'config_missing', message: string, details?: string }> => {
     if (!isConfigured) {
-        return { status: 'config_missing', message: 'Variáveis VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY não encontradas no .env' };
+        return { 
+            status: 'config_missing', 
+            message: 'Variáveis não detectadas no ambiente.',
+            details: 'Certifique-se de ter criado o arquivo .env na raiz e reiniciado o servidor (npm run dev).'
+        };
     }
 
     try {
@@ -57,6 +66,13 @@ export const checkConnection = async (): Promise<{ status: 'ok' | 'error' | 'con
         return { status: 'error', message: `Erro de Rede/Cliente: ${err.message}` };
     }
 };
+
+// Expor status para UI de Debug
+export const getConfigStatus = () => ({
+    urlConfigured: !!supabaseUrl,
+    keyConfigured: !!supabaseKey,
+    urlPreview: supabaseUrl ? `${supabaseUrl.substring(0, 15)}...` : '(vazio)'
+});
 
 
 // === APP DATA (CONFIGURAÇÕES) ===
@@ -680,5 +696,25 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
 };
 
 export const generateMockData = async () => {
-   alert("Geração de dados Mock desativada em Produção (Supabase).");
+    if (!isConfigured) {
+        alert("Erro: Supabase não configurado. Verifique se o arquivo .env existe e se o servidor foi reiniciado.");
+        return;
+    }
+    const confirm = window.confirm("Isso irá INSERIR dados de teste (Lojas e Produtos) no banco Supabase conectado. Continuar?");
+    if(!confirm) return;
+
+    try {
+        // Insert basic store config to test write access
+        const { error } = await supabase.from('app_configurations').upsert({
+            category: 'stores',
+            items: ['Loja Teste A', 'Loja Teste B']
+        }, { onConflict: 'category' });
+        
+        if(error) throw error;
+
+        alert("Sucesso! Dados de teste inseridos. O banco de dados está conectado e respondendo.");
+        window.location.reload();
+    } catch (err: any) {
+        alert("Erro ao escrever no banco: " + err.message);
+    }
 };

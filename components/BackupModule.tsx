@@ -1,6 +1,7 @@
+
 import React, { useRef, useState, useEffect } from 'react';
-import { Download, Upload, Database, AlertTriangle, Loader2, RefreshCw, CheckCircle, XCircle, HelpCircle } from 'lucide-react';
-import { createBackup, restoreBackup, generateMockData, checkConnection } from '../services/storageService';
+import { Download, Upload, Database, AlertTriangle, Loader2, RefreshCw, CheckCircle, XCircle, Server } from 'lucide-react';
+import { createBackup, restoreBackup, generateMockData, checkConnection, getConfigStatus } from '../services/storageService';
 
 export const BackupModule: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -9,6 +10,7 @@ export const BackupModule: React.FC = () => {
     // Diagnostic State
     const [connectionStatus, setConnectionStatus] = useState<'checking' | 'ok' | 'error' | 'config_missing'>('checking');
     const [connectionMessage, setConnectionMessage] = useState('');
+    const [configInfo, setConfigInfo] = useState({ urlConfigured: false, urlPreview: '' });
 
     useEffect(() => {
         runDiagnostic();
@@ -16,9 +18,10 @@ export const BackupModule: React.FC = () => {
 
     const runDiagnostic = async () => {
         setConnectionStatus('checking');
+        setConfigInfo(getConfigStatus());
         const result = await checkConnection();
         setConnectionStatus(result.status);
-        setConnectionMessage(result.message);
+        setConnectionMessage(result.message + (result.details ? ` (${result.details})` : ''));
     };
 
     const handleExport = () => {
@@ -32,11 +35,7 @@ export const BackupModule: React.FC = () => {
     };
 
     const handleMockData = () => {
-        if (window.confirm('Isso apagará os dados atuais e gerará dados fictícios para teste. Útil se o banco de dados foi limpo pelo ambiente de desenvolvimento. Continuar?')) {
-            generateMockData();
-            alert('Dados de teste gerados com sucesso!');
-            window.location.reload();
-        }
+        generateMockData();
     }
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,42 +73,57 @@ export const BackupModule: React.FC = () => {
     return (
         <div className="w-full max-w-7xl mx-auto p-4">
             <h1 className="text-3xl font-black text-heroBlack mb-6 border-l-8 border-heroRed pl-4 uppercase italic">
-                Módulo de Backup
+                Módulo de Backup & Diagnóstico
             </h1>
 
             <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn mt-8">
                 
                 {/* DIAGNOSTIC PANEL */}
-                <div className={`p-6 rounded-lg shadow-sm border-l-4 flex flex-col md:flex-row justify-between items-center gap-4 ${
+                <div className={`p-6 rounded-lg shadow-md border-l-8 flex flex-col gap-4 ${
                     connectionStatus === 'ok' ? 'bg-green-50 border-green-500' : 
                     connectionStatus === 'checking' ? 'bg-gray-50 border-gray-400' : 
                     'bg-red-50 border-red-500'
                 }`}>
-                    <div className="flex items-start gap-4">
-                        <div className="mt-1">
-                            {connectionStatus === 'ok' && <CheckCircle className="text-green-600" size={28} />}
-                            {connectionStatus === 'error' && <XCircle className="text-red-600" size={28} />}
-                            {connectionStatus === 'config_missing' && <AlertTriangle className="text-orange-600" size={28} />}
-                            {connectionStatus === 'checking' && <Loader2 className="text-gray-600 animate-spin" size={28} />}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div className="flex items-start gap-4">
+                            <div className="mt-1">
+                                {connectionStatus === 'ok' && <CheckCircle className="text-green-600" size={32} />}
+                                {connectionStatus === 'error' && <XCircle className="text-red-600" size={32} />}
+                                {connectionStatus === 'config_missing' && <AlertTriangle className="text-orange-600" size={32} />}
+                                {connectionStatus === 'checking' && <Loader2 className="text-gray-600 animate-spin" size={32} />}
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-800">
+                                    {connectionStatus === 'ok' ? 'Banco de Dados Conectado' : 
+                                     connectionStatus === 'checking' ? 'Verificando Conexão...' : 
+                                     'Falha na Conexão'}
+                                </h3>
+                                <p className={`text-sm mt-1 font-medium ${
+                                    connectionStatus === 'ok' ? 'text-green-700' : 
+                                    connectionStatus === 'checking' ? 'text-gray-500' : 
+                                    'text-red-700'
+                                }`}>
+                                    {connectionMessage}
+                                </p>
+                                
+                                {/* Config Info Block */}
+                                <div className="mt-2 text-xs text-gray-500 bg-white/50 p-2 rounded border border-gray-200 inline-block">
+                                    <div>URL Detectada: <strong>{configInfo.urlPreview}</strong></div>
+                                    <div>Chave API: <strong>{configInfo.urlConfigured ? 'Carregada' : 'Ausente'}</strong></div>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-800">
-                                {connectionStatus === 'ok' ? 'Conexão com Supabase: Ativa' : 
-                                 connectionStatus === 'checking' ? 'Verificando Conexão...' : 
-                                 'Erro de Conexão'}
-                            </h3>
-                            <p className={`text-sm ${
-                                connectionStatus === 'ok' ? 'text-green-700' : 
-                                connectionStatus === 'checking' ? 'text-gray-500' : 
-                                'text-red-700 font-bold'
-                            }`}>
-                                {connectionMessage}
-                            </p>
+                        <div className="flex flex-col gap-2 w-full md:w-auto">
+                            <button onClick={runDiagnostic} className="px-4 py-2 bg-white border border-gray-300 rounded shadow-sm text-sm font-bold hover:bg-gray-50 flex items-center justify-center gap-2">
+                                <RefreshCw size={16}/> Testar Novamente
+                            </button>
+                            {connectionStatus !== 'ok' && (
+                                <div className="text-xs text-center text-red-600 font-bold bg-red-100 p-1 rounded flex items-center justify-center gap-1">
+                                    <Server size={12}/> Reinicie o servidor se alterou .env
+                                </div>
+                            )}
                         </div>
                     </div>
-                    <button onClick={runDiagnostic} className="px-4 py-2 bg-white border border-gray-300 rounded shadow-sm text-sm font-bold hover:bg-gray-50">
-                        Testar Novamente
-                    </button>
                 </div>
 
                  <div className="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-r shadow-sm">
@@ -118,11 +132,9 @@ export const BackupModule: React.FC = () => {
                             <Database className="h-6 w-6 text-blue-500" />
                         </div>
                         <div className="ml-4">
-                            <h3 className="text-lg font-medium text-blue-800">Central de Backup</h3>
+                            <h3 className="text-lg font-medium text-blue-800">Gerenciamento de Dados</h3>
                             <p className="mt-2 text-sm text-blue-700">
-                                Utilize esta área para garantir a segurança dos seus dados. 
-                                Recomendamos realizar a exportação (backup) dos dados semanalmente ou antes de grandes alterações.
-                                O arquivo gerado contém todos os pedidos e cadastros personalizados.
+                                Utilize esta área para exportar dados para segurança ou restaurar backups antigos.
                             </p>
                         </div>
                     </div>
@@ -136,8 +148,7 @@ export const BackupModule: React.FC = () => {
                         </div>
                         <h3 className="text-2xl font-bold text-gray-800 mb-3">Exportar Dados</h3>
                         <p className="text-gray-500 mb-8 text-sm flex-grow">
-                            Gera um arquivo de segurança (.json) contendo todo o banco de dados do sistema.
-                            Salve este arquivo em seu computador ou na nuvem.
+                            Baixar backup completo (.json)
                         </p>
                         <button 
                             onClick={handleExport}
@@ -145,7 +156,7 @@ export const BackupModule: React.FC = () => {
                             className={`w-full py-4 px-6 font-bold rounded-lg flex items-center justify-center gap-3 transition-colors shadow-md ${loading || connectionStatus !== 'ok' ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
                         >
                             <Download size={24} />
-                            FAZER EXPORTAÇÃO
+                            DOWNLOAD BACKUP
                         </button>
                     </div>
 
@@ -158,14 +169,14 @@ export const BackupModule: React.FC = () => {
                                 <Upload className="w-10 h-10 text-heroBlack" />
                             )}
                         </div>
-                        <h3 className="text-2xl font-bold text-gray-800 mb-3">Importar Dados</h3>
+                        <h3 className="text-2xl font-bold text-gray-800 mb-3">Restaurar Dados</h3>
                         <p className="text-gray-500 mb-2 text-sm flex-grow">
-                            Restaura o sistema utilizando um arquivo de backup salvo anteriormente.
+                            Carregar arquivo .json
                         </p>
                         <div className="bg-red-50 border border-red-100 rounded p-2 mb-6 w-full">
                             <span className="text-red-600 font-bold text-xs flex items-center justify-center gap-1">
                                 <AlertTriangle size={14} /> 
-                                CUIDADO: Substitui os dados atuais!
+                                Substitui dados atuais!
                             </span>
                         </div>
                         
@@ -187,7 +198,7 @@ export const BackupModule: React.FC = () => {
                                 </>
                             ) : (
                                 <>
-                                    <Upload size={24} /> IMPORTAR DADOS
+                                    <Upload size={24} /> UPLOAD ARQUIVO
                                 </>
                             )}
                         </button>
@@ -195,15 +206,16 @@ export const BackupModule: React.FC = () => {
                 </div>
 
                 {/* Dev Helper */}
-                <div className="mt-8 border-t pt-8 text-center opacity-50 hover:opacity-100 transition-opacity">
-                    <h4 className="text-gray-400 font-bold text-sm mb-4 uppercase tracking-widest">Área de Desenvolvimento</h4>
+                <div className="mt-8 border-t pt-8 text-center">
+                    <h4 className="text-gray-400 font-bold text-sm mb-4 uppercase tracking-widest">Ferramentas de Teste</h4>
                     <button 
                         onClick={handleMockData}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-sm font-medium"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 transition-colors text-sm font-bold border border-yellow-300"
                     >
                         <RefreshCw size={16} />
-                        Debug: Mock Data Alert
+                        Inserir Dados de Teste no Supabase
                     </button>
+                    <p className="text-xs text-gray-400 mt-2">Use isso se o banco estiver vazio para confirmar que a escrita está funcionando.</p>
                 </div>
             </div>
         </div>
