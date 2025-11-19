@@ -24,7 +24,7 @@ export const ConsultaPedidos: React.FC = () => {
         store: '',
         product: '',
         brand: '',
-        supplier: '', // Usado no lugar de Tipo
+        supplier: '', 
         type: '',
         category: ''
     });
@@ -43,13 +43,17 @@ export const ConsultaPedidos: React.FC = () => {
     useEffect(() => {
         let result = allOrders.filter(o => {
             const orderDate = o.date;
-            return orderDate >= filters.dateStart && 
-                   orderDate <= filters.dateEnd &&
-                   (filters.store === '' || o.store === filters.store) &&
-                   (filters.product === '' || o.product === filters.product) &&
-                   (filters.brand === '' || o.brand === filters.brand) &&
-                   (filters.supplier === '' || o.supplier === filters.supplier) &&
-                   (filters.category === '' || o.category === filters.category);
+            // Basic filtering
+            const matchesDate = orderDate >= filters.dateStart && orderDate <= filters.dateEnd;
+            const matchesStore = filters.store === '' || o.store === filters.store;
+            const matchesProduct = filters.product === '' || o.product === filters.product;
+            const matchesBrand = filters.brand === '' || o.brand === filters.brand;
+            const matchesSupplier = filters.supplier === '' || o.supplier === filters.supplier;
+            const matchesCategory = filters.category === '' || o.category === filters.category;
+            // Handle Type filter - o.type might be undefined for old records, default to 'Variável' usually, but search matches exactly if set
+            const matchesType = filters.type === '' || (o.type || 'Variável') === filters.type;
+
+            return matchesDate && matchesStore && matchesProduct && matchesBrand && matchesSupplier && matchesCategory && matchesType;
         });
 
         // Ordenação: Mais recente para o mais antigo
@@ -126,6 +130,13 @@ export const ConsultaPedidos: React.FC = () => {
                             {appData.products.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
+                     <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Tipo</label>
+                        <select value={filters.type} onChange={e => setFilters({...filters, type: e.target.value})} className="w-full border p-2 rounded">
+                            <option value="">Todos</option>
+                            {appData.types.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
                 </div>
 
                 <div className="flex flex-wrap justify-end items-center gap-4 border-t pt-4 mt-2">
@@ -170,7 +181,10 @@ export const ConsultaPedidos: React.FC = () => {
                                 </td>
                                 <td className="px-4 py-2 text-sm font-medium">
                                     {order.product}
-                                    <div className="text-xs text-gray-400">{order.brand}</div>
+                                    <div className="flex gap-1 mt-1">
+                                        <span className="text-[10px] bg-gray-100 text-gray-600 px-1 rounded border">{order.brand}</span>
+                                        {order.type && <span className="text-[10px] bg-blue-50 text-blue-600 px-1 rounded border border-blue-100">{order.type}</span>}
+                                    </div>
                                 </td>
                                 <td className="px-4 py-2 text-sm">{formatCurrency(order.unitValue)}</td>
                                 <td className="px-4 py-2 text-sm font-bold">{formatCurrency(order.totalValue)}</td>
