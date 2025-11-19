@@ -1,21 +1,30 @@
 
 import React, { useState } from 'react';
-import { PedidosSubView } from '../../types';
+import { PedidosSubView, User } from '../../types';
 import { CadastroPedido } from './CadastroPedido';
 import { CamposConfig } from './CamposConfig';
 import { ConsultaPedidos } from './ConsultaPedidos';
 import { RelatorioPedidos } from './RelatorioPedidos';
 import { ClipboardList, Search, BarChart2, Settings } from 'lucide-react';
 
-export const PedidosModule: React.FC = () => {
+interface PedidosModuleProps {
+    user: User;
+}
+
+export const PedidosModule: React.FC<PedidosModuleProps> = ({ user }) => {
     const [activeTab, setActiveTab] = useState<PedidosSubView>('cadastrar');
 
+    // Abas padrão acessíveis a todos com permissão no módulo
     const tabs: { id: PedidosSubView, label: string, icon: React.ReactNode }[] = [
         { id: 'cadastrar', label: 'Cadastrar', icon: <ClipboardList size={20} /> },
         { id: 'consulta', label: 'Consulta', icon: <Search size={20} /> },
         { id: 'relatorios', label: 'Relatórios', icon: <BarChart2 size={20} /> },
-        { id: 'campos', label: 'Campos!', icon: <Settings size={20} /> },
     ];
+
+    // Adiciona a aba "Campos!" apenas se for o Administrador Mestre
+    if (user.isMaster) {
+        tabs.push({ id: 'campos', label: 'Campos!', icon: <Settings size={20} /> });
+    }
 
     return (
         <div className="w-full max-w-7xl mx-auto p-4">
@@ -46,7 +55,8 @@ export const PedidosModule: React.FC = () => {
                 {activeTab === 'cadastrar' && <CadastroPedido />}
                 {activeTab === 'consulta' && <ConsultaPedidos />}
                 {activeTab === 'relatorios' && <RelatorioPedidos />}
-                {activeTab === 'campos' && <CamposConfig />}
+                {/* Garante que o componente não renderize se o usuário não for master, mesmo manipulando estado */}
+                {activeTab === 'campos' && user.isMaster && <CamposConfig />}
             </div>
         </div>
     );

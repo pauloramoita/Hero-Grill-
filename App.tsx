@@ -100,7 +100,7 @@ const App: React.FC = () => {
             
             <main className="flex-grow py-8">
                 {currentView === 'home' && renderHome()}
-                {currentView === 'pedidos' && hasPermission('pedidos') && <PedidosModule />}
+                {currentView === 'pedidos' && hasPermission('pedidos') && <PedidosModule user={user} />}
                 {currentView === 'controle043' && hasPermission('controle043') && <Controle043Module />}
                 {currentView === 'saldo' && hasPermission('saldo') && <SaldoModule />}
                 {currentView === 'financeiro' && hasPermission('financeiro') && <FinanceiroModule />}
