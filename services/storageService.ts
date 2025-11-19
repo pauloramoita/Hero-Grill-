@@ -409,6 +409,16 @@ export const saveFinancialAccount = async (account: FinancialAccount) => {
     if (error) throw new Error(error.message);
 };
 
+export const updateFinancialAccount = async (account: FinancialAccount) => {
+    const dbAccount = {
+        name: account.name,
+        store: account.store,
+        initial_balance: account.initialBalance
+    };
+    const { error } = await supabase.from('financial_accounts').update(dbAccount).eq('id', account.id);
+    if (error) throw new Error(error.message);
+};
+
 export const deleteFinancialAccount = async (id: string) => {
     const { error } = await supabase.from('financial_accounts').delete().eq('id', id);
     if (error) throw new Error(error.message);
