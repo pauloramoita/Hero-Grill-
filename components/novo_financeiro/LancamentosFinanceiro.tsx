@@ -12,7 +12,7 @@ import {
     getOrders
 } from '../../services/storageService';
 import { AppData, FinancialAccount, DailyTransaction, Order, User } from '../../types';
-import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, AlertCircle, EyeOff } from 'lucide-react';
+import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, AlertCircle, EyeOff, Filter, Calculator } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 
 interface LancamentosFinanceiroProps {
@@ -48,6 +48,8 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     // Filter State
     const [filterStart, setFilterStart] = useState(getTodayLocalISO());
     const [filterEnd, setFilterEnd] = useState(getTodayLocalISO());
+    const [filterStore, setFilterStore] = useState('');
+    const [filterSupplier, setFilterSupplier] = useState('');
 
     // Permission Check
     const canViewBalances = user.isMaster || user.permissions.modules?.includes('view_balances');
@@ -164,17 +166,23 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     // Lista Combinada e Filtrada
     const getFilteredList = () => {
         // 1. Transações Financeiras já existentes
-        const filteredTrans = transactions.filter(t => t.date >= filterStart && t.date <= filterEnd);
+        const filteredTrans = transactions.filter(t => {
+            return t.date >= filterStart && 
+                   t.date <= filterEnd &&
+                   (!filterStore || t.store === filterStore) &&
+                   (!filterSupplier || t.supplier === filterSupplier);
+        });
         
         // 2. Pedidos do Cadastro (que ainda não viraram transações financeiras)
-        // Verificamos se já existe uma transação com o MESMO ID do pedido. 
-        // (Assumindo que ao editar/pagar um pedido, mantemos o ID dele na tabela daily_transactions)
         const existingIds = new Set(transactions.map(t => t.id));
 
         const filteredOrders = orders
             .filter(o => {
                 const dDate = o.deliveryDate || o.date; 
-                return dDate >= filterStart && dDate <= filterEnd;
+                return dDate >= filterStart && 
+                       dDate <= filterEnd &&
+                       (!filterStore || o.store === filterStore) &&
+                       (!filterSupplier || o.supplier === filterSupplier);
             })
             .filter(o => !existingIds.has(o.id)) // Remove se já existir no financeiro
             .map(o => ({
@@ -213,6 +221,12 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     if (loading) return <Loader2 className="animate-spin mx-auto mt-10" />;
 
     const filteredList = getFilteredList();
+    
+    // Totais do Filtro Atual
+    const totalQty = filteredList.length;
+    const totalReceitas = filteredList.filter(i => i.type === 'Receita').reduce((acc, i) => acc + i.value, 0);
+    const totalDespesas = filteredList.filter(i => i.type === 'Despesa').reduce((acc, i) => acc + i.value, 0); // Pedidos contam como despesa aqui
+    const totalSaldo = totalReceitas - totalDespesas;
 
     return (
         <div className="space-y-8 pb-20">
@@ -347,12 +361,68 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
 
             {/* Filter & List */}
             <div className="bg-white rounded-lg shadow border border-gray-200">
-                <div className="p-4 border-b bg-gray-50 flex flex-wrap items-center justify-between gap-4">
-                    <h3 className="font-bold text-gray-700 flex items-center gap-2"><Search size={18}/> Movimentações do Dia / Período</h3>
+                <div className="p-4 border-b bg-gray-50">
+                    <div className="flex items-center justify-between gap-4 mb-4">
+                        <h3 className="font-bold text-gray-700 flex items-center gap-2">
+                            <Search size={18}/> Movimentações do Dia / Período
+                        </h3>
+                    </div>
+                    
+                    {/* Filters Bar */}
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                        <div className="md:col-span-1">
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Data Início</label>
+                            <input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="w-full border p-2 rounded text-sm"/>
+                        </div>
+                        <div className="md:col-span-1">
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Data Fim</label>
+                            <input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="w-full border p-2 rounded text-sm"/>
+                        </div>
+                        <div className="md:col-span-1">
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Filtrar Loja</label>
+                            <select value={filterStore} onChange={e => setFilterStore(e.target.value)} className="w-full border p-2 rounded text-sm">
+                                <option value="">Todas</option>
+                                {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                         <div className="md:col-span-1">
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Filtrar Fornecedor</label>
+                            <select value={filterSupplier} onChange={e => setFilterSupplier(e.target.value)} className="w-full border p-2 rounded text-sm">
+                                <option value="">Todos</option>
+                                {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                        <div className="md:col-span-1 flex justify-end">
+                             <button onClick={() => {setFilterStore(''); setFilterSupplier(''); setFilterStart(getTodayLocalISO()); setFilterEnd(getTodayLocalISO());}} className="text-xs text-gray-500 hover:text-red-500 font-bold flex items-center gap-1">
+                                <Filter size={12}/> Limpar Filtros
+                             </button>
+                        </div>
+                    </div>
+                </div>
+
+                 {/* Summary Bar */}
+                 <div className="bg-blue-50 p-4 border-b border-blue-100 flex flex-wrap gap-4 justify-between items-center text-sm">
                     <div className="flex items-center gap-2">
-                        <input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="border p-1 rounded text-sm"/>
-                        <span className="text-gray-400">até</span>
-                        <input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="border p-1 rounded text-sm"/>
+                        <Calculator size={16} className="text-blue-600"/>
+                        <span className="font-bold text-gray-600">RESUMO DA SELEÇÃO:</span>
+                    </div>
+                    <div className="flex gap-6">
+                        <div className="flex flex-col">
+                            <span className="text-xs font-bold text-gray-500 uppercase">Qtd. Registros</span>
+                            <span className="font-bold text-gray-800 text-lg">{totalQty}</span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                            <span className="text-xs font-bold text-green-600 uppercase">Receitas</span>
+                            <span className="font-bold text-green-700">{formatCurrency(totalReceitas)}</span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                            <span className="text-xs font-bold text-red-600 uppercase">Despesas</span>
+                            <span className="font-bold text-red-700">{formatCurrency(totalDespesas)}</span>
+                        </div>
+                        <div className="flex flex-col items-end border-l pl-6 border-blue-200">
+                            <span className="text-xs font-black text-blue-800 uppercase">Saldo (Total)</span>
+                            <span className={`font-black text-lg ${totalSaldo >= 0 ? 'text-blue-800' : 'text-red-600'}`}>{formatCurrency(totalSaldo)}</span>
+                        </div>
                     </div>
                 </div>
                 
