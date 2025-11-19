@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { AppData, FinancialAccount, DailyTransaction } from '../../types';
 import { getAppData, getFinancialAccounts, formatCurrency } from '../../services/storageService';
@@ -28,6 +29,7 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
     const [paymentMethod, setPaymentMethod] = useState(transaction.paymentMethod || 'Boleto');
     const [product, setProduct] = useState(transaction.product || '');
     const [category, setCategory] = useState(transaction.category || '');
+    const [classification, setClassification] = useState(transaction.classification || '');
     const [supplier, setSupplier] = useState(transaction.supplier || '');
     const [value, setValue] = useState(transaction.value);
     const [status, setStatus] = useState<'Pago' | 'Pendente'>(transaction.status || 'Pendente');
@@ -76,6 +78,7 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
             product: type !== 'Transferência' ? product : '',
             category: type !== 'Transferência' ? category : '',
             supplier: (type === 'Despesa' && type !== 'Transferência') ? supplier : '',
+            classification: type !== 'Transferência' ? classification : '',
             value,
             status,
             description,
@@ -220,6 +223,14 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
                                     <select value={product} onChange={e => setProduct(e.target.value)} className="w-full p-2 border rounded">
                                         <option value="">Selecione...</option>
                                         {appData.products.map(p => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Classificação (Tipo)</label>
+                                    <select value={classification} onChange={e => setClassification(e.target.value)} className="w-full p-2 border rounded">
+                                        <option value="">Selecione...</option>
+                                        {appData.types.map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
                                 </div>
                             </div>

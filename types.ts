@@ -104,6 +104,7 @@ export interface DailyTransaction {
     value: number;
     status: 'Pago' | 'Pendente';
     description?: string;
+    classification?: string; // Novo: Tipo (Fixa/Variável)
     origin?: 'manual' | 'pedido'; // Para diferenciar lançamentos manuais de pedidos importados
 }
 

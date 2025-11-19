@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { 
     getAppData, 
@@ -43,6 +44,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [paymentMethod, setPaymentMethod] = useState('Boleto'); // Default Boleto
     const [product, setProduct] = useState('');
     const [category, setCategory] = useState('');
+    const [classification, setClassification] = useState(''); // Novo campo: Tipo (Fixo/Variável)
     const [supplier, setSupplier] = useState('');
     const [value, setValue] = useState(0);
     const [status, setStatus] = useState<'Pago' | 'Pendente'>('Pendente');
@@ -54,8 +56,9 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [filterStart, setFilterStart] = useState(getTodayLocalISO());
     const [filterEnd, setFilterEnd] = useState(getTodayLocalISO());
     const [filterStore, setFilterStore] = useState('');
-    const [filterAccount, setFilterAccount] = useState(''); // Novo Filtro
+    const [filterAccount, setFilterAccount] = useState('');
     const [filterSupplier, setFilterSupplier] = useState('');
+    const [filterClassification, setFilterClassification] = useState(''); // Novo Filtro
 
     // Permission Check
     const canViewBalances = user.isMaster || user.permissions.modules?.includes('view_balances');
@@ -115,6 +118,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 product: type !== 'Transferência' ? product : '',
                 category: type !== 'Transferência' ? category : '',
                 supplier: (type === 'Despesa' && type !== 'Transferência') ? supplier : '',
+                classification: type !== 'Transferência' ? classification : '', // Salvar Classificação
                 value,
                 status,
                 origin: 'manual'
@@ -127,8 +131,8 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             loadData(); // Refresh list
         } catch (err: any) {
             console.error(err);
-            if (err.message && (err.message.includes('destination_account_id') || err.message.includes('destination_store') || err.message.includes('schema cache'))) {
-                alert('⚠️ ATENÇÃO: ATUALIZAÇÃO DE BANCO DE DADOS NECESSÁRIA\n\nO sistema detectou que as colunas de transferência ainda não foram criadas no seu banco de dados.\n\nSOLUÇÃO:\n1. Vá até o módulo "Backup".\n2. Clique em "Ver SQL de Instalação/Correção".\n3. Copie o código SQL.\n4. Cole e execute no "SQL Editor" do seu painel Supabase.\n\nIsso corrigirá o erro permanentemente.');
+            if (err.message && (err.message.includes('destination_account_id') || err.message.includes('classification') || err.message.includes('schema cache'))) {
+                alert('⚠️ ATENÇÃO: ATUALIZAÇÃO DE BANCO DE DADOS NECESSÁRIA\n\nO sistema detectou que colunas novas (como Classification) ainda não foram criadas no seu banco de dados.\n\nSOLUÇÃO:\n1. Vá até o módulo "Backup".\n2. Clique em "Ver SQL de Instalação/Correção".\n3. Copie o código SQL.\n4. Cole e execute no "SQL Editor" do seu painel Supabase.\n\nIsso corrigirá o erro permanentemente.');
             } else {
                 alert('Erro ao salvar: ' + err.message);
             }
@@ -186,6 +190,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             const matchesDate = t.date >= filterStart && t.date <= filterEnd;
             const matchesStore = !filterStore || t.store === filterStore;
             const matchesSupplier = !filterSupplier || t.supplier === filterSupplier;
+            const matchesClassification = !filterClassification || t.classification === filterClassification;
             
             let matchesAccount = true;
             if (filterAccount) {
@@ -196,7 +201,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 }
             }
 
-            return matchesDate && matchesStore && matchesSupplier && matchesAccount;
+            return matchesDate && matchesStore && matchesSupplier && matchesAccount && matchesClassification;
         });
         
         const existingIds = new Set(transactions.map(t => t.id));
@@ -208,8 +213,9 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 const matchesStore = !filterStore || o.store === filterStore;
                 const matchesSupplier = !filterSupplier || o.supplier === filterSupplier;
                 const matchesAccount = !filterAccount;
+                const matchesClassification = !filterClassification || (o.type || 'Variável') === filterClassification;
 
-                return matchesDate && matchesStore && matchesSupplier && matchesAccount;
+                return matchesDate && matchesStore && matchesSupplier && matchesAccount && matchesClassification;
             })
             .filter(o => !existingIds.has(o.id))
             .map(o => ({
@@ -222,6 +228,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 paymentMethod: 'Boleto',
                 product: o.product,
                 category: o.category || '-',
+                classification: o.type || 'Variável',
                 supplier: o.supplier,
                 value: o.totalValue,
                 status: 'Pendente' as const,
@@ -287,7 +294,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Tipo</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Tipo de Lançamento</label>
                         <select 
                             value={type} 
                             onChange={e => {
@@ -410,6 +417,15 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 {appData.products.map(p => <option key={p} value={p}>{p}</option>)}
                             </select>
                         </div>
+
+                        {/* Campo de Classificação adicionado conforme solicitado */}
+                        <div>
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Classificação (Tipo)</label>
+                            <select value={classification} onChange={e => setClassification(e.target.value)} className="w-full p-2 border rounded">
+                                <option value="">Selecione...</option>
+                                {appData.types.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
                     </div>
                 )}
 
@@ -458,7 +474,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         </h3>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
                         <div className="md:col-span-1">
                             <label className="block text-xs font-bold text-gray-500 mb-1">Data Início</label>
                             <input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="w-full border p-2 rounded text-sm"/>
@@ -491,8 +507,17 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
-                        <div className="md:col-span-5 flex justify-end">
-                             <button onClick={() => {setFilterStore(''); setFilterAccount(''); setFilterSupplier(''); setFilterStart(getTodayLocalISO()); setFilterEnd(getTodayLocalISO());}} className="text-xs text-gray-500 hover:text-red-500 font-bold flex items-center gap-1">
+                         {/* Filtro de Classificação (Tipo) Adicionado */}
+                         <div className="md:col-span-1">
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Filtrar Tipo</label>
+                            <select value={filterClassification} onChange={e => setFilterClassification(e.target.value)} className="w-full border p-2 rounded text-sm">
+                                <option value="">Todos</option>
+                                {appData.types.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="md:col-span-6 flex justify-end">
+                             <button onClick={() => {setFilterStore(''); setFilterAccount(''); setFilterSupplier(''); setFilterClassification(''); setFilterStart(getTodayLocalISO()); setFilterEnd(getTodayLocalISO());}} className="text-xs text-gray-500 hover:text-red-500 font-bold flex items-center gap-1">
                                 <Filter size={12}/> Limpar Filtros
                              </button>
                         </div>
@@ -533,6 +558,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 <th className="px-4 py-3 text-left">Origem</th>
                                 <th className="px-4 py-3 text-left">Descrição / Destino</th>
                                 <th className="px-4 py-3 text-left">Conta</th>
+                                <th className="px-4 py-3 text-left">Tipo</th>
                                 <th className="px-4 py-3 text-left">Método</th>
                                 <th className="px-4 py-3 text-right">Valor</th>
                                 <th className="px-4 py-3 text-center">Status</th>
@@ -567,6 +593,11 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                     </td>
                                     <td className="px-4 py-3">
                                         {item.accountId ? getAccountName(item.accountId) : <span className="text-red-400 text-xs italic font-bold">Definir Conta</span>}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        {item.classification && (
+                                            <span className="text-[10px] bg-gray-100 px-1 rounded border border-gray-300 text-gray-600">{item.classification}</span>
+                                        )}
                                     </td>
                                     <td className="px-4 py-3">{item.paymentMethod}</td>
                                     <td className={`px-4 py-3 text-right font-bold ${item.type === 'Receita' ? 'text-green-600' : item.type === 'Transferência' ? 'text-purple-600' : 'text-red-600'}`}>
@@ -609,7 +640,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 </tr>
                             ))}
                              {filteredList.length === 0 && (
-                                <tr><td colSpan={9} className="p-6 text-center text-gray-500">Nenhum lançamento encontrado.</td></tr>
+                                <tr><td colSpan={10} className="p-6 text-center text-gray-500">Nenhum lançamento encontrado.</td></tr>
                             )}
                         </tbody>
                     </table>

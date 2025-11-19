@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS daily_transactions (
   value numeric DEFAULT 0,
   status text DEFAULT 'Pendente', -- Pago, Pendente
   description text,
+  classification text, -- Novo: Classificação (Fixo/Variável)
   origin text DEFAULT 'manual',
   created_at timestamptz DEFAULT now()
 );
@@ -163,6 +164,7 @@ CREATE TABLE IF NOT EXISTS daily_transactions (
 -- MIGRAÇÃO AUTOMÁTICA (Para corrigir erro de colunas faltantes em bancos já criados)
 ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS destination_store text;
 ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS destination_account_id uuid REFERENCES financial_accounts(id);
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS classification text;
 `;
 
 // === DIAGNÓSTICO ===
@@ -452,6 +454,7 @@ export const getDailyTransactions = async (): Promise<DailyTransaction[]> => {
         value: t.value,
         status: t.status,
         description: t.description,
+        classification: t.classification, // Mapeado
         origin: t.origin
     }));
 };
@@ -472,6 +475,7 @@ export const saveDailyTransaction = async (t: DailyTransaction) => {
         value: t.value,
         status: t.status,
         description: t.description,
+        classification: t.classification, // Mapeado
         origin: t.origin
     };
 
@@ -975,7 +979,7 @@ export const createBackup = async () => {
         const dailyTransactions = await getDailyTransactions();
 
         const backupObj = {
-            version: 10, // Updated version for Transfer support
+            version: 11, // Updated version for Finance Classification support
             timestamp: new Date().toISOString(),
             source: 'supabase_cloud',
             appData,
@@ -1128,6 +1132,7 @@ export const restoreBackup = async (file: File): Promise<{success: boolean, mess
                         value: t.value,
                         status: t.status,
                         description: t.description,
+                        classification: t.classification, // Novo Mapeamento
                         origin: t.origin
                     }));
                     // Chunking optional but recommended if large
