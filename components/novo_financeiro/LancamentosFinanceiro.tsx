@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { 
     getAppData, 
@@ -13,7 +11,7 @@ import {
     getOrders
 } from '../../services/storageService';
 import { AppData, FinancialAccount, DailyTransaction, Order, User } from '../../types';
-import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, AlertCircle, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock, Layers } from 'lucide-react';
+import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 
 interface LancamentosFinanceiroProps {
@@ -66,7 +64,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [filterClassification, setFilterClassification] = useState('');
 
     // Permission Check
-    const canViewBalances = user.isMaster || user.permissions.modules?.includes('view_balances');
+    const canViewBalances = user.isMaster || (user.permissions?.modules && user.permissions.modules.includes('view_balances'));
 
     useEffect(() => {
         loadData();
@@ -137,16 +135,8 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 let currentDesc = description;
                 if (recurrenceType === 'installment') {
                     currentDesc = description ? `${description} (${i + 1}/${loopCount})` : `Parcela (${i + 1}/${loopCount})`;
-                } else if (recurrenceType === 'fixed' && i > 0) {
-                    // Optional: Add month suffix for fixed expenses if desired, but usually standard name is fine
-                    // currentDesc = `${description} - Mês ${i + 1}`;
                 }
 
-                // Status Logic: Usually only the first one matches the form status (e.g. Paid), subsequent ones might be Pendente
-                // However, user might want to launch all as Pending. 
-                // Let's assume: If Recurrence > 1, force subsequent to 'Pendente' unless user explicitly wants otherwise? 
-                // Simplest: Respect form status for ALL, or force Pendente for future.
-                // Decision: If i > 0 (future), usually it's Pending.
                 const currentStatus = i === 0 ? status : 'Pendente';
                 const currentPaymentDate = (i === 0 && status === 'Pago') ? paymentDate : null;
 
@@ -635,7 +625,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
-                         {/* Filtro de Classificação (Tipo) Adicionado */}
                          <div className="md:col-span-1">
                             <label className="block text-xs font-bold text-gray-500 mb-1">Filtrar Tipo</label>
                             <select value={filterClassification} onChange={e => setFilterClassification(e.target.value)} className="w-full border p-2 rounded text-sm">

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { 
     getAppData, 
@@ -11,11 +9,11 @@ import {
 import { AppData, Order, DailyTransaction, FinancialAccount } from '../../types';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    AreaChart, Area, PieChart, Pie, Cell
+    AreaChart, Area
 } from 'recharts';
 import { 
     LayoutDashboard, TrendingUp, TrendingDown, DollarSign, 
-    Calendar, Store, ArrowUpRight, ArrowDownRight, Wallet, Loader2, BarChart2
+    Calendar, Store, Wallet, Loader2, BarChart2
 } from 'lucide-react';
 
 export const DashboardModule: React.FC = () => {
@@ -37,25 +35,28 @@ export const DashboardModule: React.FC = () => {
 
     const loadData = async () => {
         setLoading(true);
-        const [d, o, t, a] = await Promise.all([
-            getAppData(),
-            getOrders(),
-            getDailyTransactions(),
-            getFinancialAccounts()
-        ]);
-        setAppData(d);
-        setOrders(o);
-        setTransactions(t);
-        setAccounts(a);
-        setLoading(false);
+        try {
+            const [d, o, t, a] = await Promise.all([
+                getAppData(),
+                getOrders(),
+                getDailyTransactions(),
+                getFinancialAccounts()
+            ]);
+            setAppData(d);
+            setOrders(o);
+            setTransactions(t);
+            setAccounts(a);
+        } catch (error) {
+            console.error("Error loading dashboard data", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // === DATA PROCESSING LOGIC ===
 
-    // Helper: Check if item belongs to selected store
     const filterStore = (storeName: string) => !selectedStore || storeName === selectedStore;
     
-    // Helper: Calculate Account Balances
     const calculateAccountBalances = () => {
         return accounts.filter(acc => filterStore(acc.store)).map(acc => {
             let balance = acc.initialBalance;
@@ -77,14 +78,12 @@ export const DashboardModule: React.FC = () => {
     const accountBalances = calculateAccountBalances();
     const totalBalance = accountBalances.reduce((sum, acc) => sum + acc.currentBalance, 0);
 
-    // Helper: Get Historical Balance for Chart (Last 12 Months) - Approximate based on transaction dates
     const getHistoricalBalances = () => {
         const history: any[] = [];
         const today = new Date();
         
         for (let i = 11; i >= 0; i--) {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-            const monthStr = d.toISOString().slice(0, 7);
             const endOfMonth = new Date(today.getFullYear(), today.getMonth() - i + 1, 0).toISOString().split('T')[0];
 
             let monthlyBalance = 0;
@@ -96,6 +95,9 @@ export const DashboardModule: React.FC = () => {
                 if (t.status === 'Pago' && t.date <= endOfMonth && filterStore(t.store || '')) {
                      if (t.type === 'Receita') monthlyBalance += t.value;
                      if (t.type === 'Despesa') monthlyBalance -= t.value;
+                     // Transferências internas não afetam o saldo total consolidado, 
+                     // mas se for filtrado por loja, deveria considerar?
+                     // Para simplificar, saldo consolidado ignora transf internas se loja não filtrada.
                 }
             });
 
@@ -107,7 +109,6 @@ export const DashboardModule: React.FC = () => {
         return history;
     };
 
-    // Current Month Metrics
     const getMonthlyMetrics = () => {
         // 1. Despesas (Orders + Transactions type 'Despesa')
         const monthOrders = orders.filter(o => o.date.startsWith(currentMonth) && filterStore(o.store));
@@ -124,7 +125,7 @@ export const DashboardModule: React.FC = () => {
 
         // 3. Projections
         const today = new Date();
-        const currentMonthDate = new Date(currentMonth + '-02'); // Avoid timezone issues
+        const currentMonthDate = new Date(currentMonth + '-02');
         const isSameMonth = today.getMonth() === currentMonthDate.getMonth() && today.getFullYear() === currentMonthDate.getFullYear();
         
         const daysInMonth = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth() + 1, 0).getDate();
@@ -146,7 +147,6 @@ export const DashboardModule: React.FC = () => {
     const metrics = getMonthlyMetrics();
     const historicalBalanceData = getHistoricalBalances();
 
-    // Comparison Data (Month vs Month)
     const getComparisonData = () => {
         const data: any[] = [];
         const today = new Date();
@@ -155,17 +155,14 @@ export const DashboardModule: React.FC = () => {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
             const mStr = d.toISOString().slice(0, 7);
             
-            // Calc Expenses
             const oVal = orders.filter(o => o.date.startsWith(mStr) && filterStore(o.store)).reduce((a, b) => a + b.totalValue, 0);
             const tVal = transactions.filter(t => t.date.startsWith(mStr) && t.type === 'Despesa' && filterStore(t.store)).reduce((a, b) => a + b.value, 0);
-            
-            // Calc Revenues
             const rVal = transactions.filter(t => t.date.startsWith(mStr) && t.type === 'Receita' && filterStore(t.store)).reduce((a, b) => a + b.value, 0);
 
             data.push({
                 name: `${d.getMonth() + 1}/${d.getFullYear().toString().substr(2)}`,
+                Receitas: rVal,
                 Despesas: oVal + tVal,
-                Receitas: rVal
             });
         }
         return data;
@@ -174,7 +171,6 @@ export const DashboardModule: React.FC = () => {
     const comparisonData = getComparisonData();
 
     const getExpenseLists = () => {
-        // Combine Orders and Expense Transactions
         const allExpenses = [
             ...metrics.monthOrders.map(o => ({ 
                 name: o.product, 
@@ -185,14 +181,13 @@ export const DashboardModule: React.FC = () => {
             ...metrics.monthTrans.map(t => ({ 
                 name: t.description || t.category || 'Despesa Diversa', 
                 val: t.value,
-                // CORREÇÃO: Se não tiver classificação, assume Variável (mais comum) em vez de Fixa.
                 type: (t.classification && t.classification.length > 0) ? t.classification : 'Variável',
                 origin: 'Financeiro'
             }))
         ];
 
         const fixed = allExpenses.filter(e => e.type === 'Fixa');
-        const variable = allExpenses.filter(e => e.type !== 'Fixa'); // Todo o resto é variável
+        const variable = allExpenses.filter(e => e.type !== 'Fixa');
 
         return {
             fixedAlpha: [...fixed].sort((a, b) => a.name.localeCompare(b.name)),
@@ -247,7 +242,7 @@ export const DashboardModule: React.FC = () => {
             {/* Main Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 
-                {/* KPI Cards Row - Spanning Columns */}
+                {/* KPI Cards Row */}
                 <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {/* Total Balance */}
                     <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500 flex flex-col justify-between h-32 relative overflow-hidden">

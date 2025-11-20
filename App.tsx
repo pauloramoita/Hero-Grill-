@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
@@ -12,7 +11,7 @@ import { AdminModule } from './components/admin/AdminModule';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { View, User } from './types';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Grid, LogOut, Settings, KeyRound, Landmark, LayoutDashboard } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, LogOut, Settings, KeyRound, Landmark, LayoutDashboard } from 'lucide-react';
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
@@ -36,8 +35,8 @@ const App: React.FC = () => {
     // Filtra módulos baseados nas permissões do usuário
     const hasPermission = (moduleId: string) => {
         if (user.isMaster) return true;
-        // Permissão explícita para dashboard ou permissão padrão por módulo
-        return user.permissions.modules?.includes(moduleId);
+        if (!user.permissions || !user.permissions.modules) return false;
+        return user.permissions.modules.includes(moduleId);
     };
 
     const menuItems: { id: View, label: string, icon: React.ReactNode, color: string, disabled: boolean, requiredPerm: string }[] = [
@@ -134,7 +133,7 @@ const App: React.FC = () => {
             <footer className="bg-heroBlack text-white text-center py-6 mt-auto">
                 <p className="text-sm opacity-50">
                     &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados. 
-                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v2.4.0 (PWA+Dash)</span>
+                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v2.6.1 (Stable)</span>
                 </p>
             </footer>
 

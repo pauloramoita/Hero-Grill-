@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, AppData } from '../../types';
 import { getUsers, saveUser, deleteUser, getAppData } from '../../services/storageService';
-import { Save, Trash2, UserPlus, CheckSquare, Square, Loader2, Shield, AlertCircle, Users, KeyRound } from 'lucide-react';
+import { Save, Trash2, UserPlus, CheckSquare, Square, Loader2, Shield, AlertCircle, Users } from 'lucide-react';
 
 export const UserManagement: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
@@ -85,7 +85,7 @@ export const UserManagement: React.FC = () => {
 
     const applyProfile = (type: 'gerente' | 'operador') => {
         if (type === 'gerente') {
-            // Gerente: Operações completas + Configuração de Campos + Visualização de Saldos + Todas Lojas
+            // Gerente: Operações completas + Configuração de Campos + Visualização de Saldos + Todas Lojas + Dashboard
             setSelectedModules([
                 'dashboard',
                 'pedidos', 'config_campos',
