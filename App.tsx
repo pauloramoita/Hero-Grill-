@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
 import { Controle043Module } from './components/controle043/Controle043Module';
@@ -19,14 +19,28 @@ const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<View>('home');
     const [showPasswordModal, setShowPasswordModal] = useState(false);
 
+    // Determine if user is restricted to Dashboard only
+    const isDashboardOnly = useMemo(() => {
+        if (!user || user.isMaster) return false;
+        const modules = user.permissions?.modules || [];
+        return modules.length === 1 && modules.includes('dashboard');
+    }, [user]);
+
+    // Enforce Dashboard View for restricted users
+    useEffect(() => {
+        if (isDashboardOnly && currentView !== 'dashboard') {
+            setCurrentView('dashboard');
+        }
+    }, [isDashboardOnly, currentView]);
+
     const handleLogin = (loggedUser: User) => {
         setUser(loggedUser);
         
-        // Lógica para Observador de Dashboard: Acesso direto e exclusivo
-        const modules = loggedUser.permissions.modules || [];
-        const isDashboardOnly = modules.length === 1 && modules.includes('dashboard') && !loggedUser.isMaster;
+        // Check restriction immediately upon login
+        const modules = loggedUser.permissions?.modules || [];
+        const restricted = modules.length === 1 && modules.includes('dashboard') && !loggedUser.isMaster;
 
-        if (isDashboardOnly) {
+        if (restricted) {
             setCurrentView('dashboard');
         } else {
             setCurrentView('home');
@@ -64,9 +78,10 @@ const App: React.FC = () => {
             {/* Header */}
             <Header 
                 isHome={currentView === 'home'}
-                onHomeClick={() => setCurrentView('home')} 
+                onHomeClick={() => !isDashboardOnly && setCurrentView('home')} 
                 user={user} 
                 onLogout={handleLogout} 
+                disableNavigation={isDashboardOnly}
             />
 
             {/* Main Content */}

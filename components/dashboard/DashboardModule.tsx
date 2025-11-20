@@ -17,7 +17,8 @@ import {
 import { 
     Loader2,
     Lock,
-    Hammer
+    Hammer,
+    AlertCircle
 } from 'lucide-react';
 
 interface DashboardModuleProps {
@@ -27,6 +28,7 @@ interface DashboardModuleProps {
 export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     const [activeTab, setActiveTab] = useState('geral');
     const [loading, setLoading] = useState(true);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     
     const [orders, setOrders] = useState<Order[]>([]);
@@ -47,23 +49,29 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
 
     const loadData = async () => {
         setLoading(true);
+        setErrorMsg(null);
         try {
-            const [d, o, t, a, t043, ab] = await Promise.all([
+            // Load basic data first to avoid total crash
+            const [d, o, acc] = await Promise.all([
                 getAppData(),
-                getOrders(),
-                getDailyTransactions(),
-                getFinancialAccounts(),
-                getTransactions043(),
-                getAccountBalances()
+                getOrders().catch(e => { console.error('Orders load error', e); return []; }),
+                getFinancialAccounts().catch(e => { console.error('Acc load error', e); return []; }),
             ]);
+            
+            // Load transactional data separately to handle potential missing tables
+            const t = await getDailyTransactions().catch(e => { console.error('Trans load error', e); return []; });
+            const t043 = await getTransactions043().catch(e => { console.error('043 load error', e); return []; });
+            const ab = await getAccountBalances().catch(e => { console.error('Balances load error', e); return []; });
+
             setAppData(d);
             setOrders(o);
             setTransactions(t);
-            setAccounts(a);
+            setAccounts(acc);
             setTransactions043(t043);
             setAccountBalances(ab);
-        } catch (error) {
-            console.error("Error loading dashboard data", error);
+        } catch (error: any) {
+            console.error("Critical Dashboard Error", error);
+            setErrorMsg(error.message || 'Erro desconhecido ao carregar dados.');
         } finally {
             setLoading(false);
         }
@@ -314,6 +322,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     ];
 
     if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin w-12 h-12 text-heroRed"/></div>;
+    if (errorMsg) return <div className="p-8 text-center text-red-600 font-bold"><AlertCircle className="mx-auto mb-2"/>{errorMsg}</div>;
 
     return (
         <div className="max-w-7xl mx-auto p-4 space-y-6 animate-fadeIn">
