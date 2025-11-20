@@ -109,7 +109,7 @@ export interface DailyTransaction {
 }
 
 export interface UserPermissions {
-    modules: string[]; // 'pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro', 'dashboard'
+    modules: string[]; // 'dashboard', 'pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro', etc
     stores: string[]; // Lista de lojas permitidas
 }
 

@@ -21,6 +21,7 @@ export const UserManagement: React.FC = () => {
     const [selectedStores, setSelectedStores] = useState<string[]>([]);
 
     const modulesList = [
+        { id: 'dashboard', label: '📊 Dashboard (Visão Geral)' }, // Novo
         { id: 'pedidos', label: 'Pedidos (Cadastro)' },
         { id: 'config_campos', label: '⚙️ Config. Produtos (Campos!)' }, // Specific for Orders
         { id: 'controle043', label: 'Controle 043' },
@@ -86,6 +87,7 @@ export const UserManagement: React.FC = () => {
         if (type === 'gerente') {
             // Gerente: Operações completas + Configuração de Campos + Visualização de Saldos + Todas Lojas
             setSelectedModules([
+                'dashboard',
                 'pedidos', 'config_campos',
                 'controle043', 
                 'saldo', 
@@ -148,7 +150,7 @@ export const UserManagement: React.FC = () => {
                  <div>
                     <strong>Gestão de Perfis:</strong> Utilize os botões de "Perfil Rápido" para configurar permissões padrão.
                     <ul className="list-disc ml-4 mt-1">
-                        <li><strong>Gerente:</strong> Acesso total operacional, ver saldos, configurar campos (Produtos/Contas).</li>
+                        <li><strong>Gerente:</strong> Acesso total operacional, ver saldos, dashboard, configurar campos (Produtos/Contas).</li>
                         <li><strong>Operador:</strong> Apenas lançamentos básicos.</li>
                     </ul>
                  </div>
@@ -190,7 +192,7 @@ export const UserManagement: React.FC = () => {
                             <h3 className="font-bold text-heroBlack mb-3 flex items-center gap-2"><Shield size={16}/> Permissões de Acesso</h3>
                             <div className="space-y-2">
                                 {modulesList.map(m => (
-                                    <div key={m.id} onClick={() => toggleModule(m.id)} className={`flex items-center gap-3 cursor-pointer hover:bg-gray-200 p-2 rounded transition-colors ${m.id.startsWith('config') || m.id.startsWith('view') ? 'bg-yellow-50 border border-yellow-100' : ''}`}>
+                                    <div key={m.id} onClick={() => toggleModule(m.id)} className={`flex items-center gap-3 cursor-pointer hover:bg-gray-200 p-2 rounded transition-colors ${m.id.startsWith('config') || m.id.startsWith('view') ? 'bg-yellow-50 border border-yellow-100' : m.id === 'dashboard' ? 'bg-blue-50 border border-blue-100' : ''}`}>
                                         {selectedModules.includes(m.id) ? <CheckSquare className="text-green-600" /> : <Square className="text-gray-400" />}
                                         <span className={selectedModules.includes(m.id) ? 'font-bold text-gray-800' : 'text-gray-600'}>{m.label}</span>
                                     </div>
@@ -246,6 +248,9 @@ export const UserManagement: React.FC = () => {
                                             <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-bold border border-purple-200">GERENTE</span>
                                         ) : (
                                             <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold border border-blue-100">OPERADOR</span>
+                                        )}
+                                        {user.permissions.modules?.includes('dashboard') && (
+                                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-bold border border-green-200">DASH</span>
                                         )}
                                     </div>
                                 </td>

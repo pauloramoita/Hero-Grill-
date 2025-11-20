@@ -36,8 +36,8 @@ const App: React.FC = () => {
     // Filtra módulos baseados nas permissões do usuário
     const hasPermission = (moduleId: string) => {
         if (user.isMaster) return true;
-        // Permite acesso ao dashboard se tiver acesso ao financeiro novo ou for explicitamente permitido
-        if (moduleId === 'dashboard') return user.permissions.modules?.includes('dashboard') || user.permissions.modules?.includes('novo_financeiro');
+        // Dashboard agora requer permissão explícita 'dashboard'
+        if (moduleId === 'dashboard') return user.permissions.modules?.includes('dashboard');
         return user.permissions.modules?.includes(moduleId);
     };
 
