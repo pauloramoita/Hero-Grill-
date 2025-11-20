@@ -41,37 +41,30 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     const [sortFixed, setSortFixed] = useState<'alpha' | 'value'>('value');
     const [sortVariable, setSortVariable] = useState<'alpha' | 'value'>('value');
 
-    // Determine available stores based on user permissions (Memoized to be stable)
+    // Determine available stores based on user permissions
     const availableStores = useMemo(() => {
-        // Safely access stores, defaulting to empty if loading or undefined
         const allStores = appData?.stores || [];
         
         if (user.isMaster) return allStores;
         
+        // Se o usuário tem lojas especificadas, respeita o filtro.
         if (user.permissions?.stores && user.permissions.stores.length > 0) {
             return allStores.filter(s => user.permissions.stores.includes(s));
         }
         
-        // If user is restricted (like Observer) but has NO specific stores in permissions,
-        // we might want to show ALL or NONE.
-        // Requirement: "Ao dar permissão apenas para uma loja..." implies explicit permission.
-        // However, generic observers might see everything.
-        return allStores;
+        // IMPORTANTE: Para Investidores/Observadores (permissão dashboard apenas),
+        // se a lista de lojas for vazia, assumimos que ele pode ver o CONSOLIDADO (Todas as lojas).
+        return allStores; 
     }, [appData.stores, user]);
 
-    // Initial State for Store Selection: Respect Lock IMMEDIATELY
-    const [selectedStore, setSelectedStore] = useState(() => {
-         if (user.permissions?.stores && user.permissions.stores.length === 1) {
-             return user.permissions.stores[0];
-         }
-         return '';
-    });
+    // Initial State for Store Selection
+    const [selectedStore, setSelectedStore] = useState('');
 
     useEffect(() => {
         loadData();
     }, []);
 
-    // Ensure lock persists if data loads later
+    // Força seleção se houver apenas uma loja disponível
     useEffect(() => {
         if (availableStores.length === 1) {
             setSelectedStore(availableStores[0]);
@@ -153,6 +146,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     const calculateTotalBalance = () => {
         if (!accounts) return 0;
         let total = 0;
+        // Only sum accounts that match the store filter
         const accountsToSum = accounts.filter(a => filterStore(a.store));
 
         accountsToSum.forEach(acc => {
@@ -180,6 +174,11 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
         availableStores.forEach(s => {
             storeStats[s] = { sales: 0, expenses: 0 };
         });
+
+        // Se nenhuma loja estiver disponível (caso raro de erro), evita crash
+        if (availableStores.length === 0 && selectedStore) {
+             storeStats[selectedStore] = { sales: 0, expenses: 0 };
+        }
 
         transactions
             .filter(t => t.date && t.date.startsWith(currentMonth) && t.type === 'Receita' && filterStore(t.store))

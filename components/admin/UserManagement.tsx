@@ -101,8 +101,10 @@ export const UserManagement: React.FC = () => {
             ]);
             setSelectedStores([]); 
         } else if (type === 'observador') {
+            // Observador (Investidor): Apenas Dashboard e Acesso a TODAS as lojas (array vazio)
+            // O App.tsx agora detecta isso e redireciona direto para o Dashboard
             setSelectedModules(['dashboard']);
-            setSelectedStores([]); // Observador define lojas manualmente se necessário, ou vazio para ver tudo se master (mas aqui não é master)
+            setSelectedStores([]); 
         }
     };
 
@@ -152,7 +154,7 @@ export const UserManagement: React.FC = () => {
                     <ul className="list-disc ml-4 mt-1">
                         <li><strong>Gerente:</strong> Acesso total operacional.</li>
                         <li><strong>Operador:</strong> Apenas lançamentos básicos.</li>
-                        <li><strong>Observador:</strong> Acesso exclusivo ao Dashboard Gerencial.</li>
+                        <li><strong>Observador (Investidor):</strong> Acesso exclusivo ao Dashboard (Todas as Lojas).</li>
                     </ul>
                  </div>
             </div>
@@ -201,7 +203,10 @@ export const UserManagement: React.FC = () => {
                         </div>
 
                          <div className="bg-gray-50 p-4 rounded border">
-                            <h3 className="font-bold text-heroBlack mb-3 flex items-center gap-2"><Shield size={16}/> Acesso a Lojas</h3>
+                            <div className="flex justify-between items-center mb-3">
+                                <h3 className="font-bold text-heroBlack flex items-center gap-2"><Shield size={16}/> Acesso a Lojas</h3>
+                                <span className="text-[10px] text-gray-400 uppercase font-bold">Nenhuma selecionada = Acesso a Todas</span>
+                            </div>
                             <div className="space-y-2 max-h-60 overflow-y-auto">
                                 {appData.stores.length === 0 && <p className="text-gray-400 text-sm italic">Nenhuma loja cadastrada no sistema.</p>}
                                 {appData.stores.map(store => (
@@ -229,7 +234,7 @@ export const UserManagement: React.FC = () => {
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Nome</th>
                             <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Login</th>
-                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Módulos</th>
+                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Perfil</th>
                             <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Ações</th>
                         </tr>
                     </thead>
@@ -248,6 +253,10 @@ export const UserManagement: React.FC = () => {
                                             <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-bold border border-purple-200">GERENTE</span>
                                         ) : (
                                             <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold border border-blue-100">OPERADOR</span>
+                                        )}
+                                        
+                                        {(!user.permissions.stores || user.permissions.stores.length === 0) && !user.isMaster && (
+                                            <span className="text-[10px] text-gray-400 ml-2 self-center">(Todas Lojas)</span>
                                         )}
                                     </div>
                                 </td>

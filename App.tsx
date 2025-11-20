@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
 import { Controle043Module } from './components/controle043/Controle043Module';
@@ -12,30 +12,21 @@ import { AdminModule } from './components/admin/AdminModule';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { View, User } from './types';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard, Loader2 } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard } from 'lucide-react';
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
     const [currentView, setCurrentView] = useState<View>('home');
     const [showPasswordModal, setShowPasswordModal] = useState(false);
-    const [isRedirecting, setIsRedirecting] = useState(false);
 
     // Determine if user is restricted to Dashboard only
     const isDashboardOnly = useMemo(() => {
         if (!user || user.isMaster) return false;
         const modules = user.permissions?.modules || [];
-        // Check if Dashboard is the ONLY module permission
-        return modules.length === 1 && modules.includes('dashboard');
+        // Check if Dashboard is the ONLY module permission (ignoring auxiliary permissions)
+        const mainModules = modules.filter(m => !m.startsWith('view_') && !m.startsWith('config_'));
+        return mainModules.length === 1 && mainModules.includes('dashboard');
     }, [user]);
-
-    // Enforce Dashboard View for restricted users
-    useEffect(() => {
-        if (isDashboardOnly && currentView !== 'dashboard') {
-            setIsRedirecting(true);
-            setCurrentView('dashboard');
-            setTimeout(() => setIsRedirecting(false), 100); // Smooth transition
-        }
-    }, [isDashboardOnly, currentView]);
 
     const handleLogin = (loggedUser: User) => {
         // Ensure permissions object exists
@@ -46,11 +37,15 @@ const App: React.FC = () => {
         
         setUser(safeUser);
         
-        // Immediate check for redirection to avoid flashing Home
+        // Lógica de Redirecionamento IMEDIATO
         const modules = safeUser.permissions.modules || [];
-        const restricted = modules.length === 1 && modules.includes('dashboard') && !safeUser.isMaster;
+        
+        // Verifica se é um usuário restrito ao Dashboard (Investidor/Observador)
+        // Se tiver apenas 'dashboard' como módulo principal, força a view 'dashboard'
+        const mainModules = modules.filter(m => !m.startsWith('view_') && !m.startsWith('config_'));
+        const isRestricted = mainModules.length === 1 && mainModules[0] === 'dashboard' && !safeUser.isMaster;
 
-        if (restricted) {
+        if (isRestricted) {
             setCurrentView('dashboard');
         } else {
             setCurrentView('home');
@@ -60,25 +55,10 @@ const App: React.FC = () => {
     const handleLogout = () => {
         setUser(null);
         setCurrentView('home');
-        setIsRedirecting(false);
     };
 
     if (!user) {
         return <LoginScreen onLogin={handleLogin} />;
-    }
-
-    if (isRedirecting) {
-        return (
-            <div className="min-h-screen flex flex-col bg-gray-50">
-                <Header isHome={false} onHomeClick={() => {}} user={user} onLogout={handleLogout} disableNavigation={true}/>
-                <div className="flex-grow flex items-center justify-center">
-                    <div className="text-center">
-                        <Loader2 className="animate-spin w-10 h-10 text-heroRed mx-auto mb-4" />
-                        <p className="text-gray-500 font-bold">Carregando Perfil...</p>
-                    </div>
-                </div>
-            </div>
-        );
     }
 
     const hasPermission = (moduleId: string) => {
@@ -111,6 +91,8 @@ const App: React.FC = () => {
 
             {/* Main Content */}
             <main className="flex-grow">
+                {/* Se a view for HOME e NÃO for restrito, mostra o menu.
+                    Se for restrito (isDashboardOnly), ele nunca deve cair aqui, mas se cair, não mostra nada. */}
                 {currentView === 'home' && !isDashboardOnly ? (
                     <div className="max-w-7xl mx-auto p-6 animate-fadeIn">
                         <div className="mb-8 text-center">
@@ -158,6 +140,7 @@ const App: React.FC = () => {
                     </div>
                 ) : (
                     <div className="py-6">
+                        {/* Renderiza o módulo correspondente */}
                         {currentView === 'dashboard' && <DashboardModule user={user} />}
                         {currentView === 'pedidos' && <PedidosModule user={user} />}
                         {currentView === 'controle043' && <Controle043Module user={user} />}
