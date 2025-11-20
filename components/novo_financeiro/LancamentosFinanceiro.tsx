@@ -12,7 +12,7 @@ import {
     getOrders
 } from '../../services/storageService';
 import { AppData, FinancialAccount, DailyTransaction, Order, User } from '../../types';
-import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock } from 'lucide-react';
+import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock, Building2, Wallet, TrendingUp, TrendingDown } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 
 interface LancamentosFinanceiroProps {
@@ -321,6 +321,26 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         return balance;
     };
 
+    // Group Accounts By Store Logic
+    const accountsByStore = useMemo(() => {
+        const groups: Record<string, { accounts: FinancialAccount[], totalBalance: number }> = {};
+        
+        accounts.forEach(acc => {
+            if (store && acc.store !== store) return; // Filter by selected store (input form)
+            
+            if (!groups[acc.store]) {
+                groups[acc.store] = { accounts: [], totalBalance: 0 };
+            }
+            
+            const currentBal = getAccountCurrentBalance(acc);
+            groups[acc.store].accounts.push(acc);
+            groups[acc.store].totalBalance += currentBal;
+        });
+
+        // Ordena por Nome da Loja
+        return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+    }, [accounts, transactions, store]);
+
     if (loading) return <Loader2 className="animate-spin mx-auto mt-10" />;
 
     const filteredList = getFilteredList();
@@ -334,20 +354,62 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     return (
         <div className="space-y-8 pb-20">
             {canViewBalances ? (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 overflow-x-auto pb-2">
-                    {accounts.filter(a => !store || a.store === store).map(acc => {
-                        const currentBal = getAccountCurrentBalance(acc);
-                        return (
-                            <div key={acc.id} className="bg-white p-4 rounded shadow border border-gray-200 min-w-[200px]">
-                                <div className="text-xs text-gray-500 font-bold uppercase">{acc.store}</div>
-                                <div className="font-bold text-gray-800 truncate">{acc.name}</div>
-                                <div className={`text-xl font-black mt-1 ${currentBal < 0 ? 'text-red-600' : 'text-green-700'}`}>
-                                    {formatCurrency(currentBal)}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="bg-heroRed p-1.5 rounded-md text-white">
+                            <Wallet size={18} />
+                        </div>
+                        <h3 className="font-bold text-lg text-slate-700">Saldos em Tempo Real</h3>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {accountsByStore.map(([storeName, data]) => (
+                            <div key={storeName} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow duration-300">
+                                {/* Store Header */}
+                                <div className="bg-slate-50 px-5 py-4 border-b border-slate-100 flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <Building2 size={18} className="text-slate-400" />
+                                        <span className="font-bold text-slate-700 truncate max-w-[150px]" title={storeName}>{storeName}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Loja</span>
+                                        <span className={`text-lg font-black ${data.totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                            {formatCurrency(data.totalBalance)}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                {/* Accounts List */}
+                                <div className="divide-y divide-slate-50">
+                                    {data.accounts.map(acc => {
+                                        const bal = getAccountCurrentBalance(acc);
+                                        return (
+                                            <div key={acc.id} className="flex justify-between items-center px-5 py-3 hover:bg-slate-50 transition-colors group">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-2 h-2 rounded-full ${bal >= 0 ? 'bg-emerald-400' : 'bg-red-400'}`}></div>
+                                                    <span className="text-sm font-medium text-slate-600 group-hover:text-slate-900 transition-colors">{acc.name}</span>
+                                                </div>
+                                                <span className={`text-sm font-bold font-mono ${bal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                    {formatCurrency(bal)}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                    {data.accounts.length === 0 && (
+                                        <div className="p-4 text-center text-xs text-slate-400 italic">Nenhuma conta cadastrada.</div>
+                                    )}
                                 </div>
                             </div>
-                        );
-                    })}
-                    {accounts.length === 0 && <div className="text-gray-400 italic p-4">Nenhuma conta cadastrada em Campos!</div>}
+                        ))}
+                        
+                        {accountsByStore.length === 0 && (
+                            <div className="col-span-full text-center p-8 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-slate-400">
+                                <Wallet size={48} className="mx-auto mb-2 opacity-20"/>
+                                <p>Nenhuma conta bancária encontrada.</p>
+                                <p className="text-xs mt-1">Cadastre contas no menu "Campos Financeiro".</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             ) : (
                 <div className="bg-gray-100 border border-gray-200 rounded p-4 flex items-center justify-center gap-2 text-gray-500">
@@ -356,47 +418,59 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
-                <div className="flex justify-between items-center mb-4 border-b pb-2">
-                    <h2 className="text-xl font-bold text-gray-800">Novo Lançamento</h2>
+            <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-card border border-slate-200 animate-fadeIn relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 h-full bg-heroRed"></div>
+                
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-slate-100 pb-4 gap-4">
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                            <DollarSign className="text-heroRed" />
+                            Novo Lançamento
+                        </h2>
+                        <p className="text-slate-400 text-xs mt-1">Registre receitas, despesas ou transferências.</p>
+                    </div>
                     {recurrenceType !== 'none' && (
-                        <span className="text-xs font-bold bg-purple-100 text-purple-800 px-2 py-1 rounded border border-purple-200 flex items-center gap-1">
+                        <span className="text-xs font-bold bg-purple-50 text-purple-700 px-3 py-1.5 rounded-full border border-purple-100 flex items-center gap-1.5 animate-pulse">
                             <Repeat size={12} /> Modo Repetição Ativo
                         </span>
                     )}
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Tipo de Lançamento</label>
-                        <select 
-                            value={type} 
-                            onChange={e => {
-                                const newType = e.target.value as any;
-                                setType(newType);
-                                if (newType === 'Transferência') {
-                                    setPaymentMethod('Transferência bancária');
-                                }
-                            }} 
-                            className="w-full p-2 border rounded bg-gray-50 font-bold"
-                        >
-                            <option value="Despesa">Despesa</option>
-                            <option value="Receita">Receita</option>
-                            <option value="Transferência">Transferência</option>
-                        </select>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Tipo de Operação</label>
+                        <div className="relative">
+                            <select 
+                                value={type} 
+                                onChange={e => {
+                                    const newType = e.target.value as any;
+                                    setType(newType);
+                                    if (newType === 'Transferência') {
+                                        setPaymentMethod('Transferência bancária');
+                                    }
+                                }} 
+                                className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed"
+                            >
+                                <option value="Despesa">🔴 Despesa (Saída)</option>
+                                <option value="Receita">🟢 Receita (Entrada)</option>
+                                <option value="Transferência">🟣 Transferência</option>
+                            </select>
+                        </div>
                     </div>
                      <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Valor {recurrenceType === 'installment' ? 'da Parcela' : ''} (R$)</label>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">
+                            Valor {recurrenceType === 'installment' ? 'da Parcela' : ''} (R$)
+                        </label>
                         <input 
                             type="text" 
                             value={formatCurrency(value)} 
                             onChange={handleCurrencyChange} 
-                            className="w-full p-2 border rounded text-right font-bold text-lg"
+                            className="w-full p-2.5 border border-slate-300 rounded-lg text-right font-black text-lg text-slate-800 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none"
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Método Pagamento</label>
-                        <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full p-2 border rounded">
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Método Pagamento</label>
+                        <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-700 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none text-sm font-medium">
                             <option value="Boleto">Boleto</option>
                             <option value="PiX">PiX</option>
                             <option value="Dinheiro">Dinheiro</option>
@@ -407,15 +481,17 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 </div>
 
                 {type === 'Transferência' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-4 bg-blue-50 p-4 rounded border border-blue-200">
-                        <div className="space-y-3">
-                            <h4 className="font-bold text-blue-800 border-b border-blue-200 pb-1">Origem (De onde sai?)</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6 bg-slate-50 p-6 rounded-lg border border-slate-200">
+                        <div className="space-y-4">
+                            <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-2 flex items-center gap-2">
+                                <TrendingDown size={16} className="text-red-500"/> Origem (Sai de)
+                            </h4>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1">Loja Origem</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Loja Origem</label>
                                 <select 
                                     value={store} 
                                     onChange={e => setStore(e.target.value)} 
-                                    className={`w-full p-2 border rounded ${isSingleStore ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                    className={`w-full p-2.5 border border-slate-300 rounded-lg ${isSingleStore ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
                                     disabled={isSingleStore}
                                 >
                                     <option value="">Selecione...</option>
@@ -423,8 +499,8 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1">Conta Origem</label>
-                                <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full p-2 border rounded">
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Conta Origem</label>
+                                <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
                                     <option value="">Selecione...</option>
                                     {accounts.filter(a => !store || a.store === store).map(a => (
                                         <option key={a.id} value={a.id}>{a.name}</option>
@@ -432,18 +508,20 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 </select>
                             </div>
                         </div>
-                        <div className="space-y-3">
-                            <h4 className="font-bold text-green-800 border-b border-green-200 pb-1">Destino (Para onde vai?)</h4>
+                        <div className="space-y-4">
+                            <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-2 flex items-center gap-2">
+                                <TrendingUp size={16} className="text-emerald-500"/> Destino (Vai para)
+                            </h4>
                              <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1">Loja Destino</label>
-                                <select value={destinationStore} onChange={e => setDestinationStore(e.target.value)} className="w-full p-2 border rounded">
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Loja Destino</label>
+                                <select value={destinationStore} onChange={e => setDestinationStore(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
                                     <option value="">Selecione...</option>
                                     {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1">Conta Destino</label>
-                                <select value={destinationAccountId} onChange={e => setDestinationAccountId(e.target.value)} className="w-full p-2 border rounded">
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Conta Destino</label>
+                                <select value={destinationAccountId} onChange={e => setDestinationAccountId(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
                                     <option value="">Selecione...</option>
                                     {accounts.filter(a => !destinationStore || a.store === destinationStore).map(a => (
                                         <option key={a.id} value={a.id}>{a.name}</option>
@@ -453,13 +531,13 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         </div>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Loja</label>
                             <select 
                                 value={store} 
                                 onChange={e => setStore(e.target.value)} 
-                                className={`w-full p-2 border rounded ${isSingleStore ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                className={`w-full p-2.5 border border-slate-300 rounded-lg ${isSingleStore ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
                                 disabled={isSingleStore}
                             >
                                 <option value="">Selecione...</option>
@@ -467,41 +545,41 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Conta</label>
-                            <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full p-2 border rounded">
-                                <option value="">Selecione...</option>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Conta {accountId === '' && <span className="text-red-500">*</span>}</label>
+                            <select value={accountId} onChange={e => setAccountId(e.target.value)} className={`w-full p-2.5 border rounded-lg bg-white ${!accountId ? 'border-red-300 bg-red-50' : 'border-slate-300'}`}>
+                                <option value="">Selecione a Conta...</option>
                                 {accounts.filter(a => !store || a.store === store).map(a => (
                                     <option key={a.id} value={a.id}>{a.name}</option>
                                 ))}
                             </select>
                         </div>
                          <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Categoria</label>
-                            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-2 border rounded">
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Categoria</label>
+                            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
                                 <option value="">Selecione...</option>
                                 {appData.categories.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
                         
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor (Opcional)</label>
-                            <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-2 border rounded">
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Fornecedor (Opcional)</label>
+                            <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
                                 <option value="">Selecione...</option>
                                 {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Produto (Opcional)</label>
-                            <select value={product} onChange={e => setProduct(e.target.value)} className="w-full p-2 border rounded">
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Produto (Opcional)</label>
+                            <select value={product} onChange={e => setProduct(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
                                 <option value="">Selecione...</option>
                                 {appData.products.map(p => <option key={p} value={p}>{p}</option>)}
                             </select>
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Classificação (Tipo)</label>
-                            <select value={classification} onChange={e => setClassification(e.target.value)} className="w-full p-2 border rounded">
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Classificação</label>
+                            <select value={classification} onChange={e => setClassification(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
                                 <option value="">Selecione...</option>
                                 {appData.types.map(t => <option key={t} value={t}>{t}</option>)}
                             </select>
@@ -509,61 +587,62 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Vencimento</label>
-                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-2 border rounded"/>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Data Vencimento</label>
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-sm"/>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Pagamento</label>
-                        <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full p-2 border rounded"/>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Data Pagamento</label>
+                        <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-sm"/>
                     </div>
                     <div className="md:col-span-2">
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Descrição</label>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Descrição</label>
                         <input 
                             type="text" 
                             value={description} 
                             onChange={e => setDescription(e.target.value)} 
-                            className="w-full p-2 border rounded"
+                            className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-sm placeholder-slate-400"
                             placeholder="Ex: Aluguel referente a Janeiro"
                             maxLength={100}
                         />
                     </div>
                 </div>
 
-                <div className="bg-gray-50 p-4 rounded border border-gray-200 mb-6">
+                {/* Recurrence Panel */}
+                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
                     <div className="flex flex-col md:flex-row md:items-center gap-4">
-                        <div className="flex items-center gap-2 text-gray-700 font-bold min-w-fit">
+                        <div className="flex items-center gap-2 text-slate-700 font-bold min-w-fit">
                             <Repeat size={18} />
-                            <span>Repetição:</span>
+                            <span className="text-sm">Repetição:</span>
                         </div>
                         <div className="flex gap-2 flex-1">
                             <button 
                                 type="button"
                                 onClick={() => setRecurrenceType('none')}
-                                className={`px-4 py-2 rounded text-sm font-bold transition-colors ${recurrenceType === 'none' ? 'bg-gray-800 text-white shadow' : 'bg-white border hover:bg-gray-100'}`}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${recurrenceType === 'none' ? 'bg-slate-800 text-white shadow' : 'bg-white border border-slate-200 hover:bg-slate-100 text-slate-600'}`}
                             >
                                 Único
                             </button>
                             <button 
                                 type="button"
                                 onClick={() => { setRecurrenceType('installment'); setRecurrenceCount(2); }}
-                                className={`px-4 py-2 rounded text-sm font-bold transition-colors ${recurrenceType === 'installment' ? 'bg-blue-600 text-white shadow' : 'bg-white border hover:bg-blue-50 text-blue-600'}`}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${recurrenceType === 'installment' ? 'bg-blue-600 text-white shadow' : 'bg-white border border-slate-200 hover:bg-blue-50 text-blue-600'}`}
                             >
                                 Parcelado (x)
                             </button>
                             <button 
                                 type="button"
                                 onClick={() => { setRecurrenceType('fixed'); setRecurrenceCount(12); }}
-                                className={`px-4 py-2 rounded text-sm font-bold transition-colors ${recurrenceType === 'fixed' ? 'bg-purple-600 text-white shadow' : 'bg-white border hover:bg-purple-50 text-purple-600'}`}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${recurrenceType === 'fixed' ? 'bg-purple-600 text-white shadow' : 'bg-white border border-slate-200 hover:bg-purple-50 text-purple-600'}`}
                             >
                                 Fixo (Mensal)
                             </button>
                         </div>
                         
                         {recurrenceType !== 'none' && (
-                            <div className="flex items-center gap-2 bg-white p-1 rounded border animate-fadeIn">
-                                <span className="text-xs font-bold px-2 text-gray-500">
+                            <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm animate-fadeIn">
+                                <span className="text-xs font-bold px-2 text-slate-500">
                                     {recurrenceType === 'installment' ? 'Qtd. Parcelas:' : 'Repetir por (Meses):'}
                                 </span>
                                 <input 
@@ -572,7 +651,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                     max="120" 
                                     value={recurrenceCount} 
                                     onChange={(e) => setRecurrenceCount(parseInt(e.target.value) || 2)}
-                                    className="w-20 p-1 border rounded text-center font-bold"
+                                    className="w-16 p-1 border border-slate-200 rounded text-center font-bold text-slate-700 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none"
                                 />
                             </div>
                         )}
@@ -593,22 +672,23 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                     <div className="flex gap-2">
                         <button 
                             type="button"
-                            onClick={() => setStatus('Pago')}
-                            className={`px-6 py-2 text-xs font-bold rounded ${status === 'Pago' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}
+                            onClick={() => { setStatus('Pago'); if(!paymentDate) setPaymentDate(new Date().toISOString().split('T')[0]); }}
+                            className={`px-6 py-2.5 text-xs font-bold rounded-lg transition-all border ${status === 'Pago' ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'}`}
                         >
                             PAGO
                         </button>
                         <button 
                             type="button"
-                            onClick={() => setStatus('Pendente')}
-                            className={`px-6 py-2 text-xs font-bold rounded ${status === 'Pendente' ? 'bg-yellow-500 text-white' : 'bg-gray-200'}`}
+                            onClick={() => { setStatus('Pendente'); setPaymentDate(''); }}
+                            className={`px-6 py-2.5 text-xs font-bold rounded-lg transition-all border ${status === 'Pendente' ? 'bg-amber-500 text-white border-amber-500 shadow-md' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'}`}
                         >
                             PENDENTE
                         </button>
                     </div>
 
-                    <button disabled={saving} className="bg-green-700 hover:bg-green-800 text-white px-8 py-3 rounded font-bold flex items-center gap-2 shadow-lg">
-                        {saving ? <Loader2 className="animate-spin" /> : <CheckCircle />} LANÇAR {recurrenceType !== 'none' ? 'MÚLTIPLOS' : ''}
+                    <button disabled={saving} className="bg-slate-800 hover:bg-slate-900 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">
+                        {saving ? <Loader2 className="animate-spin" /> : <CheckCircle />} 
+                        {saving ? 'Salvando...' : `LANÇAR ${recurrenceType !== 'none' ? 'MÚLTIPLOS' : ''}`}
                     </button>
                 </div>
             </form>
