@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useMemo } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
@@ -7,12 +9,13 @@ import { BackupModule } from './components/BackupModule';
 import { SaldoModule } from './components/saldo/SaldoModule';
 import { FinanceiroModule } from './components/financeiro/FinanceiroModule'; // Old Financeiro
 import { NovoFinanceiroModule } from './components/novo_financeiro/NovoFinanceiroModule'; // New Financeiro
+import { EstoqueModule } from './components/estoque/EstoqueModule'; // New Estoque
 import { DashboardModule } from './components/dashboard/DashboardModule';
 import { AdminModule } from './components/admin/AdminModule';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { View, User } from './types';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard, ChevronRight } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard, ChevronRight, Beef } from 'lucide-react';
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
@@ -57,6 +60,8 @@ const App: React.FC = () => {
     const hasPermission = (moduleId: string) => {
         if (user.isMaster) return true;
         if (!user.permissions || !user.permissions.modules) return false;
+        // Auto-allow stock module if user has 'pedidos' permission (for simplicity, or add new perm key)
+        if (moduleId === 'estoque' && user.permissions.modules.includes('pedidos')) return true; 
         return user.permissions.modules.includes(moduleId);
     };
 
@@ -64,6 +69,7 @@ const App: React.FC = () => {
     const menuItems: { id: View, label: string, icon: React.ReactNode, color: string, description: string, requiredPerm: string }[] = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={24} />, color: 'text-slate-700 bg-slate-100', description: 'Visão geral e indicadores', requiredPerm: 'dashboard' },
         { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={24} />, color: 'text-red-600 bg-red-50', description: 'Cadastro e gestão de compras', requiredPerm: 'pedidos' },
+        { id: 'estoque', label: 'Estoque Carnes', icon: <Beef size={24} />, color: 'text-orange-600 bg-orange-50', description: 'Controle de churrasco', requiredPerm: 'estoque' },
         { id: 'novo_financeiro', label: 'Financeiro', icon: <Landmark size={24} />, color: 'text-blue-600 bg-blue-50', description: 'Fluxo de caixa e lançamentos', requiredPerm: 'novo_financeiro' },
         { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={24} />, color: 'text-emerald-600 bg-emerald-50', description: 'Gestão de conta 043', requiredPerm: 'controle043' },
         { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={24} />, color: 'text-violet-600 bg-violet-50', description: 'Balanço mensal consolidado', requiredPerm: 'saldo' },
@@ -138,6 +144,7 @@ const App: React.FC = () => {
                     <div className="py-6 sm:py-8">
                         {currentView === 'dashboard' && <DashboardModule user={user} />}
                         {currentView === 'pedidos' && <PedidosModule user={user} />}
+                        {currentView === 'estoque' && <EstoqueModule user={user} />}
                         {currentView === 'controle043' && <Controle043Module user={user} />}
                         {currentView === 'saldo' && <SaldoModule user={user} />}
                         {currentView === 'financeiro' && <FinanceiroModule />}
@@ -149,7 +156,7 @@ const App: React.FC = () => {
             </main>
 
             {/* Footer */}
-            <footer className="bg-white border-t border-slate-200 py-6 text-center">
+            <footer className="bg-white border-t border-slate-200 py-6 text-center no-print">
                 <p className="text-slate-400 text-xs font-medium">
                     &copy; {new Date().getFullYear()} <span className="font-bold text-slate-600">Hero Grill Self-service</span>. Todos os direitos reservados.
                 </p>

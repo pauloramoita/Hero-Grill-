@@ -1,7 +1,8 @@
 
+
 // ... existing imports ...
 import { createClient } from '@supabase/supabase-js';
-import { AppData, Order, Transaction043, AccountBalance, FinancialRecord, User, FinancialAccount, DailyTransaction } from '../types';
+import { AppData, Order, Transaction043, AccountBalance, FinancialRecord, User, FinancialAccount, DailyTransaction, MeatInventoryLog } from '../types';
 
 // ... existing config setup ...
 let supabaseUrl = '';
@@ -146,6 +147,15 @@ CREATE TABLE IF NOT EXISTS daily_transactions (
   created_at timestamptz DEFAULT now()
 );
 
+-- Tabela de Estoque de Carnes (Consumo)
+CREATE TABLE IF NOT EXISTS meat_inventory_logs (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  date date NOT NULL,
+  product text NOT NULL,
+  quantity_consumed numeric DEFAULT 0,
+  created_at timestamptz DEFAULT now()
+);
+
 -- MIGRAÇÃO AUTOMÁTICA
 ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS destination_store text;
 ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS destination_account_id uuid REFERENCES financial_accounts(id);
@@ -222,7 +232,7 @@ const MASTER_USER: User = {
     id: 'master-001',
     name: 'Administrador Mestre',
     username: 'Administrador',
-    permissions: { modules: ['pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro'], stores: [] },
+    permissions: { modules: ['pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro', 'estoque'], stores: [] },
     isMaster: true
 };
 
@@ -415,6 +425,34 @@ export const deleteOrder = async (id: string) => {
     const { error } = await supabase.from('orders').delete().eq('id', id);
     if (error) throw new Error(error.message);
 };
+
+// ... Estoque Carnes functions ...
+
+export const getMeatConsumptionLogs = async (): Promise<MeatInventoryLog[]> => {
+    const { data, error } = await supabase.from('meat_inventory_logs').select('*');
+    if (error) return [];
+    return data.map((l: any) => ({
+        id: l.id,
+        date: l.date,
+        product: l.product,
+        quantity_consumed: l.quantity_consumed,
+        created_at: l.created_at
+    }));
+}
+
+export const saveMeatConsumption = async (log: MeatInventoryLog) => {
+    const { error } = await supabase.from('meat_inventory_logs').insert({
+        date: log.date,
+        product: log.product,
+        quantity_consumed: log.quantity_consumed
+    });
+    if (error) throw new Error(error.message);
+}
+
+export const deleteMeatConsumption = async (id: string) => {
+    const { error } = await supabase.from('meat_inventory_logs').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+}
 
 // ... Other functions (043, Saldo, Helpers, Export, Backup) remain mostly same ...
 

@@ -110,8 +110,17 @@ export interface DailyTransaction {
     createdAt?: string; // Timestamp de criação
 }
 
+// === ESTOQUE ===
+export interface MeatInventoryLog {
+    id: string;
+    date: string; // Data do consumo
+    product: string; // Nome da carne
+    quantity_consumed: number; // Quantidade retirada/consumida
+    created_at?: string;
+}
+
 export interface UserPermissions {
-    modules: string[]; // 'dashboard', 'pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro', etc
+    modules: string[]; // 'dashboard', 'pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro', 'estoque', etc
     stores: string[]; // Lista de lojas permitidas
 }
 
@@ -124,7 +133,7 @@ export interface User {
     isMaster?: boolean; // Identifica o admin hardcoded
 }
 
-export type View = 'home' | 'pedidos' | 'controle043' | 'financeiro' | 'novo_financeiro' | 'saldo' | 'backup' | 'admin' | 'dashboard';
+export type View = 'home' | 'pedidos' | 'controle043' | 'financeiro' | 'novo_financeiro' | 'saldo' | 'backup' | 'admin' | 'dashboard' | 'estoque';
 
 export type PedidosSubView = 'cadastrar' | 'consulta' | 'relatorios' | 'campos';
 export type Controle043SubView = 'cadastrar' | 'consulta' | 'relatorios';
@@ -132,3 +141,4 @@ export type SaldoSubView = 'lancamentos' | 'consulta' | 'relatorios';
 export type FinanceiroSubView = 'lancamentos' | 'consulta' | 'relatorios';
 export type NovoFinanceiroSubView = 'lancamentos' | 'consulta' | 'relatorios' | 'campos';
 export type AdminSubView = 'usuarios';
+export type EstoqueSubView = 'controle_diario' | 'gerar_pedido';
