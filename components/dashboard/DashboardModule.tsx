@@ -5,16 +5,16 @@ import {
     getOrders, 
     getDailyTransactions, 
     getFinancialAccounts,
+    getAccountBalances,
     formatCurrency
 } from '../../services/storageService';
-import { AppData, Order, DailyTransaction, FinancialAccount } from '../../types';
+import { AppData, Order, DailyTransaction, FinancialAccount, AccountBalance } from '../../types';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    AreaChart, Area, ComposedChart, Line
+    AreaChart, Area
 } from 'recharts';
 import { 
-    LayoutDashboard, TrendingUp, TrendingDown, DollarSign, 
-    Calendar, Store, Wallet, Loader2, BarChart2, ArrowUpRight, ArrowDownRight, Filter, SortAsc, SortDesc
+    LayoutDashboard, Store, Loader2, BarChart2, ArrowUpRight, SortAsc, SortDesc
 } from 'lucide-react';
 
 export const DashboardModule: React.FC = () => {
@@ -24,6 +24,7 @@ export const DashboardModule: React.FC = () => {
     const [orders, setOrders] = useState<Order[]>([]);
     const [transactions, setTransactions] = useState<DailyTransaction[]>([]);
     const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
+    const [accountBalances, setAccountBalances] = useState<AccountBalance[]>([]);
 
     const [selectedStore, setSelectedStore] = useState('');
     const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -39,16 +40,18 @@ export const DashboardModule: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [d, o, t, a] = await Promise.all([
+            const [d, o, t, a, ab] = await Promise.all([
                 getAppData(),
                 getOrders(),
                 getDailyTransactions(),
-                getFinancialAccounts()
+                getFinancialAccounts(),
+                getAccountBalances()
             ]);
             setAppData(d);
             setOrders(o);
             setTransactions(t);
             setAccounts(a);
+            setAccountBalances(ab);
         } catch (error) {
             console.error("Error loading dashboard data", error);
         } finally {
@@ -196,30 +199,39 @@ export const DashboardModule: React.FC = () => {
 
     const expenseLists = getExpenseLists();
 
-    // --- HISTORICAL DATA ---
+    // --- EVOLUTION CHART DATA (SALDO TOTAL) ---
 
-    const getComparisonData = () => {
-        const data: any[] = [];
-        const today = new Date();
-        
-        for (let i = 5; i >= 0; i--) {
-            const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-            const mStr = d.toISOString().slice(0, 7);
+    const getBalanceHistory = () => {
+        const grouped: Record<string, number> = {};
+
+        // Agrupar saldos por Mês/Ano
+        accountBalances.forEach(b => {
+            // Se houver filtro de loja, aplica. Se não, soma tudo.
+            if (selectedStore && b.store !== selectedStore) return;
+
+            const sortKey = `${b.year}-${b.month}`; // YYYY-MM para ordenação
             
-            const oVal = orders.filter(o => o.date.startsWith(mStr) && filterStore(o.store)).reduce((a, b) => a + b.totalValue, 0);
-            const tExp = transactions.filter(t => t.date.startsWith(mStr) && t.type === 'Despesa' && filterStore(t.store)).reduce((a, b) => a + b.value, 0);
-            const tRev = transactions.filter(t => t.date.startsWith(mStr) && t.type === 'Receita' && filterStore(t.store)).reduce((a, b) => a + b.value, 0);
+            if (!grouped[sortKey]) grouped[sortKey] = 0;
+            grouped[sortKey] += b.totalBalance;
+        });
 
-            data.push({
-                name: `${d.getMonth() + 1}/${d.getFullYear().toString().slice(2)}`,
-                Receitas: tRev,
-                Despesas: oVal + tExp,
-            });
-        }
-        return data;
+        // Converter para array e ordenar cronologicamente
+        const data = Object.entries(grouped)
+            .map(([key, value]) => {
+                const [year, month] = key.split('-');
+                return {
+                    sortKey: key,
+                    name: `${month}/${year.slice(2)}`, // MM/YY
+                    Saldo: value
+                };
+            })
+            .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+        // Pegar os últimos 6 a 12 meses para caber no gráfico
+        return data.slice(-12);
     };
 
-    const comparisonData = getComparisonData();
+    const balanceHistory = getBalanceHistory();
 
     if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin w-12 h-12 text-heroRed"/></div>;
 
@@ -250,7 +262,7 @@ export const DashboardModule: React.FC = () => {
                         </select>
                     </div>
                     <div className="relative flex-1 md:w-48">
-                        <Calendar className="absolute left-3 top-3 text-gray-400" size={16} />
+                        <Loader2 className="absolute left-3 top-3 text-gray-400" size={16} />
                         <input 
                             type="month" 
                             value={currentMonth}
@@ -264,20 +276,20 @@ export const DashboardModule: React.FC = () => {
             {/* KPI CARDS */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500">
-                    <p className="text-xs font-bold text-gray-500 uppercase">Saldo Líquido (Real)</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase">Saldo Líquido (Mês Atual)</p>
                     <h3 className={`text-2xl font-black mt-1 ${metrics.totalRevenues - metrics.totalExpenses >= 0 ? 'text-blue-700' : 'text-red-600'}`}>
                         {formatCurrency(metrics.totalRevenues - metrics.totalExpenses)}
                     </h3>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-green-500">
-                    <p className="text-xs font-bold text-gray-500 uppercase">Receitas (Real)</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase">Receitas (Mês Atual)</p>
                     <h3 className="text-2xl font-black mt-1 text-green-700">{formatCurrency(metrics.totalRevenues)}</h3>
                     <div className="mt-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded w-fit flex items-center gap-1">
                          <ArrowUpRight size={12}/> Projeção: {formatCurrency(metrics.projectedRevenues)}
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500">
-                    <p className="text-xs font-bold text-gray-500 uppercase">Despesas (Real)</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase">Despesas (Mês Atual)</p>
                     <h3 className="text-2xl font-black mt-1 text-red-700">{formatCurrency(metrics.totalExpenses)}</h3>
                     <div className="mt-2 text-xs text-red-600 bg-red-50 px-2 py-1 rounded w-fit flex items-center gap-1">
                          <ArrowUpRight size={12}/> Projeção: {formatCurrency(metrics.projectedExpenses)}
@@ -292,26 +304,43 @@ export const DashboardModule: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                {/* CHART: Comparativo Mensal */}
+                {/* CHART: Evolução Saldo Total */}
                 <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                     <h3 className="text-sm font-bold text-gray-700 uppercase mb-6 flex items-center gap-2">
-                        <BarChart2 size={18} /> Comparativo Mensal: Receitas vs Despesas
+                        <BarChart2 size={18} /> Evolução do Saldo Total (Contas)
                     </h3>
                     <div className="h-80 w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={comparisonData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                            <AreaChart data={balanceHistory} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="colorSaldo" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
+                                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <XAxis dataKey="name" tick={{fontSize: 12}} stroke="#9CA3AF" />
+                                <YAxis tick={{fontSize: 12}} tickFormatter={(val) => `R$${val/1000}k`} stroke="#9CA3AF" />
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                                <XAxis dataKey="name" tick={{fontSize: 12}} />
-                                <YAxis tick={{fontSize: 12}} tickFormatter={(val) => `R$${val/1000}k`} />
                                 <Tooltip 
-                                    formatter={(val: number) => formatCurrency(val)}
+                                    formatter={(val: number) => [formatCurrency(val), "Saldo Total"]}
                                     contentStyle={{backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff'}}
                                 />
                                 <Legend />
-                                <Bar dataKey="Receitas" fill="#10B981" radius={[4,4,0,0]} barSize={40} />
-                                <Bar dataKey="Despesas" fill="#EF4444" radius={[4,4,0,0]} barSize={40} />
-                            </BarChart>
+                                <Area 
+                                    type="monotone" 
+                                    dataKey="Saldo" 
+                                    stroke="#10B981" 
+                                    strokeWidth={3}
+                                    fillOpacity={1} 
+                                    fill="url(#colorSaldo)" 
+                                />
+                            </AreaChart>
                         </ResponsiveContainer>
+                        {balanceHistory.length === 0 && (
+                            <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
+                                Sem dados de saldo histórico registrados no módulo Saldo Contas.
+                            </div>
+                        )}
                     </div>
                 </div>
 
