@@ -25,6 +25,7 @@ import {
     Calendar
 } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
+import { ConfirmPaymentModal } from './ConfirmPaymentModal';
 
 export const ConsultaFinanceiro: React.FC = () => {
     const [transactions, setTransactions] = useState<DailyTransaction[]>([]);
@@ -34,6 +35,7 @@ export const ConsultaFinanceiro: React.FC = () => {
     const [loading, setLoading] = useState(true);
     
     const [editingItem, setEditingItem] = useState<DailyTransaction | null>(null);
+    const [confirmingItem, setConfirmingItem] = useState<DailyTransaction | null>(null);
 
     // Filters
     const [dateType, setDateType] = useState<'due' | 'payment' | 'created'>('due'); // due = Vencimento, payment = Pagamento, created = Cadastro
@@ -184,10 +186,16 @@ export const ConsultaFinanceiro: React.FC = () => {
     };
 
     const handlePay = async (t: DailyTransaction) => {
-        if (!t.accountId) {
-            alert("Conta não definida. Edite o lançamento para selecionar uma conta antes de pagar.");
+        const missingAccount = !t.accountId;
+        const missingMethod = !t.paymentMethod || t.paymentMethod === '-';
+
+        // If information is missing, open the specific confirm modal
+        if (missingAccount || missingMethod) {
+            setConfirmingItem(t);
             return;
         }
+
+        // Standard fast confirmation if data is complete
         if (window.confirm(`Confirmar pagamento de ${formatCurrency(t.value)} na data de hoje?`)) {
             const updated: DailyTransaction = {
                 ...t,
@@ -198,6 +206,12 @@ export const ConsultaFinanceiro: React.FC = () => {
             // Update local state
             setTransactions(prev => prev.map(item => item.id === t.id ? updated : item));
         }
+    };
+
+    const handlePaymentConfirmed = async (updated: DailyTransaction) => {
+        await saveDailyTransaction(updated);
+        setTransactions(prev => prev.map(item => item.id === updated.id ? updated : item));
+        setConfirmingItem(null);
     };
 
     const handleDelete = async (id: string) => {
@@ -484,6 +498,15 @@ export const ConsultaFinanceiro: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+
+            {confirmingItem && (
+                <ConfirmPaymentModal
+                    transaction={confirmingItem}
+                    accounts={accounts}
+                    onClose={() => setConfirmingItem(null)}
+                    onConfirm={handlePaymentConfirmed}
+                />
+            )}
 
             {editingItem && (
                 <EditLancamentoModal 
