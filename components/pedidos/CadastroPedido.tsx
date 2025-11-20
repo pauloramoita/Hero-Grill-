@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { getAppData, saveOrder, getLastOrderForProduct, formatCurrency } from '../../services/storageService';
 import { AppData } from '../../types';
-import { Calendar, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 
 export const CadastroPedido: React.FC = () => {
     const [data, setData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
@@ -19,7 +18,7 @@ export const CadastroPedido: React.FC = () => {
     const [unitValue, setUnitValue] = useState<number>(0);
     const [unitMeasure, setUnitMeasure] = useState('');
     const [quantity, setQuantity] = useState<string>('');
-    const [deliveryDate, setDeliveryDate] = useState(''); // Agora representa "Data Vencimento"
+    const [deliveryDate, setDeliveryDate] = useState(''); 
 
     const [errors, setErrors] = useState<Record<string, boolean>>({});
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -103,7 +102,7 @@ export const CadastroPedido: React.FC = () => {
         setSaving(true);
         try {
             await saveOrder({
-                id: '', // DB Generates
+                id: '', 
                 date, store, product, brand, supplier, unitValue, unitMeasure,
                 quantity: qtyFloat, totalValue: unitValue * qtyFloat, 
                 deliveryDate: deliveryDate || null,
@@ -117,7 +116,6 @@ export const CadastroPedido: React.FC = () => {
             setUnitValue(0);
             setQuantity('');
             setDeliveryDate('');
-            // Mantém Tipo e Categoria para agilizar
             setErrors({});
             alert('Cadastro realizado!');
         } catch (err: any) {
@@ -130,89 +128,91 @@ export const CadastroPedido: React.FC = () => {
     if (loadingData) return <div className="text-center p-10"><Loader2 className="animate-spin mx-auto" size={40}/></div>;
 
     const getInputClass = (hasError: boolean) => 
-        `w-full p-3 border rounded outline-none transition-all ${hasError ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white focus:ring-2 focus:ring-heroRed'}`;
+        `w-full p-2.5 border rounded text-sm outline-none transition-all ${hasError ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white focus:border-heroRed focus:ring-1 focus:ring-heroRed'}`;
 
     return (
-        <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-lg border border-gray-200 max-w-4xl mx-auto animate-fadeIn">
-            <h2 className="text-2xl font-bold text-heroBlack mb-6 border-b-2 border-heroRed pb-2">Novo Cadastro</h2>
+        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 max-w-5xl mx-auto animate-fadeIn">
+            {/* Form Header Styled as requested */}
+            <div className="px-8 py-6 border-b border-gray-100">
+                <h2 className="text-xl font-bold text-heroRed uppercase tracking-wide">Novo Pedido</h2>
+            </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Data</label>
-                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-3 border border-gray-300 rounded bg-gray-50"/>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Data do Pedido</label>
+                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-2.5 border border-gray-300 rounded text-sm"/>
                 </div>
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Loja {errors.store && '*'}</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Loja {errors.store && '*'}</label>
                     <select value={store} onChange={(e) => setStore(e.target.value)} className={getInputClass(errors.store)}>
                         <option value="">Selecione...</option>
                         {data.stores.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
-
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Tipo {errors.type && '*'}</label>
-                    <select value={type} onChange={(e) => setType(e.target.value)} className={getInputClass(errors.type)}>
-                         {data.types.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Categoria</label>
-                    <select value={category} onChange={(e) => setCategory(e.target.value)} className={getInputClass(false)}>
-                        <option value="">Selecione...</option>
-                         {data.categories.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                </div>
-
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Produto {errors.product && '*'}</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Produto {errors.product && '*'}</label>
                     <select value={product} onChange={(e) => setProduct(e.target.value)} className={getInputClass(errors.product)}>
                         <option value="">Selecione...</option>
                         {data.products.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
+
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Marca {errors.brand && '*'}</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Marca {errors.brand && '*'}</label>
                     <select value={brand} onChange={(e) => setBrand(e.target.value)} className={getInputClass(errors.brand)}>
                         <option value="">Selecione...</option>
                         {data.brands.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Fornecedor {errors.supplier && '*'}</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Fornecedor {errors.supplier && '*'}</label>
                     <select value={supplier} onChange={(e) => setSupplier(e.target.value)} className={getInputClass(errors.supplier)}>
                         <option value="">Selecione...</option>
                         {data.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Unidade {errors.unitMeasure && '*'}</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Medida {errors.unitMeasure && '*'}</label>
                     <select value={unitMeasure} onChange={(e) => setUnitMeasure(e.target.value)} className={getInputClass(errors.unitMeasure)}>
                         <option value="">Selecione...</option>
                         {data.units.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
+
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Valor (R$) {errors.unitValue && '*'}</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Valor Unitário (R$) {errors.unitValue && '*'}</label>
                     <input type="text" value={formatCurrency(unitValue)} onChange={handleCurrencyChange} className={`${getInputClass(errors.unitValue)} text-right`}/>
                 </div>
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Quantidade {errors.quantity && '*'}</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Quantidade {errors.quantity && '*'}</label>
                     <input type="text" value={quantity} onChange={handleQuantityChange} className={`${getInputClass(errors.quantity)} text-right`} placeholder="0,000"/>
                 </div>
-                <div className="bg-gray-100 p-4 rounded border">
-                    <label className="block text-sm font-bold text-gray-600">Total</label>
-                    <div className="text-2xl font-black text-gray-800 text-right">{calculateTotal()}</div>
-                </div>
                 <div>
-                     <label className="block text-sm font-bold text-gray-700 mb-1">Data Vencimento</label>
-                     <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="w-full p-3 border rounded"/>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Valor Total</label>
+                    <div className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded text-right font-black text-gray-800">{calculateTotal()}</div>
+                </div>
+
+                <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Data da Entrega</label>
+                    <div className="flex gap-2">
+                        <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="w-full p-2.5 border border-gray-300 rounded text-sm"/>
+                        <button type="button" onClick={() => setDeliveryDate(new Date().toISOString().split('T')[0])} className="bg-heroBlack text-white px-4 rounded text-xs font-bold uppercase hover:bg-gray-800">Hoje</button>
+                    </div>
+                </div>
+
+                 {/* Additional Fields (Type/Category) - kept but simplified */}
+                 <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tipo (Opcional)</label>
+                    <select value={type} onChange={(e) => setType(e.target.value)} className={getInputClass(errors.type)}>
+                         {data.types.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                 </div>
             </div>
 
-            <div className="mt-8 pt-6 border-t flex flex-col items-end gap-4">
-                {submitError && <div className="text-red-600 bg-red-50 px-4 py-2 rounded font-bold flex gap-2"><AlertCircle size={16} /> {submitError}</div>}
-                <button disabled={saving} type="submit" className="bg-heroRed text-white font-bold py-4 px-12 rounded shadow hover:bg-red-800 flex items-center gap-3 text-lg disabled:opacity-50">
-                    {saving ? <Loader2 className="animate-spin"/> : <CheckCircle size={24} />} CADASTRAR
+            <div className="px-8 py-6 bg-gray-50 border-t border-gray-200 flex justify-end items-center gap-4 rounded-b-lg">
+                {submitError && <span className="text-red-600 text-sm font-bold flex items-center gap-1"><AlertCircle size={14}/> {submitError}</span>}
+                <button disabled={saving} type="submit" className="bg-heroRed text-white font-bold py-3 px-8 rounded shadow hover:bg-red-700 flex items-center gap-2 text-sm uppercase tracking-wider disabled:opacity-50 transition-colors">
+                    {saving ? <Loader2 className="animate-spin" size={18}/> : null} CADASTRAR PEDIDO
                 </button>
             </div>
         </form>

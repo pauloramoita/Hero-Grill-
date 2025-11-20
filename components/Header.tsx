@@ -1,26 +1,48 @@
 import React from 'react';
+import { LogOut, User as UserIcon } from 'lucide-react';
+import { User } from '../types';
 
 interface HeaderProps {
     onHomeClick: () => void;
+    user?: User | null;
+    onLogout?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onHomeClick }) => {
+export const Header: React.FC<HeaderProps> = ({ onHomeClick, user, onLogout }) => {
     return (
-        <header className="bg-white shadow-md py-4 flex justify-center items-center sticky top-0 z-50 border-b-4 border-heroRed">
-            <button onClick={onHomeClick} className="flex flex-col items-center group transition-transform hover:scale-105">
-                {/* Conceptual Logo Representation based on description */}
-                <div className="flex flex-col items-center">
-                    <div className="flex items-center">
-                        <span className="text-5xl font-black text-heroRed italic tracking-tighter" style={{fontFamily: 'Arial Black, sans-serif'}}>HERO</span>
-                        {/* Flame icon simulation */}
-                        <svg className="w-10 h-10 text-heroRed ml-1 mb-4" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 2C12 2 15 6 15 9C15 11.5 13.5 13 12 16C13.5 13.5 16 12 16 15C16 18.5 13.5 21.5 10.5 22C7.5 22.5 5 20 5 17C5 14 8 11 8 8C8 8 6 10 6 12C6 8 9 5 12 2Z" />
-                        </svg>
+        <header className="bg-white border-t-4 border-heroRed shadow-sm sticky top-0 z-50">
+            <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+                {/* Logo Area */}
+                <button onClick={onHomeClick} className="flex items-end group gap-2 focus:outline-none">
+                    <div className="flex flex-col leading-none">
+                        <span className="text-3xl font-black text-heroRed italic tracking-tighter" style={{ fontFamily: 'Arial Black, sans-serif' }}>HERO</span>
                     </div>
-                    <span className="text-6xl font-black text-heroBlack italic tracking-tighter leading-none -mt-2" style={{fontFamily: 'Arial Black, sans-serif'}}>GRILL</span>
-                    <span className="text-sm font-light tracking-[0.5em] text-heroBlack mt-1 uppercase">Self Service</span>
-                </div>
-            </button>
+                    <div className="flex flex-col leading-none">
+                        <span className="text-3xl font-black text-heroBlack italic tracking-tighter" style={{ fontFamily: 'Arial Black, sans-serif' }}>GRILL</span>
+                    </div>
+                    <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1 ml-1">Self Service</span>
+                </button>
+
+                {/* User Area */}
+                {user && (
+                    <div className="flex items-center gap-6">
+                        <div className="flex flex-col items-end">
+                            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Bem-vindo</span>
+                            <span className="text-sm font-bold text-gray-800 flex items-center gap-1">
+                                Olá, {user.name.split(' ')[0]}
+                            </span>
+                        </div>
+                        <div className="h-8 w-px bg-gray-200"></div>
+                        <button 
+                            onClick={onLogout}
+                            className="text-heroRed hover:bg-red-50 p-2 rounded-full transition-colors"
+                            title="Sair"
+                        >
+                            <LogOut size={20} />
+                        </button>
+                    </div>
+                )}
+            </div>
         </header>
     );
 };

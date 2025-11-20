@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
 import { Controle043Module } from './components/controle043/Controle043Module';
@@ -12,7 +11,7 @@ import { AdminModule } from './components/admin/AdminModule';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { View, User } from './types';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, LogOut, Settings, KeyRound, Landmark, LayoutDashboard } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard } from 'lucide-react';
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
@@ -39,86 +38,56 @@ const App: React.FC = () => {
         return user.permissions.modules.includes(moduleId);
     };
 
-    const menuItems: { id: View, label: string, icon: React.ReactNode, color: string, disabled: boolean, requiredPerm: string }[] = [
-        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={48} />, color: 'bg-blue-600', disabled: false, requiredPerm: 'dashboard' },
-        { id: 'pedidos', label: 'Cadastro', icon: <ShoppingCart size={48} />, color: 'bg-heroRed', disabled: false, requiredPerm: 'pedidos' },
-        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={48} />, color: 'bg-heroBlack', disabled: false, requiredPerm: 'controle043' },
-        { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={48} />, color: 'bg-gray-800', disabled: false, requiredPerm: 'saldo' },
-        { id: 'financeiro', label: 'Entradas e Saídas', icon: <DollarSign size={48} />, color: 'bg-gray-700', disabled: false, requiredPerm: 'financeiro' }, 
-        { id: 'novo_financeiro', label: 'Financeiro', icon: <Landmark size={48} />, color: 'bg-green-700', disabled: false, requiredPerm: 'novo_financeiro' }, 
-        { id: 'backup', label: 'Backup', icon: <Database size={48} />, color: 'bg-gray-700', disabled: false, requiredPerm: 'backup' },
-        { id: 'admin', label: 'Administração', icon: <Settings size={48} />, color: 'bg-gray-900', disabled: false, requiredPerm: 'admin' },
+    const menuItems: { id: View, label: string, icon: React.ReactNode, colorClass: string, description: string, requiredPerm: string }[] = [
+        { id: 'dashboard', label: 'DASHBOARD', icon: <LayoutDashboard size={32} />, colorClass: 'text-blue-600 bg-blue-50', description: 'Visão Geral', requiredPerm: 'dashboard' },
+        { id: 'pedidos', label: 'CADASTRO', icon: <ShoppingCart size={32} />, colorClass: 'text-heroRed bg-red-50', description: 'Pedidos e Produtos', requiredPerm: 'pedidos' },
+        { id: 'controle043', label: 'CONTROLE 043', icon: <ShieldCheck size={32} />, colorClass: 'text-gray-800 bg-gray-100', description: 'Débitos e Créditos', requiredPerm: 'controle043' },
+        { id: 'saldo', label: 'SALDO CONTAS', icon: <Wallet size={32} />, colorClass: 'text-emerald-600 bg-emerald-50', description: 'Balanço Mensal', requiredPerm: 'saldo' },
+        { id: 'financeiro', label: 'ENTRADAS E SAÍDAS', icon: <DollarSign size={32} />, colorClass: 'text-orange-600 bg-orange-50', description: 'Fluxo Financeiro (Antigo)', requiredPerm: 'financeiro' }, 
+        { id: 'novo_financeiro', label: 'FINANCEIRO', icon: <Landmark size={32} />, colorClass: 'text-green-700 bg-green-50', description: 'Caixa Diário', requiredPerm: 'novo_financeiro' }, 
+        { id: 'backup', label: 'BACKUP', icon: <Database size={32} />, colorClass: 'text-indigo-600 bg-indigo-50', description: 'Segurança de Dados', requiredPerm: 'backup' },
+        { id: 'admin', label: 'CONTROLE SISTEMA', icon: <Settings size={32} />, colorClass: 'text-gray-900 bg-gray-200', description: 'Usuários e Permissões', requiredPerm: 'admin' },
     ];
 
     const renderHome = () => (
-        <div className="max-w-6xl mx-auto p-8">
-            <div className="text-center mb-12 animate-fadeIn">
-                <h2 className="text-4xl font-bold text-gray-800 mb-2">Olá, {user.name}</h2>
-                <p className="text-gray-500">Selecione um módulo para começar</p>
-                <button 
-                    onClick={() => setShowPasswordModal(true)}
-                    className="mt-3 text-sm text-gray-400 hover:text-heroRed underline decoration-dotted flex items-center justify-center gap-1 mx-auto transition-colors"
-                >
-                    <KeyRound size={14} /> Alterar minha senha de acesso
-                </button>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fadeIn">
                 {menuItems.map((item) => {
                     if (!hasPermission(item.requiredPerm)) return null;
 
                     return (
                     <button
                         key={item.id}
-                        onClick={() => !item.disabled && setCurrentView(item.id)}
-                        disabled={item.disabled}
-                        className={`
-                            relative overflow-hidden h-64 rounded-xl shadow-xl transition-all duration-300 
-                            flex flex-col items-center justify-center group
-                            ${item.disabled ? 'opacity-60 cursor-not-allowed grayscale' : 'cursor-pointer hover:-translate-y-2 hover:shadow-2xl'}
-                            bg-white
-                        `}
+                        onClick={() => setCurrentView(item.id)}
+                        className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col items-center justify-center gap-4 group h-56"
                     >
-                        <div className={`absolute inset-0 ${item.color} opacity-90 transition-opacity group-hover:opacity-100`}></div>
-                        <div className="relative z-10 text-white flex flex-col items-center">
-                            <div className="mb-4 p-4 bg-white/20 rounded-full backdrop-blur-sm">
-                                {item.icon}
-                            </div>
-                            <span className="text-2xl font-bold uppercase tracking-wider">{item.label}</span>
-                            {item.disabled && <span className="text-xs mt-2 bg-black/50 px-2 py-1 rounded">Em Construção</span>}
+                        <div className={`p-4 rounded-full ${item.colorClass} group-hover:scale-110 transition-transform`}>
+                            {item.icon}
                         </div>
-                        <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full"></div>
+                        <div className="text-center">
+                            <h3 className="text-lg font-black text-gray-800 tracking-tight">{item.label}</h3>
+                            <p className="text-xs text-gray-400 font-medium mt-1 uppercase tracking-wider">{item.description}</p>
+                        </div>
                     </button>
                 )})}
+            </div>
+            
+             <div className="mt-12 text-center">
+                <button 
+                    onClick={() => setShowPasswordModal(true)}
+                    className="text-xs text-gray-400 hover:text-heroRed font-bold flex items-center justify-center gap-2 mx-auto transition-colors border border-gray-200 px-4 py-2 rounded-full hover:bg-white"
+                >
+                    <KeyRound size={14} /> ALTERAR MINHA SENHA
+                </button>
             </div>
         </div>
     );
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
-            <div className="relative">
-                <Header onHomeClick={() => setCurrentView('home')} />
-                <div className="absolute top-6 right-6 flex items-center gap-4">
-                    <div className="hidden md:flex items-center">
-                         <button 
-                            onClick={() => setShowPasswordModal(true)}
-                            className="text-gray-400 hover:text-gray-600 text-xs font-bold mr-4 transition-colors"
-                        >
-                            SENHA
-                        </button>
-                        <div className="h-4 w-px bg-gray-300 mr-4"></div>
-                    </div>
-                    <button 
-                        onClick={handleLogout} 
-                        className="text-gray-500 hover:text-heroRed flex items-center gap-2 text-sm font-bold transition-colors bg-white/80 px-3 py-1 rounded hover:shadow-sm"
-                        title="Sair do sistema"
-                    >
-                        <LogOut size={18} /> SAIR
-                    </button>
-                </div>
-            </div>
+        <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+            <Header onHomeClick={() => setCurrentView('home')} user={user} onLogout={handleLogout} />
             
-            <main className="flex-grow py-8">
+            <main className="flex-grow">
                 {currentView === 'home' && renderHome()}
                 {currentView === 'dashboard' && hasPermission('dashboard') && <DashboardModule />}
                 {currentView === 'pedidos' && hasPermission('pedidos') && <PedidosModule user={user} />}
@@ -130,14 +99,15 @@ const App: React.FC = () => {
                 {currentView === 'admin' && hasPermission('admin') && <AdminModule />}
             </main>
 
-            <footer className="bg-heroBlack text-white text-center py-6 mt-auto">
-                <p className="text-sm opacity-50">
-                    &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados. 
-                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v2.8.0 (Stable)</span>
-                </p>
-            </footer>
+            {currentView === 'home' && (
+                <footer className="bg-white border-t border-gray-200 text-center py-6 mt-auto">
+                    <p className="text-xs text-gray-400 font-medium">
+                        &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados.
+                    </p>
+                </footer>
+            )}
 
-             {showPasswordModal && (
+             {showPasswordModal && user && (
                 <ChangePasswordModal 
                     user={user} 
                     onClose={() => setShowPasswordModal(false)} 
