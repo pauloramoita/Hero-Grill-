@@ -47,6 +47,7 @@ export const ConsultaFinanceiro: React.FC = () => {
     const [filterAccount, setFilterAccount] = useState('');
     const [filterCategory, setFilterCategory] = useState('');
     const [filterSupplier, setFilterSupplier] = useState('');
+    const [filterStatus, setFilterStatus] = useState(''); // '' = Todos, 'Pago', 'Pendente'
 
     useEffect(() => {
         loadData();
@@ -54,7 +55,7 @@ export const ConsultaFinanceiro: React.FC = () => {
 
     useEffect(() => {
         applyFilters();
-    }, [transactions, startDate, endDate, filterStore, filterAccount, filterCategory, filterSupplier]);
+    }, [transactions, startDate, endDate, filterStore, filterAccount, filterCategory, filterSupplier, filterStatus]);
 
     const loadData = async () => {
         setLoading(true);
@@ -71,11 +72,14 @@ export const ConsultaFinanceiro: React.FC = () => {
 
     const applyFilters = () => {
         const result = transactions.filter(t => {
+            // Filtro de Data (Baseado no Vencimento)
             const tDate = t.date;
             const matchesDate = tDate >= startDate && tDate <= endDate;
+            
             const matchesStore = !filterStore || t.store === filterStore;
             const matchesCategory = !filterCategory || t.category === filterCategory;
             const matchesSupplier = !filterSupplier || t.supplier === filterSupplier;
+            const matchesStatus = !filterStatus || t.status === filterStatus;
             
             let matchesAccount = true;
             if (filterAccount) {
@@ -87,14 +91,14 @@ export const ConsultaFinanceiro: React.FC = () => {
                 }
             }
 
-            return matchesDate && matchesStore && matchesCategory && matchesSupplier && matchesAccount;
+            return matchesDate && matchesStore && matchesCategory && matchesSupplier && matchesAccount && matchesStatus;
         });
 
         // Ordenar: Pendentes primeiro, depois por data
         result.sort((a, b) => {
             if (a.status === 'Pendente' && b.status === 'Pago') return -1;
             if (a.status === 'Pago' && b.status === 'Pendente') return 1;
-            return b.date.localeCompare(a.date);
+            return a.date.localeCompare(b.date); // Data crescente (mais antigo primeiro nos pendentes faz sentido)
         });
 
         setFilteredTransactions(result);
@@ -163,13 +167,11 @@ export const ConsultaFinanceiro: React.FC = () => {
     };
 
     const handleExport = () => {
-        // Simples exportação reutilizando a lógica existente (adaptada para XML se necessário)
-        // Aqui vamos gerar um XML específico para transactions
         let xmlContent = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Financeiro"><Table>';
         
         // Header
         xmlContent += '<Row>';
-        ['Data', 'Loja', 'Tipo', 'Descrição', 'Conta', 'Categoria', 'Fornecedor', 'Valor', 'Status'].forEach(h => {
+        ['Data Vencimento', 'Data Pagamento', 'Loja', 'Tipo', 'Descrição', 'Conta', 'Categoria', 'Fornecedor', 'Valor', 'Status'].forEach(h => {
             xmlContent += `<Cell><Data ss:Type="String">${h}</Data></Cell>`;
         });
         xmlContent += '</Row>';
@@ -178,6 +180,7 @@ export const ConsultaFinanceiro: React.FC = () => {
         filteredTransactions.forEach(t => {
             xmlContent += '<Row>';
             xmlContent += `<Cell><Data ss:Type="String">${formatDateBr(t.date)}</Data></Cell>`;
+            xmlContent += `<Cell><Data ss:Type="String">${t.paymentDate ? formatDateBr(t.paymentDate) : '-'}</Data></Cell>`;
             xmlContent += `<Cell><Data ss:Type="String">${t.store}</Data></Cell>`;
             xmlContent += `<Cell><Data ss:Type="String">${t.type}</Data></Cell>`;
             xmlContent += `<Cell><Data ss:Type="String">${t.description || ''}</Data></Cell>`;
@@ -211,6 +214,15 @@ export const ConsultaFinanceiro: React.FC = () => {
     const totalDespesas = filteredTransactions.filter(t => t.type === 'Despesa').reduce((acc, t) => acc + t.value, 0);
     const saldo = totalReceitas - totalDespesas;
 
+    const clearFilters = () => {
+        setFilterStore(''); 
+        setFilterAccount(''); 
+        setFilterCategory(''); 
+        setFilterSupplier(''); 
+        setFilterStatus('');
+        setDateRange('hoje');
+    };
+
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" size={40}/></div>;
 
     return (
@@ -225,14 +237,22 @@ export const ConsultaFinanceiro: React.FC = () => {
                     <button onClick={() => setDateRange('ano')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase">Este Ano</button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Início</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Início (Vencimento)</label>
                         <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border p-2 rounded text-sm"/>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Fim</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Fim (Vencimento)</label>
                         <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border p-2 rounded text-sm"/>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Status</label>
+                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full border p-2 rounded text-sm font-bold">
+                            <option value="">Todos (Pagos e Pendentes)</option>
+                            <option value="Pago">Apenas Pagos</option>
+                            <option value="Pendente">Apenas Pendentes</option>
+                        </select>
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
@@ -252,13 +272,6 @@ export const ConsultaFinanceiro: React.FC = () => {
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Categoria</label>
-                        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full border p-2 rounded text-sm">
-                            <option value="">Todas</option>
-                            {appData.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
-                    <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
                         <select value={filterSupplier} onChange={e => setFilterSupplier(e.target.value)} className="w-full border p-2 rounded text-sm">
                             <option value="">Todos</option>
@@ -267,13 +280,19 @@ export const ConsultaFinanceiro: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex justify-end gap-2 border-t pt-4 mt-4">
-                    <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">
-                        <Download size={18}/> Excel
+                <div className="flex justify-between border-t pt-4 mt-4 items-center">
+                    <button onClick={clearFilters} className="text-xs text-gray-500 hover:text-red-500 font-bold flex items-center gap-1">
+                        <Filter size={12}/> Limpar Filtros
                     </button>
-                    <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow-sm">
-                        <Printer size={18}/> Imprimir
-                    </button>
+
+                    <div className="flex gap-2">
+                        <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">
+                            <Download size={18}/> Excel
+                        </button>
+                        <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow-sm">
+                            <Printer size={18}/> Imprimir
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -318,7 +337,7 @@ export const ConsultaFinanceiro: React.FC = () => {
                                 <td className="px-4 py-3 whitespace-nowrap">
                                     <div className="font-medium">{formatDateBr(t.date)}</div>
                                     {t.paymentDate && t.status === 'Pago' && (
-                                        <div className="text-[10px] text-green-600">Pg: {formatDateBr(t.paymentDate)}</div>
+                                        <div className="text-[10px] text-green-600 font-bold">PG: {formatDateBr(t.paymentDate)}</div>
                                     )}
                                 </td>
                                 <td className="px-4 py-3 text-gray-700">{t.store}</td>
@@ -392,6 +411,9 @@ export const ConsultaFinanceiro: React.FC = () => {
                                 </td>
                             </tr>
                         ))}
+                        {filteredTransactions.length === 0 && (
+                            <tr><td colSpan={8} className="p-8 text-center text-gray-400">Nenhum registro encontrado para os filtros selecionados.</td></tr>
+                        )}
                     </tbody>
                 </table>
             </div>
