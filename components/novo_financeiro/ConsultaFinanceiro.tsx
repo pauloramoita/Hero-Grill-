@@ -1,16 +1,18 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { 
     getDailyTransactions, 
     getAppData, 
     getFinancialAccounts,
+    getOrders,
     saveDailyTransaction, 
     deleteDailyTransaction,
     formatCurrency, 
     formatDateBr,
     getTodayLocalISO
 } from '../../services/storageService';
-import { AppData, DailyTransaction, FinancialAccount } from '../../types';
+import { AppData, DailyTransaction, FinancialAccount, Order } from '../../types';
 import { 
     CheckCircle, 
     Trash2, 
@@ -54,12 +56,41 @@ export const ConsultaFinanceiro: React.FC = () => {
 
     const loadData = async () => {
         setLoading(true);
-        const [t, d, acc] = await Promise.all([
+        const [t, d, acc, o] = await Promise.all([
             getDailyTransactions(), 
             getAppData(),
-            getFinancialAccounts()
+            getFinancialAccounts(),
+            getOrders()
         ]);
-        setTransactions(t);
+
+        // Mesclar Transações e Pedidos (Consistência com Lançamentos)
+        const existingIds = new Set(t.map(item => item.id));
+        const mappedOrders = o
+            .filter(order => !existingIds.has(order.id))
+            .map(order => ({
+                id: order.id,
+                date: order.deliveryDate || order.date, // Vencimento
+                paymentDate: null,
+                store: order.store,
+                type: 'Despesa' as const, // Pedidos são Despesas
+                accountId: null,
+                destinationStore: undefined,
+                destinationAccountId: undefined,
+                paymentMethod: 'Boleto',
+                product: order.product,
+                category: order.category || '',
+                supplier: order.supplier,
+                classification: order.type || 'Variável',
+                value: order.totalValue,
+                status: 'Pendente' as const,
+                description: `Pedido ref. ${order.product}`,
+                origin: 'pedido' as const,
+                createdAt: order.createdAt || order.date // Data de Cadastro
+            } as DailyTransaction));
+
+        const merged = [...t, ...mappedOrders];
+
+        setTransactions(merged);
         setAppData(d);
         setAccounts(acc);
         setLoading(false);
@@ -70,8 +101,6 @@ export const ConsultaFinanceiro: React.FC = () => {
             // Filtro de Data (Vencimento vs Pagamento)
             const targetDate = dateType === 'payment' ? (t.paymentDate || '') : t.date;
             
-            // Se filtrar por pagamento, item sem data de pagamento (pendente) não deve aparecer,
-            // exceto se quisermos mostrar pendentes "devidos" no periodo? Não, regime de caixa é estrito.
             if (dateType === 'payment' && !targetDate) return false;
 
             const matchesDate = targetDate >= startDate && targetDate <= endDate;
@@ -150,6 +179,8 @@ export const ConsultaFinanceiro: React.FC = () => {
                 paymentDate: getTodayLocalISO()
             };
             await saveDailyTransaction(updated);
+            
+            // Update local state to reflect changes (move from Order type to Transaction type effectively)
             setTransactions(prev => prev.map(item => item.id === t.id ? updated : item));
         }
     };
@@ -164,7 +195,7 @@ export const ConsultaFinanceiro: React.FC = () => {
     const handleModalSave = async (updated: DailyTransaction) => {
         await saveDailyTransaction(updated);
         setEditingItem(null);
-        loadData();
+        loadData(); // Reload to refresh merged list correctly
     };
 
     const handleExport = () => {
@@ -266,186 +297,4 @@ export const ConsultaFinanceiro: React.FC = () => {
                             <option value="Pago">Apenas Pagos</option>
                             <option value="Pendente">Apenas Pendentes</option>
                         </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
-                        <select value={filterStore} onChange={e => setFilterStore(e.target.value)} className="w-full border p-2 rounded text-sm">
-                            <option value="">Todas</option>
-                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Conta</label>
-                        <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)} className="w-full border p-2 rounded text-sm">
-                            <option value="">Todas</option>
-                            {accounts
-                                .filter(a => !filterStore || a.store === filterStore)
-                                .map(a => <option key={a.id} value={a.id}>{a.name}</option>)
-                            }
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
-                        <select value={filterSupplier} onChange={e => setFilterSupplier(e.target.value)} className="w-full border p-2 rounded text-sm">
-                            <option value="">Todos</option>
-                            {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-                </div>
-
-                <div className="flex justify-between border-t pt-4 mt-4 items-center">
-                    <button onClick={clearFilters} className="text-xs text-gray-500 hover:text-red-500 font-bold flex items-center gap-1">
-                        <Filter size={12}/> Limpar Filtros
-                    </button>
-
-                    <div className="flex gap-2">
-                        <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm transition-colors">
-                            <Download size={18}/> Excel
-                        </button>
-                        <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow-sm transition-colors">
-                            <Printer size={18}/> Imprimir
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Summary Bar (New Layout) */}
-            <div className="bg-blue-50 p-4 border-b border-blue-100 flex flex-wrap gap-4 justify-between items-center text-sm rounded-lg shadow-sm">
-                <div className="flex items-center gap-2">
-                    <Calculator size={16} className="text-blue-600"/>
-                    <span className="font-bold text-gray-600">RESUMO DA SELEÇÃO:</span>
-                </div>
-                <div className="flex gap-6 flex-wrap">
-                    <div className="flex flex-col">
-                        <span className="text-xs font-bold text-gray-500 uppercase">Qtd. Registros</span>
-                        <span className="font-bold text-gray-800 text-lg">{filteredTransactions.length}</span>
-                    </div>
-                    <div className="flex flex-col items-end">
-                        <span className="text-xs font-bold text-green-600 uppercase">Receitas</span>
-                        <span className="font-bold text-green-700">{formatCurrency(totalReceitas)}</span>
-                    </div>
-                    <div className="flex flex-col items-end">
-                        <span className="text-xs font-bold text-red-600 uppercase">Despesas</span>
-                        <span className="font-bold text-red-700">{formatCurrency(totalDespesas)}</span>
-                    </div>
-                    <div className="flex flex-col items-end border-l pl-6 border-blue-200">
-                        <span className="text-xs font-black text-blue-800 uppercase">Saldo (Total)</span>
-                        <span className={`font-black text-lg ${saldo >= 0 ? 'text-blue-800' : 'text-red-600'}`}>{formatCurrency(saldo)}</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Data Table */}
-            <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-100">
-                        <tr>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Vencimento</th>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Loja</th>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Descrição / Detalhes</th>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Conta</th>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Categoria</th>
-                            <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">Valor</th>
-                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase">Status</th>
-                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase no-print">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200 text-sm">
-                        {filteredTransactions.map((t) => (
-                            <tr key={t.id} className="hover:bg-gray-50 break-inside-avoid">
-                                <td className="px-4 py-3 whitespace-nowrap">
-                                    <div className="font-medium">{formatDateBr(t.date)}</div>
-                                    {t.paymentDate && t.status === 'Pago' && (
-                                        <div className="text-[10px] text-green-600 font-bold mt-1 bg-green-50 px-1 rounded inline-block border border-green-100">
-                                            PG: {formatDateBr(t.paymentDate)}
-                                        </div>
-                                    )}
-                                </td>
-                                <td className="px-4 py-3 text-gray-700">{t.store}</td>
-                                <td className="px-4 py-3">
-                                    {t.type === 'Transferência' ? (
-                                        <div className="flex items-center gap-1 text-purple-700 font-bold">
-                                            <ArrowRight size={12}/> {t.destinationStore} 
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <div className="font-bold text-gray-800">{t.description || t.product || 'Sem descrição'}</div>
-                                            {t.supplier && <div className="text-xs text-gray-500">{t.supplier}</div>}
-                                        </>
-                                    )}
-                                </td>
-                                <td className="px-4 py-3">
-                                    {t.type === 'Transferência' ? (
-                                        <div className="text-xs">
-                                            <span className="text-red-500">Sai: {getAccountName(t.accountId)}</span><br/>
-                                            <span className="text-green-500">Entra: {getAccountName(t.destinationAccountId)}</span>
-                                        </div>
-                                    ) : (
-                                        <span className={!t.accountId ? "text-red-400 font-bold" : ""}>
-                                            {getAccountName(t.accountId)}
-                                        </span>
-                                    )}
-                                </td>
-                                <td className="px-4 py-3 text-xs text-gray-600">
-                                    {t.category || '-'}
-                                </td>
-                                <td className={`px-4 py-3 text-right font-bold ${t.type === 'Receita' ? 'text-green-600' : t.type === 'Transferência' ? 'text-purple-600' : 'text-red-600'}`}>
-                                    {t.type === 'Receita' ? '+' : ''}{formatCurrency(t.value)}
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                    {t.status === 'Pago' ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-bold">
-                                            <CheckCircle size={12}/> PAGO
-                                        </span>
-                                    ) : (
-                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 text-xs font-bold">
-                                            PENDENTE
-                                        </span>
-                                    )}
-                                </td>
-                                <td className="px-4 py-3 text-center no-print">
-                                    <div className="flex justify-center gap-2">
-                                        {t.status === 'Pendente' && (
-                                            <button 
-                                                onClick={() => handlePay(t)} 
-                                                className="text-green-600 hover:bg-green-100 p-1.5 rounded transition-colors"
-                                                title="Confirmar Pagamento (Hoje)"
-                                            >
-                                                <CheckCircle size={18} />
-                                            </button>
-                                        )}
-                                        <button 
-                                            onClick={() => setEditingItem(t)} 
-                                            className="text-blue-600 hover:bg-blue-100 p-1.5 rounded transition-colors"
-                                            title="Editar"
-                                        >
-                                            <Edit size={18} />
-                                        </button>
-                                        <button 
-                                            onClick={() => handleDelete(t.id)} 
-                                            className="text-red-500 hover:bg-red-100 p-1.5 rounded transition-colors"
-                                            title="Excluir"
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                        {filteredTransactions.length === 0 && (
-                            <tr><td colSpan={8} className="p-8 text-center text-gray-400">Nenhum registro encontrado para os filtros selecionados.</td></tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-
-            {editingItem && (
-                <EditLancamentoModal 
-                    transaction={editingItem} 
-                    onClose={() => setEditingItem(null)} 
-                    onSave={handleModalSave} 
-                />
-            )}
-        </div>
-    );
-};
+                    

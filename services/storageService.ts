@@ -455,7 +455,8 @@ export const getDailyTransactions = async (): Promise<DailyTransaction[]> => {
         status: t.status,
         description: t.description,
         classification: t.classification, // Mapeado
-        origin: t.origin
+        origin: t.origin,
+        createdAt: t.created_at // Mapeado
     }));
 };
 
@@ -517,7 +518,8 @@ export const getOrders = async (): Promise<Order[]> => {
         totalValue: o.total_value,
         deliveryDate: o.delivery_date,
         type: o.type || 'Variável',
-        category: o.category
+        category: o.category,
+        createdAt: o.created_at // Mapeado
     }));
 };
 
@@ -545,7 +547,8 @@ export const getLastOrderForProduct = async (productName: string): Promise<Order
         totalValue: o.total_value,
         deliveryDate: o.delivery_date,
         type: o.type,
-        category: o.category
+        category: o.category,
+        createdAt: o.created_at
     };
 };
 

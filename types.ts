@@ -24,6 +24,7 @@ export interface Order {
     deliveryDate: string | null; // Usado agora como Data Vencimento visualmente
     type?: string; // Novo
     category?: string; // Novo
+    createdAt?: string; // Timestamp de criação
 }
 
 export interface Transaction043 {
@@ -106,6 +107,7 @@ export interface DailyTransaction {
     description?: string;
     classification?: string; // Novo: Tipo (Fixa/Variável)
     origin?: 'manual' | 'pedido'; // Para diferenciar lançamentos manuais de pedidos importados
+    createdAt?: string; // Timestamp de criação
 }
 
 export interface UserPermissions {
