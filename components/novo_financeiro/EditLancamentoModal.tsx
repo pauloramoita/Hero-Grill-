@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AppData, FinancialAccount, DailyTransaction } from '../../types';
 import { getAppData, getFinancialAccounts, formatCurrency } from '../../services/storageService';
@@ -75,7 +76,7 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
             paymentMethod,
             product: type !== 'Transferência' ? product : '',
             category: type !== 'Transferência' ? category : '',
-            supplier: (type === 'Despesa') ? supplier : '',
+            supplier: type !== 'Transferência' ? supplier : '',
             classification: type !== 'Transferência' ? classification : '',
             value,
             status,
@@ -206,15 +207,13 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
                                     </select>
                                 </div>
                                 
-                                {type === 'Despesa' && (
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
-                                        <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-2 border rounded">
-                                            <option value="">Selecione...</option>
-                                            {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-                                        </select>
-                                    </div>
-                                )}
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor (Opcional)</label>
+                                    <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-2 border rounded">
+                                        <option value="">Selecione...</option>
+                                        {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
 
                                 <div>
                                     <label className="block text-xs font-bold text-gray-600 mb-1">Produto</label>

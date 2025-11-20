@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { getAppData, saveOrder, getLastOrderForProduct, formatCurrency } from '../../services/storageService';
 import { AppData } from '../../types';
@@ -193,7 +194,7 @@ export const CadastroPedido: React.FC = () => {
                 </div>
 
                 <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Data da Entrega</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Data do Vencimento</label>
                     <div className="flex gap-2">
                         <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="w-full p-2.5 border border-gray-300 rounded text-sm"/>
                         <button type="button" onClick={() => setDeliveryDate(new Date().toISOString().split('T')[0])} className="bg-heroBlack text-white px-4 rounded text-xs font-bold uppercase hover:bg-gray-800">Hoje</button>
