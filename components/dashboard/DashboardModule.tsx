@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
     getAppData, 
     getOrders, 
@@ -8,7 +9,7 @@ import {
     getAccountBalances,
     formatCurrency
 } from '../../services/storageService';
-import { AppData, Order, DailyTransaction, FinancialAccount, Transaction043, AccountBalance } from '../../types';
+import { AppData, Order, DailyTransaction, FinancialAccount, Transaction043, AccountBalance, User } from '../../types';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     Cell
@@ -19,7 +20,11 @@ import {
     Hammer
 } from 'lucide-react';
 
-export const DashboardModule: React.FC = () => {
+interface DashboardModuleProps {
+    user: User;
+}
+
+export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     const [activeTab, setActiveTab] = useState('geral');
     const [loading, setLoading] = useState(true);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
@@ -63,6 +68,22 @@ export const DashboardModule: React.FC = () => {
             setLoading(false);
         }
     };
+
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (user.isMaster) return appData.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return appData.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return appData.stores;
+    }, [appData.stores, user]);
+
+    // Auto-select if only one store available
+    useEffect(() => {
+        if (availableStores.length === 1) {
+            setSelectedStore(availableStores[0]);
+        }
+    }, [availableStores]);
 
     const filterStore = (storeName: string | null | undefined) => !selectedStore || storeName === selectedStore;
 
@@ -131,10 +152,8 @@ export const DashboardModule: React.FC = () => {
         const storeStats: Record<string, { sales: number, expenses: number }> = {};
         
         // Init stores (to show even those with 0)
-        appData.stores.forEach(s => {
-            if (filterStore(s)) {
-                storeStats[s] = { sales: 0, expenses: 0 };
-            }
+        availableStores.forEach(s => {
+            storeStats[s] = { sales: 0, expenses: 0 };
         });
 
         // Sales
@@ -338,10 +357,11 @@ export const DashboardModule: React.FC = () => {
                         <select 
                             value={selectedStore} 
                             onChange={(e) => setSelectedStore(e.target.value)}
-                            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-heroRed focus:border-heroRed block p-2.5"
+                            className={`bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-heroRed focus:border-heroRed block p-2.5 ${availableStores.length === 1 ? 'cursor-not-allowed bg-gray-100 text-gray-500' : ''}`}
+                            disabled={availableStores.length === 1}
                         >
-                            <option value="">Todas as Lojas</option>
-                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                             {availableStores.length !== 1 && <option value="">Todas as Lojas</option>}
+                            {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                         <input 
                             type="month" 

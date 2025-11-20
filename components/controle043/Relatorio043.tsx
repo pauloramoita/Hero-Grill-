@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getTransactions043, getAppData, formatCurrency, formatDateBr, getTodayLocalISO, exportTransactionsToXML } from '../../services/storageService';
-import { AppData, Transaction043 } from '../../types';
+import { AppData, Transaction043, User } from '../../types';
 import { FileText, TrendingUp, TrendingDown, FileSpreadsheet, Printer, Loader2 } from 'lucide-react';
 
-export const Relatorio043: React.FC = () => {
+interface Relatorio043Props {
+    user: User;
+}
+
+export const Relatorio043: React.FC<Relatorio043Props> = ({ user }) => {
     const [transactions, setTransactions] = useState<Transaction043[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<Transaction043[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
@@ -28,11 +32,27 @@ export const Relatorio043: React.FC = () => {
         load();
     }, []);
 
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (user.isMaster) return appData.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return appData.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return appData.stores;
+    }, [appData.stores, user]);
+
     const generateReport = () => {
         const filtered = transactions.filter(t => {
-            return t.date >= startDate && 
-                   t.date <= endDate && 
-                   (storeFilter === '' || t.store === storeFilter);
+            const dateMatch = t.date >= startDate && t.date <= endDate;
+            const storeMatch = storeFilter === '' || t.store === storeFilter;
+            
+            // Permission Check
+            let allowed = true;
+            if (!user.isMaster && availableStores.length > 0) {
+                 allowed = availableStores.includes(t.store);
+            }
+
+            return dateMatch && storeMatch && allowed;
         }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
         setFilteredTransactions(filtered);
@@ -75,7 +95,7 @@ export const Relatorio043: React.FC = () => {
                         <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
                         <select value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)} className="w-full border p-2 rounded">
                             <option value="">Todas as Lojas</option>
-                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                            {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                 </div>

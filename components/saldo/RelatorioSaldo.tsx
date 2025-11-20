@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getAccountBalances, getAppData, formatCurrency, exportBalancesToXML } from '../../services/storageService';
-import { AppData, AccountBalance } from '../../types';
+import { AppData, AccountBalance, User } from '../../types';
 import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine } from 'recharts';
 import { FileText, FileSpreadsheet, Printer, Loader2 } from 'lucide-react';
 
@@ -9,7 +9,11 @@ interface BalanceWithVariation extends AccountBalance {
     monthLabel: string;
 }
 
-export const RelatorioSaldo: React.FC = () => {
+interface RelatorioSaldoProps {
+    user: User;
+}
+
+export const RelatorioSaldo: React.FC<RelatorioSaldoProps> = ({ user }) => {
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [filteredData, setFilteredData] = useState<BalanceWithVariation[]>([]);
     const [loading, setLoading] = useState(true);
@@ -48,9 +52,24 @@ export const RelatorioSaldo: React.FC = () => {
         load();
     }, []);
 
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (user.isMaster) return appData.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return appData.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return appData.stores;
+    }, [appData.stores, user]);
+
     const generateReport = async () => {
         setLoading(true);
-        const rawBalances = await getAccountBalances();
+        let rawBalances = await getAccountBalances();
+
+        // Filter raw balances by permissions
+        if (!user.isMaster && availableStores.length > 0) {
+            rawBalances = rawBalances.filter(b => availableStores.includes(b.store));
+        }
+
         let processed: BalanceWithVariation[] = [];
 
         if (storeFilter === '') {
@@ -167,7 +186,7 @@ export const RelatorioSaldo: React.FC = () => {
                         <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
                         <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)} className="w-full border p-2 rounded">
                             <option value="">Todas as Lojas (Consolidado)</option>
-                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                            {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                     <div>

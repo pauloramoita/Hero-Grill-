@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { getTransactions043, getAppData, formatCurrency, formatDateBr, deleteTransaction043, updateTransaction043, exportTransactionsToXML } from '../../services/storageService';
-import { AppData, Transaction043 } from '../../types';
+import { AppData, Transaction043, User } from '../../types';
 import { Trash2, TrendingUp, TrendingDown, Edit, FileSpreadsheet, Printer, Loader2 } from 'lucide-react';
 import { EditTransactionModal } from './EditTransactionModal';
 
-export const Consulta043: React.FC = () => {
+interface Consulta043Props {
+    user: User;
+}
+
+export const Consulta043: React.FC<Consulta043Props> = ({ user }) => {
     const [transactions, setTransactions] = useState<Transaction043[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<Transaction043[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
@@ -25,11 +30,35 @@ export const Consulta043: React.FC = () => {
         load();
     }, []);
 
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (user.isMaster) return appData.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return appData.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return appData.stores;
+    }, [appData.stores, user]);
+
+    // Auto-select if only one store available
+    useEffect(() => {
+        if (availableStores.length === 1) {
+            setStoreFilter(availableStores[0]);
+        }
+    }, [availableStores]);
+
     useEffect(() => {
         let result = transactions.filter(t => t.date.startsWith(dateValue));
+        
+        // Apply Store Filter
         if (storeFilter) result = result.filter(t => t.store === storeFilter);
+
+        // Force Permission Check
+        if (!user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
+            result = result.filter(t => user.permissions.stores.includes(t.store));
+        }
+
         setFilteredTransactions(result.sort((a, b) => a.date.localeCompare(b.date)));
-    }, [transactions, storeFilter, dateValue]);
+    }, [transactions, storeFilter, dateValue, user]);
 
     const handleDelete = async (id: string) => {
         if (window.confirm('Excluir?')) {
@@ -53,9 +82,14 @@ export const Consulta043: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="bg-white p-6 rounded-lg shadow border no-print flex gap-4 flex-wrap">
-                <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)} className="border p-2 rounded">
-                    <option value="">Todas as Lojas</option>
-                    {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                <select 
+                    value={storeFilter} 
+                    onChange={e => setStoreFilter(e.target.value)} 
+                    className={`border p-2 rounded ${availableStores.length === 1 ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                    disabled={availableStores.length === 1}
+                >
+                    {availableStores.length !== 1 && <option value="">Todas as Lojas</option>}
+                    {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 <input type="month" value={dateValue} onChange={e => setDateValue(e.target.value)} className="border p-2 rounded" />
                 <button onClick={() => exportTransactionsToXML(filteredTransactions, '043')} className="ml-auto bg-green-600 text-white px-4 py-2 rounded flex gap-2"><FileSpreadsheet size={18}/> Excel</button>

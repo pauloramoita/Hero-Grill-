@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, AppData } from '../../types';
 import { getUsers, saveUser, deleteUser, getAppData } from '../../services/storageService';
-import { Save, Trash2, UserPlus, CheckSquare, Square, Loader2, Shield, AlertCircle, Users } from 'lucide-react';
+import { Save, Trash2, UserPlus, CheckSquare, Square, Loader2, Shield, AlertCircle, Users, Eye } from 'lucide-react';
 
 export const UserManagement: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
@@ -21,14 +21,14 @@ export const UserManagement: React.FC = () => {
     const [selectedStores, setSelectedStores] = useState<string[]>([]);
 
     const modulesList = [
-        { id: 'dashboard', label: '📊 Dashboard (Visão Geral)' }, // Novo
+        { id: 'dashboard', label: '📊 Dashboard (Visão Geral)' },
         { id: 'pedidos', label: 'Pedidos (Cadastro)' },
-        { id: 'config_campos', label: '⚙️ Config. Produtos (Campos!)' }, // Specific for Orders
+        { id: 'config_campos', label: '⚙️ Config. Produtos (Campos!)' },
         { id: 'controle043', label: 'Controle 043' },
         { id: 'saldo', label: 'Saldo Contas' },
         { id: 'financeiro', label: 'Entradas e Saídas (Antigo)' },
         { id: 'novo_financeiro', label: 'Financeiro (Caixa/Lançamentos)' },
-        { id: 'config_financeiro_campos', label: '⚙️ Config. Contas (Financeiro)' }, // Specific for Finance
+        { id: 'config_financeiro_campos', label: '⚙️ Config. Contas (Financeiro)' },
         { id: 'view_balances', label: '💰 Permissão: Visualizar Saldos' },
         { id: 'backup', label: 'Backup' },
         { id: 'admin', label: 'Administração (Admin)' },
@@ -83,9 +83,8 @@ export const UserManagement: React.FC = () => {
         );
     };
 
-    const applyProfile = (type: 'gerente' | 'operador') => {
+    const applyProfile = (type: 'gerente' | 'operador' | 'observador') => {
         if (type === 'gerente') {
-            // Gerente: Operações completas + Configuração de Campos + Visualização de Saldos + Todas Lojas + Dashboard
             setSelectedModules([
                 'dashboard',
                 'pedidos', 'config_campos',
@@ -94,14 +93,16 @@ export const UserManagement: React.FC = () => {
                 'financeiro', 
                 'novo_financeiro', 'config_financeiro_campos', 'view_balances'
             ]);
-            setSelectedStores(appData.stores); // Todas as lojas
-        } else {
-            // Operador: Apenas lançamentos, sem config, sem ver saldo total, sem admin
+            setSelectedStores(appData.stores); 
+        } else if (type === 'operador') {
             setSelectedModules([
                 'pedidos', 
                 'novo_financeiro'
             ]);
-            setSelectedStores([]); // Operador define lojas manualmente
+            setSelectedStores([]); 
+        } else if (type === 'observador') {
+            setSelectedModules(['dashboard']);
+            setSelectedStores([]); // Observador define lojas manualmente se necessário, ou vazio para ver tudo se master (mas aqui não é master)
         }
     };
 
@@ -144,29 +145,29 @@ export const UserManagement: React.FC = () => {
 
     return (
         <div className="max-w-6xl mx-auto animate-fadeIn space-y-8">
-            {/* Info Box */}
             <div className="bg-blue-50 border-l-4 border-blue-500 p-4 text-sm text-blue-800 flex items-center gap-3">
                  <AlertCircle size={20} />
                  <div>
                     <strong>Gestão de Perfis:</strong> Utilize os botões de "Perfil Rápido" para configurar permissões padrão.
                     <ul className="list-disc ml-4 mt-1">
-                        <li><strong>Gerente:</strong> Acesso total operacional, ver saldos, dashboard, configurar campos (Produtos/Contas).</li>
+                        <li><strong>Gerente:</strong> Acesso total operacional.</li>
                         <li><strong>Operador:</strong> Apenas lançamentos básicos.</li>
+                        <li><strong>Observador:</strong> Acesso exclusivo ao Dashboard Gerencial.</li>
                     </ul>
                  </div>
             </div>
 
-            {/* Form Card */}
             <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-200">
                 <div className="flex items-center justify-between mb-6 border-b pb-2">
                     <div className="flex items-center gap-3">
                         <div className="bg-heroBlack p-2 rounded text-white"><UserPlus size={24} /></div>
                         <h2 className="text-2xl font-bold text-gray-800">{editingId ? 'Editar Usuário' : 'Novo Usuário'}</h2>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                         <span className="text-xs font-bold text-gray-500 uppercase self-center mr-2">Perfil Rápido:</span>
                         <button type="button" onClick={() => applyProfile('gerente')} className="bg-purple-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-purple-700 flex items-center gap-1 transition-colors"><Users size={12}/> Gerente</button>
                         <button type="button" onClick={() => applyProfile('operador')} className="bg-gray-500 text-white px-3 py-1 rounded text-xs font-bold hover:bg-gray-600 flex items-center gap-1 transition-colors"><Users size={12}/> Operador</button>
+                        <button type="button" onClick={() => applyProfile('observador')} className="bg-blue-500 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-600 flex items-center gap-1 transition-colors"><Eye size={12}/> Observador</button>
                     </div>
                 </div>
                 
@@ -187,7 +188,6 @@ export const UserManagement: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                        {/* Módulos */}
                         <div className="bg-gray-50 p-4 rounded border">
                             <h3 className="font-bold text-heroBlack mb-3 flex items-center gap-2"><Shield size={16}/> Permissões de Acesso</h3>
                             <div className="space-y-2">
@@ -200,7 +200,6 @@ export const UserManagement: React.FC = () => {
                             </div>
                         </div>
 
-                         {/* Lojas */}
                          <div className="bg-gray-50 p-4 rounded border">
                             <h3 className="font-bold text-heroBlack mb-3 flex items-center gap-2"><Shield size={16}/> Acesso a Lojas</h3>
                             <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -224,7 +223,6 @@ export const UserManagement: React.FC = () => {
                 </form>
             </div>
 
-            {/* List */}
             <div className="bg-white rounded-lg shadow border overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-100">
@@ -244,13 +242,12 @@ export const UserManagement: React.FC = () => {
                                     <div className="flex flex-wrap gap-1">
                                         {user.permissions.modules?.includes('admin') ? (
                                             <span className="text-xs bg-black text-white px-2 py-1 rounded font-bold">ADMIN</span>
+                                        ) : user.permissions.modules?.length === 1 && user.permissions.modules?.includes('dashboard') ? (
+                                            <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded font-bold">OBSERVADOR</span>
                                         ) : user.permissions.modules?.includes('config_campos') && user.permissions.modules?.includes('view_balances') ? (
                                             <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-bold border border-purple-200">GERENTE</span>
                                         ) : (
                                             <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold border border-blue-100">OPERADOR</span>
-                                        )}
-                                        {user.permissions.modules?.includes('dashboard') && (
-                                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-bold border border-green-200">DASH</span>
                                         )}
                                     </div>
                                 </td>

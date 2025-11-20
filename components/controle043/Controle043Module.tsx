@@ -1,10 +1,15 @@
+
 import React, { useState } from 'react';
-import { Controle043SubView } from '../../types';
+import { Controle043SubView, User } from '../../types';
 import { Cadastro043 } from './Cadastro043';
 import { Consulta043 } from './Consulta043';
 import { Relatorio043 } from './Relatorio043';
 
-export const Controle043Module: React.FC = () => {
+interface Controle043ModuleProps {
+    user: User;
+}
+
+export const Controle043Module: React.FC<Controle043ModuleProps> = ({ user }) => {
     const [activeTab, setActiveTab] = useState<Controle043SubView>('cadastrar');
 
     const tabs: { id: Controle043SubView, label: string }[] = [
@@ -38,9 +43,9 @@ export const Controle043Module: React.FC = () => {
 
             {/* Content */}
             <div className="animate-fadeIn">
-                {activeTab === 'cadastrar' && <Cadastro043 />}
-                {activeTab === 'consulta' && <Consulta043 />}
-                {activeTab === 'relatorios' && <Relatorio043 />}
+                {activeTab === 'cadastrar' && <Cadastro043 user={user} />}
+                {activeTab === 'consulta' && <Consulta043 user={user} />}
+                {activeTab === 'relatorios' && <Relatorio043 user={user} />}
             </div>
         </div>
     );

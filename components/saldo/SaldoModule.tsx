@@ -1,10 +1,15 @@
+
 import React, { useState } from 'react';
-import { SaldoSubView } from '../../types';
+import { SaldoSubView, User } from '../../types';
 import { CadastroSaldo } from './CadastroSaldo';
 import { ConsultaSaldo } from './ConsultaSaldo';
 import { RelatorioSaldo } from './RelatorioSaldo';
 
-export const SaldoModule: React.FC = () => {
+interface SaldoModuleProps {
+    user: User;
+}
+
+export const SaldoModule: React.FC<SaldoModuleProps> = ({ user }) => {
     const [activeTab, setActiveTab] = useState<SaldoSubView>('lancamentos');
 
     const tabs: { id: SaldoSubView, label: string }[] = [
@@ -38,9 +43,9 @@ export const SaldoModule: React.FC = () => {
 
             {/* Content */}
             <div className="animate-fadeIn">
-                {activeTab === 'lancamentos' && <CadastroSaldo />}
-                {activeTab === 'consulta' && <ConsultaSaldo />}
-                {activeTab === 'relatorios' && <RelatorioSaldo />}
+                {activeTab === 'lancamentos' && <CadastroSaldo user={user} />}
+                {activeTab === 'consulta' && <ConsultaSaldo user={user} />}
+                {activeTab === 'relatorios' && <RelatorioSaldo user={user} />}
             </div>
         </div>
     );

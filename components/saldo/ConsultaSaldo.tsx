@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { getAccountBalances, getAppData, formatCurrency, deleteAccountBalance, updateAccountBalance, exportBalancesToXML } from '../../services/storageService';
-import { AppData, AccountBalance } from '../../types';
+import { AppData, AccountBalance, User } from '../../types';
 import { Search, Trash2, Edit, TrendingUp, TrendingDown, Minus, Layers, FileSpreadsheet, Printer, Loader2 } from 'lucide-react';
 import { EditSaldoModal } from './EditSaldoModal';
 
@@ -9,7 +10,11 @@ interface BalanceWithVariation extends AccountBalance {
     isAggregated?: boolean;
 }
 
-export const ConsultaSaldo: React.FC = () => {
+interface ConsultaSaldoProps {
+    user: User;
+}
+
+export const ConsultaSaldo: React.FC<ConsultaSaldoProps> = ({ user }) => {
     const [rawBalances, setRawBalances] = useState<AccountBalance[]>([]);
     const [displayBalances, setDisplayBalances] = useState<BalanceWithVariation[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
@@ -48,17 +53,44 @@ export const ConsultaSaldo: React.FC = () => {
         setLoading(false);
     };
 
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (user.isMaster) return appData.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return appData.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return appData.stores;
+    }, [appData.stores, user]);
+
+    // Auto-select if only one store available
+    useEffect(() => {
+        if (availableStores.length === 1) {
+            setStoreFilter(availableStores[0]);
+        }
+    }, [availableStores]);
+
     useEffect(() => {
         processData();
-    }, [rawBalances, storeFilter, yearFilter, monthFilter]);
+    }, [rawBalances, storeFilter, yearFilter, monthFilter, user]);
 
     const processData = () => {
         let processed: BalanceWithVariation[] = [];
 
-        if (storeFilter === '') {
+        // Force filter if user has store restriction
+        let effectiveStoreFilter = storeFilter;
+        if (availableStores.length === 1) {
+            effectiveStoreFilter = availableStores[0];
+        }
+
+        if (effectiveStoreFilter === '') {
+            // Ensure we only aggregate stores the user has permission for
+            const allowedStores = user.isMaster ? null : user.permissions.stores;
+            
             const grouped: Record<string, AccountBalance> = {};
 
             rawBalances.forEach(b => {
+                if (allowedStores && allowedStores.length > 0 && !allowedStores.includes(b.store)) return;
+
                 const key = `${b.year}-${b.month}`;
                 if (!grouped[key]) {
                     grouped[key] = {
@@ -87,7 +119,7 @@ export const ConsultaSaldo: React.FC = () => {
             }
 
         } else {
-            const storeData = rawBalances.filter(b => b.store === storeFilter);
+            const storeData = rawBalances.filter(b => b.store === effectiveStoreFilter);
             storeData.sort((a, b) => {
                 if (a.year !== b.year) return a.year - b.year;
                 return a.month.localeCompare(b.month);
@@ -153,9 +185,14 @@ export const ConsultaSaldo: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
-                        <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)} className="w-full border p-2 rounded">
-                            <option value="">Todas as Lojas (Consolidado)</option>
-                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        <select 
+                            value={storeFilter} 
+                            onChange={e => setStoreFilter(e.target.value)} 
+                            className={`w-full border p-2 rounded ${availableStores.length === 1 ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                            disabled={availableStores.length === 1}
+                        >
+                             {availableStores.length !== 1 && <option value="">Todas as Lojas (Consolidado)</option>}
+                            {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                     <div>
