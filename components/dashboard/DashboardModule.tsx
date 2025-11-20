@@ -10,11 +10,11 @@ import {
 import { AppData, Order, DailyTransaction, FinancialAccount } from '../../types';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    AreaChart, Area
+    AreaChart, Area, ComposedChart, Line
 } from 'recharts';
 import { 
     LayoutDashboard, TrendingUp, TrendingDown, DollarSign, 
-    Calendar, Store, Wallet, Loader2, BarChart2
+    Calendar, Store, Wallet, Loader2, BarChart2, ArrowUpRight, ArrowDownRight, Filter, SortAsc, SortDesc
 } from 'lucide-react';
 
 export const DashboardModule: React.FC = () => {
@@ -27,6 +27,10 @@ export const DashboardModule: React.FC = () => {
 
     const [selectedStore, setSelectedStore] = useState('');
     const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
+
+    // Sorting States for Lists
+    const [sortFixed, setSortFixed] = useState<'alpha' | 'value'>('value');
+    const [sortVariable, setSortVariable] = useState<'alpha' | 'value'>('value');
 
     useEffect(() => {
         loadData();
@@ -52,89 +56,147 @@ export const DashboardModule: React.FC = () => {
         }
     };
 
+    // --- HELPER FUNCTIONS ---
+
     const filterStore = (storeName: string | null | undefined) => !selectedStore || storeName === selectedStore;
-    
-    const calculateAccountBalances = () => {
-        return accounts.filter(acc => filterStore(acc.store)).map(acc => {
-            let balance = acc.initialBalance;
-            transactions.forEach(t => {
-                if (t.status === 'Pago') {
-                    if (t.accountId === acc.id) {
-                        if (t.type === 'Receita') balance += t.value;
-                        if (t.type === 'Despesa' || t.type === 'Transferência') balance -= t.value;
-                    }
-                    if (t.type === 'Transferência' && t.destinationAccountId === acc.id) {
-                        balance += t.value;
-                    }
-                }
-            });
-            return { ...acc, currentBalance: balance };
-        });
-    };
 
-    const accountBalances = calculateAccountBalances();
-    const totalBalance = accountBalances.reduce((sum, acc) => sum + acc.currentBalance, 0);
-
-    const getHistoricalBalances = () => {
-        const history: any[] = [];
+    const getProjectionFactor = () => {
         const today = new Date();
+        const [year, month] = currentMonth.split('-').map(Number);
+        const selectedDate = new Date(year, month - 1, 1);
         
-        for (let i = 11; i >= 0; i--) {
-            const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-            const endOfMonth = new Date(today.getFullYear(), today.getMonth() - i + 1, 0).toISOString().split('T')[0];
-
-            let monthlyBalance = 0;
-            accounts.filter(acc => filterStore(acc.store)).forEach(acc => monthlyBalance += acc.initialBalance);
-
-            transactions.forEach(t => {
-                if (t.status === 'Pago' && t.date <= endOfMonth && filterStore(t.store)) {
-                     if (t.type === 'Receita') monthlyBalance += t.value;
-                     if (t.type === 'Despesa') monthlyBalance -= t.value;
-                }
-            });
-
-            history.push({
-                month: `${d.getMonth() + 1}/${d.getFullYear().toString().slice(2)}`,
-                saldo: monthlyBalance
-            });
+        // Se não for o mês atual, fator é 1 (sem projeção, usa real)
+        if (today.getMonth() !== selectedDate.getMonth() || today.getFullYear() !== selectedDate.getFullYear()) {
+            return 1;
         }
-        return history;
+
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const daysPassed = today.getDate();
+        
+        if (daysPassed === 0) return 1;
+        return daysInMonth / daysPassed;
     };
 
-    const getMonthlyMetrics = () => {
-        const monthOrders = orders.filter(o => o.date.startsWith(currentMonth) && filterStore(o.store));
-        const monthTrans = transactions.filter(t => t.date.startsWith(currentMonth) && t.type === 'Despesa' && filterStore(t.store));
-        
-        const totalOrdersVal = monthOrders.reduce((acc, o) => acc + o.totalValue, 0);
-        const totalTransVal = monthTrans.reduce((acc, t) => acc + t.value, 0);
-        
-        const totalExpenses = totalOrdersVal + totalTransVal;
+    // --- DATA PROCESSING ---
 
-        const monthRevenues = transactions.filter(t => t.date.startsWith(currentMonth) && t.type === 'Receita' && filterStore(t.store));
-        const totalRevenues = monthRevenues.reduce((acc, t) => acc + t.value, 0);
+    const calculateMetrics = () => {
+        const factor = getProjectionFactor();
 
-        const today = new Date();
-        const currentMonthDate = new Date(currentMonth + '-02');
-        const isSameMonth = today.getMonth() === currentMonthDate.getMonth() && today.getFullYear() === currentMonthDate.getFullYear();
-        
-        const daysInMonth = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth() + 1, 0).getDate();
-        const daysPassed = isSameMonth ? today.getDate() : daysInMonth;
-        
-        const projectedExpenses = daysPassed > 0 ? (totalExpenses / daysPassed) * daysInMonth : totalExpenses;
-        const projectedRevenues = daysPassed > 0 ? (totalRevenues / daysPassed) * daysInMonth : totalRevenues;
+        // 1. Aggregate Expenses (Orders + Transactions type 'Despesa')
+        const expensesList = [
+            ...orders
+                .filter(o => o.date.startsWith(currentMonth) && filterStore(o.store))
+                .map(o => ({
+                    name: o.product,
+                    value: o.totalValue,
+                    type: o.type || 'Variável',
+                    store: o.store
+                })),
+            ...transactions
+                .filter(t => t.date.startsWith(currentMonth) && t.type === 'Despesa' && filterStore(t.store))
+                .map(t => ({
+                    name: t.description || t.category || t.supplier,
+                    value: t.value,
+                    type: t.classification || 'Variável',
+                    store: t.store
+                }))
+        ];
 
+        // 2. Aggregate Revenues
+        const revenuesList = transactions
+            .filter(t => t.date.startsWith(currentMonth) && t.type === 'Receita' && filterStore(t.store))
+            .map(t => ({
+                name: t.description || t.category,
+                value: t.value,
+                store: t.store
+            }));
+
+        const totalRevenues = revenuesList.reduce((acc, item) => acc + item.value, 0);
+        const totalExpenses = expensesList.reduce((acc, item) => acc + item.value, 0);
+        
         return {
-            totalExpenses,
             totalRevenues,
-            projectedExpenses,
-            projectedRevenues,
-            monthOrders,
-            monthTrans
+            totalExpenses,
+            projectedRevenues: totalRevenues * factor,
+            projectedExpenses: totalExpenses * factor,
+            expensesList,
+            revenuesList
         };
     };
 
-    const metrics = getMonthlyMetrics();
-    const historicalBalanceData = getHistoricalBalances();
+    const metrics = calculateMetrics();
+
+    // --- STORE PERFORMANCE DATA ---
+
+    const getStorePerformance = () => {
+        const stores = appData.stores.filter(s => filterStore(s));
+        const factor = getProjectionFactor();
+        const performanceData: any[] = [];
+
+        stores.forEach(store => {
+            // Revenues
+            const storeRev = transactions
+                .filter(t => t.date.startsWith(currentMonth) && t.type === 'Receita' && t.store === store)
+                .reduce((acc, t) => acc + t.value, 0);
+
+            // Expenses (Orders + Trans)
+            const storeOrd = orders
+                .filter(o => o.date.startsWith(currentMonth) && o.store === store)
+                .reduce((acc, o) => acc + o.totalValue, 0);
+            
+            const storeTransExp = transactions
+                .filter(t => t.date.startsWith(currentMonth) && t.type === 'Despesa' && t.store === store)
+                .reduce((acc, t) => acc + t.value, 0);
+
+            const storeExp = storeOrd + storeTransExp;
+
+            performanceData.push({
+                store,
+                revenue: storeRev,
+                projRevenue: storeRev * factor,
+                expense: storeExp,
+                projExpense: storeExp * factor,
+                result: storeRev - storeExp
+            });
+        });
+
+        return performanceData.sort((a, b) => b.revenue - a.revenue);
+    };
+
+    const storePerformance = getStorePerformance();
+
+    // --- LISTS DATA (FIXED vs VARIABLE) ---
+
+    const getExpenseLists = () => {
+        const fixed = metrics.expensesList.filter(e => e.type === 'Fixa' || e.type === 'Fixo');
+        const variable = metrics.expensesList.filter(e => e.type === 'Variável' || e.type === 'Variavel' || !e.type);
+
+        // Group by Name to avoid duplicates in list
+        const groupAndSum = (list: any[]) => {
+            const grouped: Record<string, number> = {};
+            list.forEach(item => {
+                grouped[item.name] = (grouped[item.name] || 0) + item.value;
+            });
+            return Object.entries(grouped).map(([name, value]) => ({ name, value }));
+        };
+
+        const groupedFixed = groupAndSum(fixed);
+        const groupedVariable = groupAndSum(variable);
+
+        const sortFn = (type: 'alpha' | 'value') => (a: any, b: any) => {
+            if (type === 'value') return b.value - a.value;
+            return a.name.localeCompare(b.name);
+        };
+
+        return {
+            fixed: groupedFixed.sort(sortFn(sortFixed)),
+            variable: groupedVariable.sort(sortFn(sortVariable))
+        };
+    };
+
+    const expenseLists = getExpenseLists();
+
+    // --- HISTORICAL DATA ---
 
     const getComparisonData = () => {
         const data: any[] = [];
@@ -145,13 +207,13 @@ export const DashboardModule: React.FC = () => {
             const mStr = d.toISOString().slice(0, 7);
             
             const oVal = orders.filter(o => o.date.startsWith(mStr) && filterStore(o.store)).reduce((a, b) => a + b.totalValue, 0);
-            const tVal = transactions.filter(t => t.date.startsWith(mStr) && t.type === 'Despesa' && filterStore(t.store)).reduce((a, b) => a + b.value, 0);
-            const rVal = transactions.filter(t => t.date.startsWith(mStr) && t.type === 'Receita' && filterStore(t.store)).reduce((a, b) => a + b.value, 0);
+            const tExp = transactions.filter(t => t.date.startsWith(mStr) && t.type === 'Despesa' && filterStore(t.store)).reduce((a, b) => a + b.value, 0);
+            const tRev = transactions.filter(t => t.date.startsWith(mStr) && t.type === 'Receita' && filterStore(t.store)).reduce((a, b) => a + b.value, 0);
 
             data.push({
                 name: `${d.getMonth() + 1}/${d.getFullYear().toString().slice(2)}`,
-                Receitas: rVal,
-                Despesas: oVal + tVal,
+                Receitas: tRev,
+                Despesas: oVal + tExp,
             });
         }
         return data;
@@ -163,6 +225,7 @@ export const DashboardModule: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 p-6 animate-fadeIn">
+            {/* HEADER */}
             <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                 <div className="flex items-center gap-3">
                     <div className="bg-heroBlack p-2 rounded text-white">
@@ -170,7 +233,7 @@ export const DashboardModule: React.FC = () => {
                     </div>
                     <div>
                         <h1 className="text-2xl font-black text-gray-800 uppercase italic">Dashboard Gerencial</h1>
-                        <p className="text-sm text-gray-500">Visão unificada do seu negócio</p>
+                        <p className="text-sm text-gray-500">Visão unificada e projeções</p>
                     </div>
                 </div>
                 
@@ -198,137 +261,146 @@ export const DashboardModule: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                
-                {/* KPIs */}
-                <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500 flex flex-col justify-between h-32 relative overflow-hidden">
-                        <div className="flex justify-between items-start z-10">
-                            <div>
-                                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Saldo Acumulado</p>
-                                <h3 className={`text-2xl font-black mt-1 ${totalBalance >= 0 ? 'text-blue-700' : 'text-red-600'}`}>
-                                    {formatCurrency(totalBalance)}
-                                </h3>
-                            </div>
-                            <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                                <Wallet size={24} />
-                            </div>
-                        </div>
-                        <p className="text-xs text-gray-400 mt-auto z-10">Total de todas as contas</p>
+            {/* KPI CARDS */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500">
+                    <p className="text-xs font-bold text-gray-500 uppercase">Saldo Líquido (Real)</p>
+                    <h3 className={`text-2xl font-black mt-1 ${metrics.totalRevenues - metrics.totalExpenses >= 0 ? 'text-blue-700' : 'text-red-600'}`}>
+                        {formatCurrency(metrics.totalRevenues - metrics.totalExpenses)}
+                    </h3>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-green-500">
+                    <p className="text-xs font-bold text-gray-500 uppercase">Receitas (Real)</p>
+                    <h3 className="text-2xl font-black mt-1 text-green-700">{formatCurrency(metrics.totalRevenues)}</h3>
+                    <div className="mt-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded w-fit flex items-center gap-1">
+                         <ArrowUpRight size={12}/> Projeção: {formatCurrency(metrics.projectedRevenues)}
                     </div>
-
-                    <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-green-500 flex flex-col justify-between h-32 relative overflow-hidden">
-                        <div className="flex justify-between items-start z-10">
-                            <div>
-                                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Receitas do Mês</p>
-                                <h3 className="text-2xl font-black text-green-700 mt-1">{formatCurrency(metrics.totalRevenues)}</h3>
-                            </div>
-                            <div className="p-2 bg-green-50 rounded-lg text-green-600">
-                                <TrendingUp size={24} />
-                            </div>
-                        </div>
-                         <div className="flex items-center gap-1 mt-auto z-10 text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded w-fit">
-                            Projeção: {formatCurrency(metrics.projectedRevenues)}
-                        </div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500">
+                    <p className="text-xs font-bold text-gray-500 uppercase">Despesas (Real)</p>
+                    <h3 className="text-2xl font-black mt-1 text-red-700">{formatCurrency(metrics.totalExpenses)}</h3>
+                    <div className="mt-2 text-xs text-red-600 bg-red-50 px-2 py-1 rounded w-fit flex items-center gap-1">
+                         <ArrowUpRight size={12}/> Projeção: {formatCurrency(metrics.projectedExpenses)}
                     </div>
+                </div>
+                 <div className="bg-gray-800 p-6 rounded-xl shadow-md border-l-4 border-gray-600 text-white">
+                    <p className="text-xs font-bold text-gray-400 uppercase">Resultado Projetado</p>
+                    <h3 className={`text-2xl font-black mt-1 ${metrics.projectedRevenues - metrics.projectedExpenses >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {formatCurrency(metrics.projectedRevenues - metrics.projectedExpenses)}
+                    </h3>
+                </div>
+            </div>
 
-                    <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500 flex flex-col justify-between h-32 relative overflow-hidden">
-                         <div className="flex justify-between items-start z-10">
-                            <div>
-                                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Despesas do Mês</p>
-                                <h3 className="text-2xl font-black text-red-700 mt-1">{formatCurrency(metrics.totalExpenses)}</h3>
-                            </div>
-                            <div className="p-2 bg-red-50 rounded-lg text-red-600">
-                                <TrendingDown size={24} />
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-1 mt-auto z-10 text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded w-fit">
-                            Projeção: {formatCurrency(metrics.projectedExpenses)}
-                        </div>
-                    </div>
-
-                    <div className="bg-gray-900 p-6 rounded-xl shadow-md border-l-4 border-gray-700 flex flex-col justify-between h-32 relative overflow-hidden">
-                        <div className="flex justify-between items-start z-10">
-                            <div>
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Resultado Líquido</p>
-                                <h3 className={`text-2xl font-black mt-1 ${metrics.totalRevenues - metrics.totalExpenses >= 0 ? 'text-white' : 'text-red-400'}`}>
-                                    {formatCurrency(metrics.totalRevenues - metrics.totalExpenses)}
-                                </h3>
-                            </div>
-                            <div className="p-2 bg-gray-800 rounded-lg text-white">
-                                <DollarSign size={24} />
-                            </div>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-auto z-10">Receitas - Despesas</p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                {/* CHART: Comparativo Mensal */}
+                <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                    <h3 className="text-sm font-bold text-gray-700 uppercase mb-6 flex items-center gap-2">
+                        <BarChart2 size={18} /> Comparativo Mensal: Receitas vs Despesas
+                    </h3>
+                    <div className="h-80 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={comparisonData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                                <XAxis dataKey="name" tick={{fontSize: 12}} />
+                                <YAxis tick={{fontSize: 12}} tickFormatter={(val) => `R$${val/1000}k`} />
+                                <Tooltip 
+                                    formatter={(val: number) => formatCurrency(val)}
+                                    contentStyle={{backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff'}}
+                                />
+                                <Legend />
+                                <Bar dataKey="Receitas" fill="#10B981" radius={[4,4,0,0]} barSize={40} />
+                                <Bar dataKey="Despesas" fill="#EF4444" radius={[4,4,0,0]} barSize={40} />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* Charts */}
-                <div className="lg:col-span-3 grid grid-cols-1 gap-6">
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                        <h3 className="text-sm font-bold text-gray-700 uppercase mb-6 flex items-center gap-2">
-                            <BarChart2 size={18} /> Comparativo Mensal: Receitas vs Despesas (6 Meses)
+                {/* TABLE: Performance por Loja */}
+                <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+                    <div className="p-4 border-b bg-gray-50">
+                         <h3 className="text-sm font-bold text-gray-700 uppercase flex items-center gap-2">
+                            <Store size={18} /> Performance por Loja
                         </h3>
-                        <div className="h-72 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={comparisonData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                                    <XAxis dataKey="name" tick={{fontSize: 12}} />
-                                    <YAxis tick={{fontSize: 12}} tickFormatter={(val) => `R$${val/1000}k`} />
-                                    <Tooltip 
-                                        formatter={(val: number) => formatCurrency(val)}
-                                        contentStyle={{backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff'}}
-                                    />
-                                    <Legend />
-                                    <Bar dataKey="Receitas" fill="#10B981" radius={[4,4,0,0]} barSize={30} />
-                                    <Bar dataKey="Despesas" fill="#EF4444" radius={[4,4,0,0]} barSize={30} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
                     </div>
-                    
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                         <h3 className="text-sm font-bold text-gray-700 uppercase mb-6 flex items-center gap-2">
-                            <TrendingUp size={18} /> Evolução do Saldo (12 Meses)
-                        </h3>
-                        <div className="h-64 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={historicalBalanceData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="colorSaldo" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                                            <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                                        </linearGradient>
-                                    </defs>
-                                    <XAxis dataKey="month" tick={{fontSize: 12}}/>
-                                    <YAxis tick={{fontSize: 12}} tickFormatter={(val) => `R$${val/1000}k`}/>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3}/>
-                                    <Tooltip formatter={(val: number) => formatCurrency(val)} contentStyle={{borderRadius: '8px'}}/>
-                                    <Area type="monotone" dataKey="saldo" stroke="#3B82F6" fillOpacity={1} fill="url(#colorSaldo)" strokeWidth={3} />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
+                    <div className="overflow-y-auto flex-1">
+                        <table className="min-w-full">
+                            <thead className="bg-gray-100 text-xs uppercase font-bold text-gray-500">
+                                <tr>
+                                    <th className="px-4 py-2 text-left">Loja</th>
+                                    <th className="px-4 py-2 text-right">Venda</th>
+                                    <th className="px-4 py-2 text-right">Despesa</th>
+                                    <th className="px-4 py-2 text-right">Proj. Venda</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {storePerformance.map((store, idx) => (
+                                    <tr key={idx} className="hover:bg-gray-50">
+                                        <td className="px-4 py-3 text-xs font-bold text-gray-700">{store.store}</td>
+                                        <td className="px-4 py-3 text-xs text-right font-mono text-green-600">{formatCurrency(store.revenue)}</td>
+                                        <td className="px-4 py-3 text-xs text-right font-mono text-red-600">{formatCurrency(store.expense)}</td>
+                                        <td className="px-4 py-3 text-xs text-right font-mono font-bold text-blue-600 bg-blue-50">{formatCurrency(store.projRevenue)}</td>
+                                    </tr>
+                                ))}
+                                {storePerformance.length === 0 && <tr><td colSpan={4} className="p-4 text-center text-gray-400 text-xs">Sem dados</td></tr>}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
+            </div>
 
-                {/* Side List */}
-                <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full">
-                    <div className="p-4 border-b border-gray-100">
-                        <h3 className="font-bold text-gray-700 uppercase text-xs">Saldos por Loja/Conta</h3>
+            {/* EXPENSE LISTS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Fixed Expenses */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-[500px]">
+                    <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+                        <h3 className="text-sm font-bold text-gray-700 uppercase flex items-center gap-2">
+                             <div className="w-3 h-3 bg-blue-500 rounded-full"></div> Despesas Fixas
+                        </h3>
+                        <button 
+                            onClick={() => setSortFixed(prev => prev === 'value' ? 'alpha' : 'value')}
+                            className="text-xs flex items-center gap-1 bg-white border px-2 py-1 rounded hover:bg-gray-100 font-bold text-gray-600"
+                        >
+                            {sortFixed === 'value' ? <><SortDesc size={14}/> Valor Maior</> : <><SortAsc size={14}/> A-Z</>}
+                        </button>
                     </div>
-                    <div className="p-4 overflow-y-auto max-h-[650px] space-y-4">
-                        {accountBalances.map(acc => (
-                            <div key={acc.id} className="flex justify-between items-center border-b border-gray-50 pb-2 last:border-0">
-                                <div>
-                                    <div className="text-xs text-gray-400 font-bold">{acc.store}</div>
-                                    <div className="text-sm font-medium text-gray-700 truncate w-28" title={acc.name}>{acc.name}</div>
-                                </div>
-                                <div className={`text-sm font-bold ${acc.currentBalance < 0 ? 'text-red-600' : 'text-gray-800'}`}>
-                                    {formatCurrency(acc.currentBalance)}
-                                </div>
+                    <div className="overflow-y-auto flex-1 p-2">
+                        {expenseLists.fixed.map((item, idx) => (
+                             <div key={idx} className="flex justify-between items-center p-3 border-b border-gray-50 hover:bg-blue-50/30 rounded transition-colors">
+                                <span className="text-sm text-gray-700 font-medium">{item.name}</span>
+                                <span className="text-sm font-bold text-gray-800">{formatCurrency(item.value)}</span>
                             </div>
                         ))}
-                        {accountBalances.length === 0 && <p className="text-center text-xs text-gray-400 py-4">Nenhuma conta cadastrada.</p>}
+                        {expenseLists.fixed.length === 0 && <p className="text-center text-gray-400 py-10 text-sm">Nenhuma despesa fixa encontrada.</p>}
+                    </div>
+                    <div className="p-3 bg-gray-50 text-right text-xs font-bold text-gray-500 border-t">
+                        Total Fixas: {formatCurrency(expenseLists.fixed.reduce((a,b) => a + b.value, 0))}
+                    </div>
+                </div>
+
+                {/* Variable Expenses */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-[500px]">
+                    <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+                        <h3 className="text-sm font-bold text-gray-700 uppercase flex items-center gap-2">
+                             <div className="w-3 h-3 bg-orange-500 rounded-full"></div> Despesas Variáveis
+                        </h3>
+                        <button 
+                            onClick={() => setSortVariable(prev => prev === 'value' ? 'alpha' : 'value')}
+                            className="text-xs flex items-center gap-1 bg-white border px-2 py-1 rounded hover:bg-gray-100 font-bold text-gray-600"
+                        >
+                            {sortVariable === 'value' ? <><SortDesc size={14}/> Valor Maior</> : <><SortAsc size={14}/> A-Z</>}
+                        </button>
+                    </div>
+                    <div className="overflow-y-auto flex-1 p-2">
+                         {expenseLists.variable.map((item, idx) => (
+                             <div key={idx} className="flex justify-between items-center p-3 border-b border-gray-50 hover:bg-orange-50/30 rounded transition-colors">
+                                <span className="text-sm text-gray-700 font-medium">{item.name}</span>
+                                <span className="text-sm font-bold text-gray-800">{formatCurrency(item.value)}</span>
+                            </div>
+                        ))}
+                         {expenseLists.variable.length === 0 && <p className="text-center text-gray-400 py-10 text-sm">Nenhuma despesa variável encontrada.</p>}
+                    </div>
+                     <div className="p-3 bg-gray-50 text-right text-xs font-bold text-gray-500 border-t">
+                        Total Variáveis: {formatCurrency(expenseLists.variable.reduce((a,b) => a + b.value, 0))}
                     </div>
                 </div>
             </div>
