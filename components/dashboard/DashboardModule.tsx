@@ -214,57 +214,74 @@ export const DashboardModule: React.FC = () => {
         };
     };
 
-    // --- NEW: 043 DATA ---
-    const get043Data = () => {
-        const filtered = transactions043.filter(t => t.date.startsWith(currentMonth) && filterStore(t.store));
-        const credit = filtered.filter(t => t.type === 'CREDIT').reduce((a, b) => a + b.value, 0);
-        const debit = filtered.filter(t => t.type === 'DEBIT').reduce((a, b) => a + b.value, 0);
-        
-        return [{
-            name: 'Geral',
-            Credito: credit,
-            Debito: debit
-        }];
-    };
-
-    // --- NEW: SALDO CONTAS DATA ---
-    const getSaldosData = () => {
-        const [yearStr, monthStr] = currentMonth.split('-');
-        const year = parseInt(yearStr);
-        
-        const filtered = accountBalances.filter(b => 
-            b.year === year && 
-            b.month === monthStr && 
-            filterStore(b.store)
+    // --- 043 DATA (LAST 12 MONTHS) ---
+    const get043History = () => {
+        // 1. Filter by Store (if selected) and include all dates up to current month
+        const relevant = transactions043.filter(t => 
+            filterStore(t.store) && t.date.slice(0, 7) <= currentMonth
         );
 
-        if (selectedStore) {
-            // Breakdown accounts for specific store
-            if (filtered.length === 0) return [];
-            const b = filtered[0];
-            return [
-                { name: 'CX. Econ', value: b.caixaEconomica },
-                { name: 'Cofre', value: b.cofre },
-                { name: 'Loteria', value: b.loteria },
-                { name: 'PagBank H', value: b.pagbankH },
-                { name: 'PagBank D', value: b.pagbankD },
-                { name: 'Inv.', value: b.investimentos },
-            ];
-        } else {
-            // Compare stores
-            return filtered.map(b => ({
-                name: b.store,
-                value: b.totalBalance
-            }));
-        }
+        // 2. Group by Month
+        const grouped: Record<string, { credit: number, debit: number }> = {};
+        
+        relevant.forEach(t => {
+            const key = t.date.slice(0, 7); // YYYY-MM
+            if (!grouped[key]) grouped[key] = { credit: 0, debit: 0 };
+            
+            if (t.type === 'CREDIT') grouped[key].credit += t.value;
+            if (t.type === 'DEBIT') grouped[key].debit += t.value;
+        });
+
+        // 3. Convert to Array, Sort and Take Last 12
+        const sortedKeys = Object.keys(grouped).sort();
+        const last12Keys = sortedKeys.slice(-12);
+
+        return last12Keys.map(key => {
+            const [y, m] = key.split('-');
+            return {
+                name: `${m}/${y}`,
+                Credito: grouped[key].credit,
+                Debito: grouped[key].debit
+            };
+        });
+    };
+
+    // --- SALDO CONTAS DATA (LAST 12 MONTHS) ---
+    const getSaldosHistory = () => {
+        // 1. Filter by Store (if selected) and include all dates up to current month
+        const relevant = accountBalances.filter(b => {
+            const key = `${b.year}-${b.month}`;
+            return filterStore(b.store) && key <= currentMonth;
+        });
+
+        // 2. Group by Month (summing up all stores if 'Todas' is selected)
+        const grouped: Record<string, number> = {};
+
+        relevant.forEach(b => {
+            const key = `${b.year}-${b.month}`;
+            if (!grouped[key]) grouped[key] = 0;
+            grouped[key] += b.totalBalance;
+        });
+
+        // 3. Convert to Array, Sort and Take Last 12
+        const sortedKeys = Object.keys(grouped).sort();
+        const last12Keys = sortedKeys.slice(-12);
+
+        return last12Keys.map(key => {
+            const [y, m] = key.split('-');
+            return {
+                name: `${m}/${y}`,
+                value: grouped[key]
+            };
+        });
     };
 
     const metrics = calculateFinancialMetrics();
     const totalBalance = calculateTotalBalance();
     const storePerformance = getStorePerformance();
     const expenseLists = getExpenseLists();
-    const data043 = get043Data();
-    const dataSaldos = getSaldosData();
+    const data043 = get043History();
+    const dataSaldos = getSaldosHistory();
 
     if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin w-12 h-12 text-heroRed"/></div>;
 
@@ -321,7 +338,7 @@ export const DashboardModule: React.FC = () => {
             {/* 2. Desempenho por Loja */}
             <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
                 <div className="p-4 bg-gray-50 border-b border-gray-200">
-                    <h3 className="text-gray-700 font-bold uppercase text-sm">DESEMPENHO POR LOJA</h3>
+                    <h3 className="text-gray-700 font-bold uppercase text-sm">DESEMPENHO POR LOJA (Mês Atual)</h3>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -350,17 +367,17 @@ export const DashboardModule: React.FC = () => {
                 </div>
             </div>
 
-            {/* 3. Charts Section (CHANGED) */}
+            {/* 3. Charts Section (Last 12 Months) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
                 {/* Controle 043 */}
                 <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                    <h3 className="text-heroBlack font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">CONTROLE 043 (Mês Atual)</h3>
+                    <h3 className="text-heroBlack font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">CONTROLE 043 (Últimos 12 Meses)</h3>
                     <div className="h-64 w-full">
                          <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={data043}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis dataKey="name" hide />
+                                <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} />
                                 <YAxis 
                                     tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)} 
                                     tick={{fontSize: 11}}
@@ -370,8 +387,8 @@ export const DashboardModule: React.FC = () => {
                                     cursor={{fill: 'transparent'}} 
                                 />
                                 <Legend />
-                                <Bar dataKey="Credito" name="Crédito (043)" fill="#2ECC71" barSize={60} radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="Debito" name="Débito (043)" fill="#C0392B" barSize={60} radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="Credito" name="Crédito" fill="#2ECC71" barSize={20} radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="Debito" name="Débito" fill="#C0392B" barSize={20} radius={[4, 4, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -379,10 +396,10 @@ export const DashboardModule: React.FC = () => {
 
                  {/* Saldo de Contas */}
                  <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                    <h3 className="text-heroBlack font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">SALDO DE CONTAS (Mês Atual)</h3>
+                    <h3 className="text-heroBlack font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">SALDO DE CONTAS (Últimos 12 Meses)</h3>
                     <div className="h-64 w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                             <BarChart data={dataSaldos} layout={selectedStore ? 'horizontal' : 'horizontal'}>
+                             <BarChart data={dataSaldos}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} />
                                 <YAxis 
@@ -393,7 +410,7 @@ export const DashboardModule: React.FC = () => {
                                     formatter={(value: number) => formatCurrency(value)}
                                     cursor={{fill: 'rgba(0,0,0,0.05)'}} 
                                 />
-                                <Bar dataKey="value" name="Saldo" barSize={40} radius={[4, 4, 0, 0]}>
+                                <Bar dataKey="value" name="Saldo Total" barSize={40} radius={[4, 4, 0, 0]}>
                                     {dataSaldos.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={entry.value >= 0 ? '#1A1A1A' : '#C0392B'} />
                                     ))}
@@ -409,7 +426,7 @@ export const DashboardModule: React.FC = () => {
                 {/* Despesas Fixas List */}
                 <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-gray-600 font-bold uppercase text-sm">DESPESAS FIXAS</h3>
+                        <h3 className="text-gray-600 font-bold uppercase text-sm">DESPESAS FIXAS (Mês Atual)</h3>
                          <button onClick={() => setSortFixed(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded hover:bg-gray-50">
                             {sortFixed === 'value' ? 'Ordenar: Valor' : 'Ordenar: A-Z'}
                         </button>
@@ -427,7 +444,7 @@ export const DashboardModule: React.FC = () => {
                 {/* Despesas Variáveis List */}
                 <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-gray-600 font-bold uppercase text-sm">DESPESAS VARIÁVEIS</h3>
+                        <h3 className="text-gray-600 font-bold uppercase text-sm">DESPESAS VARIÁVEIS (Mês Atual)</h3>
                         <button onClick={() => setSortVariable(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded hover:bg-gray-50">
                             {sortVariable === 'value' ? 'Ordenar: Valor' : 'Ordenar: A-Z'}
                         </button>

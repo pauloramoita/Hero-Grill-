@@ -1,16 +1,21 @@
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 
-// Error Boundary to catch crashes
-class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: Error | null }> {
-  constructor(props: { children: ReactNode }) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+interface ErrorBoundaryProps {
+  children?: ReactNode;
+}
 
-  static getDerivedStateFromError(error: Error) {
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+// Error Boundary to catch crashes
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
