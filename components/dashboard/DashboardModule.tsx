@@ -12,7 +12,7 @@ import {
     AreaChart, Area
 } from 'recharts';
 import { 
-    Loader2
+    Loader2, TrendingUp, TrendingDown
 } from 'lucide-react';
 
 export const DashboardModule: React.FC = () => {
@@ -55,10 +55,9 @@ export const DashboardModule: React.FC = () => {
 
     const filterStore = (storeName: string | null | undefined) => !selectedStore || storeName === selectedStore;
 
-    // --- KPIs Calculations (Financial Module) ---
+    // --- KPIs Calculations ---
 
     const calculateFinancialMetrics = () => {
-        // Filter for period and store
         const periodTransactions = transactions.filter(t => 
             t.date.startsWith(currentMonth) && 
             filterStore(t.store)
@@ -69,19 +68,14 @@ export const DashboardModule: React.FC = () => {
             filterStore(o.store)
         );
 
-        // 1. Vendas Mês (Todas as Receitas do módulo financeiro)
         const totalRevenues = periodTransactions
             .filter(t => t.type === 'Receita')
             .reduce((acc, t) => acc + t.value, 0);
 
-        // 2. Despesas Fixas (Do módulo financeiro)
-        // Consideramos que 'classification' armazena 'Fixa' ou 'Fixo'
         const totalFixed = periodTransactions
             .filter(t => t.type === 'Despesa' && (t.classification === 'Fixa' || t.classification === 'Fixo'))
             .reduce((acc, t) => acc + t.value, 0);
 
-        // 3. Despesas Variáveis (Do módulo financeiro + Pedidos)
-        // Pedidos são considerados despesas variáveis de estoque
         const variableTrans = periodTransactions
             .filter(t => t.type === 'Despesa' && t.classification !== 'Fixa' && t.classification !== 'Fixo')
             .reduce((acc, t) => acc + t.value, 0);
@@ -90,8 +84,6 @@ export const DashboardModule: React.FC = () => {
             .reduce((acc, o) => acc + o.totalValue, 0);
 
         const totalVariable = variableTrans + variableOrders;
-
-        // 4. Lucro Líquido (Receitas - Despesas Totais)
         const netResult = totalRevenues - (totalFixed + totalVariable);
 
         return {
@@ -103,26 +95,18 @@ export const DashboardModule: React.FC = () => {
     };
 
     const calculateTotalBalance = () => {
-        // Somar o saldo de todas as contas (considerando apenas o que foi PAGO/REALIZADO)
         let total = 0;
-        
-        // Contas pertencentes à loja selecionada (ou todas)
         const accountsToSum = accounts.filter(a => filterStore(a.store));
 
         accountsToSum.forEach(acc => {
             let bal = acc.initialBalance;
-            
-            // Transações PAGAS afetam o saldo real
             const accTrans = transactions.filter(t => t.status === 'Pago');
-            
             accTrans.forEach(t => {
-                // Se a conta é a origem/principal
                 if (t.accountId === acc.id) {
                     if (t.type === 'Receita') bal += t.value;
                     else if (t.type === 'Despesa') bal -= t.value;
                     else if (t.type === 'Transferência') bal -= t.value;
                 }
-                // Se a conta é destino de uma transferência
                 if (t.type === 'Transferência' && t.destinationAccountId === acc.id) {
                     bal += t.value;
                 }
@@ -133,35 +117,24 @@ export const DashboardModule: React.FC = () => {
     };
 
     const getFinancialBalanceHistory = () => {
-        // Histórico baseado nas transações reais (Fluxo de Caixa Realizado)
         const accountsToSum = accounts.filter(a => filterStore(a.store));
         const initialTotal = accountsToSum.reduce((acc, a) => acc + a.initialBalance, 0);
-
-        // Transações pagas ordenadas por data de pagamento
         const sortedTrans = transactions
             .filter(t => t.status === 'Pago')
             .sort((a, b) => (a.paymentDate || a.date).localeCompare(b.paymentDate || b.date));
 
-        // Últimos 12 meses
         const today = new Date();
         const history = [];
         
-        for(let i=11; i>=0; i--) {
+        for(let i=5; i>=0; i--) {
              const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
              const y = d.getFullYear();
-             const m = d.getMonth(); // 0-11
-             const monthKey = `${y}-${String(m + 1).padStart(2, '0')}`;
+             const m = d.getMonth();
              const endOfMonth = new Date(y, m + 1, 0).toISOString().slice(0, 10);
 
-             // Calcula saldo acumulado até o fim deste mês
-             // Filtrar transações que ocorreram até endOfMonth
              const transUpToNow = sortedTrans.filter(t => (t.paymentDate || t.date) <= endOfMonth);
-
              let change = 0;
              transUpToNow.forEach(t => {
-                // Verifica se a transação afeta as contas selecionadas
-                // Otimização: poderíamos pré-filtrar transUpToNow, mas iterar é seguro
-                
                 const isOriginInFilter = t.accountId && accountsToSum.some(a => a.id === t.accountId);
                 const isDestInFilter = t.destinationAccountId && accountsToSum.some(a => a.id === t.destinationAccountId);
 
@@ -175,8 +148,11 @@ export const DashboardModule: React.FC = () => {
                 }
              });
 
+             // Nome do mês curto
+             const monthName = d.toLocaleString('pt-BR', { month: 'short' }).replace('.','');
+
              history.push({
-                name: `${String(m + 1).padStart(2, '0')}/${String(y).slice(2)}`,
+                name: `${monthName}/${String(y).slice(2)}`,
                 Saldo: initialTotal + change
              });
         }
@@ -184,7 +160,49 @@ export const DashboardModule: React.FC = () => {
         return history;
     };
 
-    // --- Expense Lists for Details ---
+    const getStorePerformance = () => {
+        const storeStats: Record<string, { sales: number, expenses: number }> = {};
+        
+        // Init stores (to show even those with 0)
+        appData.stores.forEach(s => {
+            if (filterStore(s)) {
+                storeStats[s] = { sales: 0, expenses: 0 };
+            }
+        });
+
+        // Sales
+        transactions
+            .filter(t => t.date.startsWith(currentMonth) && t.type === 'Receita' && filterStore(t.store))
+            .forEach(t => {
+                if (!storeStats[t.store]) storeStats[t.store] = { sales: 0, expenses: 0 };
+                storeStats[t.store].sales += t.value;
+            });
+
+        // Expenses (Transactions)
+        transactions
+            .filter(t => t.date.startsWith(currentMonth) && t.type === 'Despesa' && filterStore(t.store))
+            .forEach(t => {
+                if (!storeStats[t.store]) storeStats[t.store] = { sales: 0, expenses: 0 };
+                storeStats[t.store].expenses += t.value;
+            });
+
+        // Expenses (Orders)
+        orders
+            .filter(o => o.date.startsWith(currentMonth) && filterStore(o.store))
+            .forEach(o => {
+                if (!storeStats[o.store]) storeStats[o.store] = { sales: 0, expenses: 0 };
+                storeStats[o.store].expenses += o.totalValue;
+            });
+
+        return Object.entries(storeStats)
+            .map(([store, stats]) => ({
+                store,
+                sales: stats.sales,
+                expenses: stats.expenses,
+                result: stats.sales - stats.expenses
+            }))
+            .sort((a, b) => b.sales - a.sales);
+    };
 
     const getExpenseLists = () => {
         const periodTransactions = transactions.filter(t => 
@@ -235,6 +253,7 @@ export const DashboardModule: React.FC = () => {
     const metrics = calculateFinancialMetrics();
     const totalBalance = calculateTotalBalance();
     const balanceHistory = getFinancialBalanceHistory();
+    const storePerformance = getStorePerformance();
     const expenseLists = getExpenseLists();
 
     if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin w-12 h-12 text-heroRed"/></div>;
@@ -263,33 +282,24 @@ export const DashboardModule: React.FC = () => {
                 />
             </div>
 
-            {/* KPI Cards - Updated to 5 items */}
+            {/* 1. KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                {/* 1. Saldo Total (Black) */}
                 <div className="bg-[#1A1A1A] text-white p-4 rounded-lg shadow-lg flex flex-col justify-center h-32">
-                    <p className="text-xs font-bold uppercase opacity-70">SALDO TOTAL</p>
+                    <p className="text-xs font-bold uppercase opacity-70">SALDO TOTAL (ACUMULADO)</p>
                     <h3 className="text-2xl font-black mt-1 break-words">{formatCurrency(totalBalance)}</h3>
                 </div>
-
-                {/* 2. Vendas Mês (Red) */}
                 <div className="bg-[#C0392B] text-white p-4 rounded-lg shadow-lg flex flex-col justify-center h-32">
                     <p className="text-xs font-bold uppercase opacity-70">VENDAS MÊS</p>
                     <h3 className="text-2xl font-black mt-1 break-words">{formatCurrency(metrics.totalRevenues)}</h3>
                 </div>
-
-                {/* 3. Despesas Fixas (White) */}
                 <div className="bg-white text-gray-800 p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-center h-32">
                     <p className="text-xs font-bold text-gray-500 uppercase">DESPESAS FIXAS</p>
                     <h3 className="text-2xl font-black mt-1 text-heroBlack break-words">{formatCurrency(metrics.totalFixed)}</h3>
                 </div>
-
-                {/* 4. Despesas Variáveis (White) */}
                 <div className="bg-white text-gray-800 p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-center h-32">
                     <p className="text-xs font-bold text-gray-500 uppercase">DESP. VARIÁVEIS</p>
                     <h3 className="text-2xl font-black mt-1 text-heroBlack break-words">{formatCurrency(metrics.totalVariable)}</h3>
                 </div>
-
-                {/* 5. Lucro Líquido (White with Green/Red Text) */}
                 <div className="bg-white p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-center h-32">
                     <p className="text-xs font-bold text-gray-500 uppercase">LUCRO LÍQUIDO</p>
                     <h3 className={`text-2xl font-black mt-1 break-words ${metrics.netResult >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -298,12 +308,44 @@ export const DashboardModule: React.FC = () => {
                 </div>
             </div>
 
-            {/* Main Charts Section */}
+            {/* 2. Desempenho por Loja (Moved Up) */}
+            <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+                <div className="p-4 bg-gray-50 border-b border-gray-200">
+                    <h3 className="text-gray-700 font-bold uppercase text-sm">DESEMPENHO POR LOJA</h3>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-white">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">LOJA</th>
+                                <th className="px-6 py-3 text-right text-xs font-bold text-green-600 uppercase">VENDAS</th>
+                                <th className="px-6 py-3 text-right text-xs font-bold text-red-600 uppercase">DESPESAS</th>
+                                <th className="px-6 py-3 text-right text-xs font-bold text-blue-600 uppercase">RESULTADO</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {storePerformance.map((item) => (
+                                <tr key={item.store} className="hover:bg-gray-50">
+                                    <td className="px-6 py-3 text-sm font-bold text-gray-800">{item.store}</td>
+                                    <td className="px-6 py-3 text-sm text-right font-mono text-green-700">{formatCurrency(item.sales)}</td>
+                                    <td className="px-6 py-3 text-sm text-right font-mono text-red-700">{formatCurrency(item.expenses)}</td>
+                                    <td className={`px-6 py-3 text-sm text-right font-mono font-bold ${item.result >= 0 ? 'text-blue-800' : 'text-red-800'}`}>
+                                        {formatCurrency(item.result)}
+                                    </td>
+                                </tr>
+                            ))}
+                            {storePerformance.length === 0 && <tr><td colSpan={4} className="p-4 text-center text-gray-500">Sem dados para o período.</td></tr>}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* 3. Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
                 {/* Receitas x Despesas */}
                 <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                    <h3 className="text-heroRed font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">RECEITAS X DESPESAS</h3>
+                    <h3 className="text-heroRed font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">RECEITAS X DESPESAS (ANUAL/MENSAL)</h3>
                     <div className="h-64 w-full">
                          <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={[{ 
@@ -313,8 +355,14 @@ export const DashboardModule: React.FC = () => {
                             }]}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <XAxis dataKey="name" hide />
-                                <YAxis tickFormatter={(val) => `R$${val/1000}k`} />
-                                <Tooltip cursor={{fill: 'transparent'}} />
+                                <YAxis 
+                                    tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)} 
+                                    tick={{fontSize: 11}}
+                                />
+                                <Tooltip 
+                                    formatter={(value: number) => formatCurrency(value)}
+                                    cursor={{fill: 'transparent'}} 
+                                />
                                 <Legend />
                                 <Bar dataKey="receitas" name="Receita" fill="#2ECC71" barSize={60} radius={[4, 4, 0, 0]} />
                                 <Bar dataKey="despesas" name="Despesa" fill="#C0392B" barSize={60} radius={[4, 4, 0, 0]} />
@@ -323,20 +371,24 @@ export const DashboardModule: React.FC = () => {
                     </div>
                 </div>
 
-                 {/* Evolução de Saldo (Histórico Real) */}
+                 {/* Evolução de Saldo */}
                  <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                    <h3 className="text-heroRed font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">EVOLUÇÃO DO SALDO TOTAL</h3>
+                    <h3 className="text-heroRed font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">EVOLUÇÃO DO SALDO</h3>
                     <div className="h-64 w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={balanceHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <AreaChart data={balanceHistory} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="colorSaldo" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#C0392B" stopOpacity={0.1}/>
                                         <stop offset="95%" stopColor="#C0392B" stopOpacity={0}/>
                                     </linearGradient>
                                 </defs>
-                                <XAxis dataKey="name" tick={{fontSize: 10}} stroke="#9CA3AF" />
-                                <YAxis tick={{fontSize: 10}} tickFormatter={(val) => `${val/1000}k`} stroke="#9CA3AF" />
+                                <XAxis dataKey="name" tick={{fontSize: 11}} stroke="#9CA3AF" />
+                                <YAxis 
+                                    tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)} 
+                                    tick={{fontSize: 11}} 
+                                    stroke="#9CA3AF" 
+                                />
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <Tooltip formatter={(value: number) => formatCurrency(value)}/>
                                 <Area 
@@ -353,12 +405,12 @@ export const DashboardModule: React.FC = () => {
                 </div>
             </div>
 
-            {/* Detailed Tables */}
+            {/* 4. Detailed Tables (Moved Down) */}
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Despesas Fixas List */}
                 <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-gray-600 font-bold uppercase text-sm">Detalhamento: Despesas Fixas</h3>
+                        <h3 className="text-gray-600 font-bold uppercase text-sm">DESPESAS FIXAS</h3>
                          <button onClick={() => setSortFixed(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded hover:bg-gray-50">
                             {sortFixed === 'value' ? 'Ordenar: Valor' : 'Ordenar: A-Z'}
                         </button>
@@ -376,7 +428,7 @@ export const DashboardModule: React.FC = () => {
                 {/* Despesas Variáveis List */}
                 <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-gray-600 font-bold uppercase text-sm">Detalhamento: Despesas Variáveis</h3>
+                        <h3 className="text-gray-600 font-bold uppercase text-sm">DESPESAS VARIÁVEIS</h3>
                         <button onClick={() => setSortVariable(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded hover:bg-gray-50">
                             {sortVariable === 'value' ? 'Ordenar: Valor' : 'Ordenar: A-Z'}
                         </button>
