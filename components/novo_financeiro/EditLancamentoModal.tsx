@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import { AppData, FinancialAccount, DailyTransaction } from '../../types';
 import { getAppData, getFinancialAccounts, formatCurrency } from '../../services/storageService';
@@ -77,7 +78,7 @@ export const EditLancamentoModal: React.FC<EditLancamentoModalProps> = ({ transa
             paymentMethod,
             product: type !== 'Transferência' ? product : '',
             category: type !== 'Transferência' ? category : '',
-            supplier: (type === 'Despesa' && type !== 'Transferência') ? supplier : '',
+            supplier: (type === 'Despesa') ? supplier : '',
             classification: type !== 'Transferência' ? classification : '',
             value,
             status,

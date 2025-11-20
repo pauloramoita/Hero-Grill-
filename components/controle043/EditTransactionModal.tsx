@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AppData, Transaction043 } from '../../types';
 import { getAppData, formatCurrency } from '../../services/storageService';
@@ -11,7 +10,7 @@ interface EditTransactionModalProps {
 }
 
 export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ transaction, onClose, onSave }) => {
-    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     
     const [date, setDate] = useState(transaction.date);
     const [store, setStore] = useState(transaction.store);

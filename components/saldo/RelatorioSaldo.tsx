@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { getAccountBalances, getAppData, formatCurrency, exportBalancesToXML } from '../../services/storageService';
 import { AppData, AccountBalance } from '../../types';
@@ -11,7 +10,7 @@ interface BalanceWithVariation extends AccountBalance {
 }
 
 export const RelatorioSaldo: React.FC = () => {
-    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [filteredData, setFilteredData] = useState<BalanceWithVariation[]>([]);
     const [loading, setLoading] = useState(true);
     

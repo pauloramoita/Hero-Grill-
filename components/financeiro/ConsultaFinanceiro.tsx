@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { getFinancialRecords, getAppData, formatCurrency, deleteFinancialRecord, updateFinancialRecord, exportFinancialToXML } from '../../services/storageService';
 import { AppData, FinancialRecord } from '../../types';
@@ -12,7 +11,7 @@ interface FinancialRecordWithAgg extends FinancialRecord {
 export const ConsultaFinanceiro: React.FC = () => {
     const [rawRecords, setRawRecords] = useState<FinancialRecord[]>([]);
     const [displayRecords, setDisplayRecords] = useState<FinancialRecordWithAgg[]>([]);
-    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loading, setLoading] = useState(true);
     
     const [storeFilter, setStoreFilter] = useState('');

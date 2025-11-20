@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { 
     getAppData, 
@@ -14,7 +15,7 @@ import {
 } from 'recharts';
 import { 
     LayoutDashboard, TrendingUp, TrendingDown, DollarSign, 
-    Calendar, Store, ArrowUpRight, ArrowDownRight, Wallet, Loader2
+    Calendar, Store, ArrowUpRight, ArrowDownRight, Wallet, Loader2, BarChart2
 } from 'lucide-react';
 
 export const DashboardModule: React.FC = () => {
@@ -183,8 +184,9 @@ export const DashboardModule: React.FC = () => {
             })),
             ...metrics.monthTrans.map(t => ({ 
                 name: t.description || t.category || 'Despesa Diversa', 
-                val: t.value, 
-                type: t.classification || 'Fixa', // Usa a classificação do banco, ou Fixa se vazio
+                val: t.value,
+                // CORREÇÃO: Se não tiver classificação, assume Variável (mais comum) em vez de Fixa.
+                type: (t.classification && t.classification.length > 0) ? t.classification : 'Variável',
                 origin: 'Financeiro'
             }))
         ];
@@ -321,7 +323,7 @@ export const DashboardModule: React.FC = () => {
                     {/* Comparison Chart */}
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                         <h3 className="text-sm font-bold text-gray-700 uppercase mb-6 flex items-center gap-2">
-                            <BarChart size={18} /> Comparativo Mensal: Receitas vs Despesas (6 Meses)
+                            <BarChart2 size={18} /> Comparativo Mensal: Receitas vs Despesas (6 Meses)
                         </h3>
                         <div className="h-72 w-full">
                             <ResponsiveContainer width="100%" height="100%">

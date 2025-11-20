@@ -7,7 +7,7 @@ import { EditTransactionModal } from './EditTransactionModal';
 export const Consulta043: React.FC = () => {
     const [transactions, setTransactions] = useState<Transaction043[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<Transaction043[]>([]);
-    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loading, setLoading] = useState(true);
     const [editingTransaction, setEditingTransaction] = useState<Transaction043 | null>(null);
     const [storeFilter, setStoreFilter] = useState('');

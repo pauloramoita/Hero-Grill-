@@ -4,7 +4,7 @@ import { AppData } from '../../types';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 export const Cadastro043: React.FC = () => {
-    const [data, setData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [data, setData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { getFinancialRecords, getAppData, formatCurrency, exportFinancialToXML } from '../../services/storageService';
 import { AppData, FinancialRecord } from '../../types';
@@ -10,7 +9,7 @@ interface FinancialChartData extends FinancialRecord {
 }
 
 export const RelatorioFinanceiro: React.FC = () => {
-    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [filteredData, setFilteredData] = useState<FinancialChartData[]>([]);
     const [loading, setLoading] = useState(true);
     
@@ -118,31 +117,28 @@ export const RelatorioFinanceiro: React.FC = () => {
             return (
                 <div className="bg-white p-3 border border-gray-200 shadow-lg rounded opacity-95">
                     <p className="text-sm font-bold text-gray-800 mb-2 border-b pb-1">{label}</p>
-                    {payload.map((entry: any) => (
-                        <p key={entry.name} className="text-xs font-semibold" style={{ color: entry.color }}>
+                    {payload.map((entry: any, index: number) => (
+                        <p key={index} style={{ color: entry.color }} className="text-xs font-bold">
                             {entry.name}: {formatCurrency(entry.value)}
                         </p>
                     ))}
-                    <div className="mt-2 pt-2 border-t">
-                         <p className="text-xs font-bold text-gray-600">
-                            Saldo: {formatCurrency(payload[0].value - payload[1].value)}
-                        </p>
-                    </div>
                 </div>
             );
         }
         return null;
     };
 
-    const totalNetResult = filteredData.reduce((acc, curr) => acc + curr.netResult, 0);
+    if (loading && filteredData.length === 0) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" size={40}/></div>;
 
-    if (loading && filteredData.length === 0) return <div className="flex justify-center p-10"><Loader2 className="animate-spin"/></div>;
+    const totalRevenues = filteredData.reduce((acc, r) => acc + r.totalRevenues, 0);
+    const totalExpenses = filteredData.reduce((acc, r) => acc + r.totalExpenses, 0);
+    const netResult = totalRevenues - totalExpenses;
 
     return (
         <div className="space-y-8">
-             {/* Filters - Match Relatorio043 */}
-             <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
-                <h3 className="text-lg font-bold text-heroRed mb-4 border-b pb-2">Parâmetros do Relatório</h3>
+            {/* Filters */}
+            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Parâmetros do Relatório</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
@@ -169,7 +165,7 @@ export const RelatorioFinanceiro: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex gap-3">
-                    <button onClick={generateReport} className="bg-heroBlack text-white px-8 py-3 rounded font-bold hover:bg-gray-800 flex items-center gap-2">
+                    <button onClick={generateReport} className="bg-gray-800 text-white px-8 py-3 rounded font-bold hover:bg-gray-700 flex items-center gap-2">
                          {loading ? <Loader2 className="animate-spin"/> : <FileText size={20} />} Gerar Relatório
                     </button>
                     {filteredData.length > 0 && (
@@ -189,17 +185,32 @@ export const RelatorioFinanceiro: React.FC = () => {
             {filteredData.length > 0 ? (
                 <div className="space-y-8 animate-fadeIn">
                     
-                    {/* Summary Table */}
+                    {/* Chart */}
+                    <div className="bg-white p-6 rounded-lg shadow border border-gray-200 h-96 break-inside-avoid">
+                         <h3 className="text-lg font-bold text-gray-800 mb-4 text-center uppercase">Evolução Financeira (Receitas x Despesas)</h3>
+                         <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={filteredData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                                <XAxis dataKey="monthLabel" />
+                                <YAxis tickFormatter={(val) => `R$ ${val/1000}k`} />
+                                <Tooltip content={<CustomTooltip />} />
+                                <Legend />
+                                <Bar dataKey="totalRevenues" name="Receitas" fill="#10B981" barSize={20} />
+                                <Bar dataKey="totalExpenses" name="Despesas" fill="#EF4444" barSize={20} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    {/* Table */}
                     <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
-                        <div className="p-4 bg-gray-50 border-b font-bold text-gray-700">Resumo Financeiro {storeFilter ? ` - ${storeFilter}` : ' (Consolidado)'}</div>
-                        <table className="min-w-full divide-y divide-gray-200">
-                             <thead className="bg-gray-100">
+                         <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-100">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Período</th>
                                     <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Loja</th>
-                                    <th className="px-6 py-3 text-right text-xs font-bold text-green-700 uppercase">Receitas</th>
-                                    <th className="px-6 py-3 text-right text-xs font-bold text-red-700 uppercase">Despesas</th>
-                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-800 uppercase">Resultado</th>
+                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase text-green-700">Receitas</th>
+                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase text-red-700">Despesas</th>
+                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Resultado</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -207,47 +218,29 @@ export const RelatorioFinanceiro: React.FC = () => {
                                     <tr key={idx} className="break-inside-avoid">
                                         <td className="px-6 py-2 text-sm font-medium capitalize">{item.monthLabel}</td>
                                         <td className="px-6 py-2 text-sm text-gray-600">{item.store}</td>
-                                        <td className="px-6 py-2 text-sm text-right font-mono text-green-700">{formatCurrency(item.totalRevenues)}</td>
-                                        <td className="px-6 py-2 text-sm text-right font-mono text-red-700">{formatCurrency(item.totalExpenses)}</td>
-                                        <td className={`px-6 py-2 text-sm text-right font-bold ${item.netResult >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
+                                        <td className="px-6 py-2 text-sm text-right font-mono text-green-600">{formatCurrency(item.totalRevenues)}</td>
+                                        <td className="px-6 py-2 text-sm text-right font-mono text-red-600">{formatCurrency(item.totalExpenses)}</td>
+                                        <td className={`px-6 py-2 text-sm text-right font-bold ${item.netResult >= 0 ? 'text-blue-800' : 'text-red-800'}`}>
                                             {formatCurrency(item.netResult)}
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
+                            <tfoot className="bg-gray-50 font-bold border-t">
+                                <tr>
+                                    <td colSpan={2} className="px-6 py-3 text-right text-gray-700 uppercase text-xs">Totais do Relatório:</td>
+                                    <td className="px-6 py-3 text-right text-green-700">{formatCurrency(totalRevenues)}</td>
+                                    <td className="px-6 py-3 text-right text-red-700">{formatCurrency(totalExpenses)}</td>
+                                    <td className={`px-6 py-3 text-right ${netResult >= 0 ? 'text-blue-800' : 'text-red-800'}`}>{formatCurrency(netResult)}</td>
+                                </tr>
+                            </tfoot>
                         </table>
-                    </div>
-
-                    {/* Chart */}
-                    <div className="bg-white p-6 rounded-lg shadow border border-gray-200 h-[500px] break-inside-avoid">
-                        <h3 className="text-2xl font-black text-gray-800 mb-6 text-center uppercase tracking-wider">
-                            Comparativo: Receitas vs Despesas
-                        </h3>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={filteredData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" opacity={0.3} vertical={false} />
-                                <XAxis dataKey="monthLabel" tick={{fill: '#4a5568', fontSize: 12}} />
-                                <YAxis tickFormatter={(val) => `R$ ${val}`} tick={{fill: '#4a5568', fontSize: 12}} />
-                                <Tooltip content={<CustomTooltip />} cursor={{fill: '#f7fafc'}} />
-                                <Legend wrapperStyle={{paddingTop: '20px'}} />
-                                <Bar dataKey="totalRevenues" name="Receitas" fill="#10B981" radius={[4, 4, 0, 0]} barSize={40} />
-                                <Bar dataKey="totalExpenses" name="Despesas" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={40} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-
-                    {/* Final Summary Box */}
-                    <div className="flex justify-end">
-                        <div className={`p-6 rounded-lg shadow-lg border w-full md:w-1/3 text-center ${totalNetResult >= 0 ? 'bg-blue-600 border-blue-700 text-white' : 'bg-red-600 border-red-700 text-white'}`}>
-                            <h4 className="text-sm font-bold uppercase opacity-90 mb-2">Resultado Final Acumulado</h4>
-                            <span className="text-4xl font-black tracking-tight">{formatCurrency(totalNetResult)}</span>
-                        </div>
                     </div>
                 </div>
             ) : (
-                <div className="text-center text-gray-400 py-12 border-2 border-dashed border-gray-200 rounded-lg">
-                    <AlertTriangle className="mx-auto mb-2 h-10 w-10 opacity-20" />
-                    <p>Selecione os filtros e clique em "Gerar Relatório" para visualizar os dados.</p>
+                <div className="text-center text-gray-400 py-12 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center">
+                    <AlertTriangle size={48} className="mb-2 opacity-20" />
+                    <p>Defina os filtros e clique em "Gerar Relatório".</p>
                 </div>
             )}
         </div>

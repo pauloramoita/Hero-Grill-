@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { getTransactions043, getAppData, formatCurrency, formatDateBr, getTodayLocalISO, exportTransactionsToXML } from '../../services/storageService';
 import { AppData, Transaction043 } from '../../types';
@@ -7,7 +6,7 @@ import { FileText, TrendingUp, TrendingDown, FileSpreadsheet, Printer, Loader2 }
 export const Relatorio043: React.FC = () => {
     const [transactions, setTransactions] = useState<Transaction043[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<Transaction043[]>([]);
-    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loading, setLoading] = useState(true);
 
     // Relatório Filters

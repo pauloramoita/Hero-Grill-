@@ -162,7 +162,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                     paymentMethod,
                     product: type !== 'Transferência' ? product : '',
                     category: type !== 'Transferência' ? category : '',
-                    supplier: (type === 'Despesa' && type !== 'Transferência') ? supplier : '',
+                    supplier: (type === 'Despesa') ? supplier : '',
                     classification: type !== 'Transferência' ? classification : '',
                     value,
                     status: currentStatus,

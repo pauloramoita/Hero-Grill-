@@ -36,8 +36,7 @@ const App: React.FC = () => {
     // Filtra módulos baseados nas permissões do usuário
     const hasPermission = (moduleId: string) => {
         if (user.isMaster) return true;
-        // Dashboard agora requer permissão explícita 'dashboard'
-        if (moduleId === 'dashboard') return user.permissions.modules?.includes('dashboard');
+        // Permissão explícita para dashboard ou permissão padrão por módulo
         return user.permissions.modules?.includes(moduleId);
     };
 
@@ -135,7 +134,7 @@ const App: React.FC = () => {
             <footer className="bg-heroBlack text-white text-center py-6 mt-auto">
                 <p className="text-sm opacity-50">
                     &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados. 
-                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v2.3.0 (Dashboard)</span>
+                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v2.4.0 (PWA+Dash)</span>
                 </p>
             </footer>
 

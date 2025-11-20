@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AppData, AccountBalance } from '../../types';
 import { getAppData, formatCurrency } from '../../services/storageService';
@@ -11,7 +10,7 @@ interface EditSaldoModalProps {
 }
 
 export const EditSaldoModal: React.FC<EditSaldoModalProps> = ({ balance, onClose, onSave }) => {
-    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [] });
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     
     const [store, setStore] = useState(balance.store);
     const [year, setYear] = useState(balance.year);
