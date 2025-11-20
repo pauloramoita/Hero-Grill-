@@ -6,26 +6,48 @@ interface HeaderProps {
     onHomeClick: () => void;
     user?: User | null;
     onLogout?: () => void;
+    isHome: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onHomeClick, user, onLogout }) => {
+export const Header: React.FC<HeaderProps> = ({ onHomeClick, user, onLogout, isHome }) => {
     return (
-        <header className="bg-white border-t-4 border-heroRed shadow-sm sticky top-0 z-50">
-            <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+        <header className="bg-white border-t-4 border-heroRed shadow-sm sticky top-0 z-50 h-20 flex items-center transition-all duration-300">
+            <div className="w-full max-w-7xl mx-auto px-6 flex justify-between items-center relative h-full">
                 {/* Logo Area */}
-                <button onClick={onHomeClick} className="flex items-end group gap-2 focus:outline-none">
+                <button 
+                    onClick={onHomeClick} 
+                    className={`flex items-end group gap-2 focus:outline-none transition-all duration-500 ${
+                        isHome 
+                        ? 'relative translate-x-0 translate-y-0' 
+                        : 'absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 hover:scale-105'
+                    }`}
+                >
                     <div className="flex flex-col leading-none">
-                        <span className="text-3xl font-black text-heroRed italic tracking-tighter" style={{ fontFamily: 'Arial Black, sans-serif' }}>HERO</span>
+                        <span 
+                            className={`font-black text-heroRed italic tracking-tighter transition-all duration-500 ${isHome ? 'text-3xl' : 'text-4xl md:text-5xl'}`} 
+                            style={{ fontFamily: 'Arial Black, sans-serif' }}
+                        >
+                            HERO
+                        </span>
                     </div>
                     <div className="flex flex-col leading-none">
-                        <span className="text-3xl font-black text-heroBlack italic tracking-tighter" style={{ fontFamily: 'Arial Black, sans-serif' }}>GRILL</span>
+                        <span 
+                            className={`font-black text-heroBlack italic tracking-tighter transition-all duration-500 ${isHome ? 'text-3xl' : 'text-4xl md:text-5xl'}`} 
+                            style={{ fontFamily: 'Arial Black, sans-serif' }}
+                        >
+                            GRILL
+                        </span>
                     </div>
-                    <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1 ml-1">Self Service</span>
+                    <span 
+                        className={`font-bold tracking-widest text-gray-400 uppercase mb-1 ml-1 transition-all duration-500 ${isHome ? 'text-[10px] opacity-100' : 'text-[0px] opacity-0 w-0 overflow-hidden'}`}
+                    >
+                        Self Service
+                    </span>
                 </button>
 
-                {/* User Area */}
+                {/* User Area - Always forced to the right */}
                 {user && (
-                    <div className="flex items-center gap-6">
+                    <div className="ml-auto flex items-center gap-6">
                         <div className="flex flex-col items-end">
                             <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Bem-vindo</span>
                             <span className="text-sm font-bold text-gray-800 flex items-center gap-1">

@@ -85,7 +85,12 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
-            <Header onHomeClick={() => setCurrentView('home')} user={user} onLogout={handleLogout} />
+            <Header 
+                onHomeClick={() => setCurrentView('home')} 
+                user={user} 
+                onLogout={handleLogout} 
+                isHome={currentView === 'home'} 
+            />
             
             <main className="flex-grow">
                 {currentView === 'home' && renderHome()}
