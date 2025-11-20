@@ -12,7 +12,7 @@ import { AdminModule } from './components/admin/AdminModule';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { View, User } from './types';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard, ChevronRight } from 'lucide-react';
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
@@ -23,25 +23,18 @@ const App: React.FC = () => {
     const isDashboardOnly = useMemo(() => {
         if (!user || user.isMaster) return false;
         const modules = user.permissions?.modules || [];
-        // Check if Dashboard is the ONLY module permission (ignoring auxiliary permissions)
         const mainModules = modules.filter(m => !m.startsWith('view_') && !m.startsWith('config_'));
         return mainModules.length === 1 && mainModules.includes('dashboard');
     }, [user]);
 
     const handleLogin = (loggedUser: User) => {
-        // Ensure permissions object exists
         const safeUser = {
             ...loggedUser,
             permissions: loggedUser.permissions || { modules: [], stores: [] }
         };
-        
         setUser(safeUser);
         
-        // Lógica de Redirecionamento IMEDIATO
         const modules = safeUser.permissions.modules || [];
-        
-        // Verifica se é um usuário restrito ao Dashboard (Investidor/Observador)
-        // Se tiver apenas 'dashboard' como módulo principal, força a view 'dashboard'
         const mainModules = modules.filter(m => !m.startsWith('view_') && !m.startsWith('config_'));
         const isRestricted = mainModules.length === 1 && mainModules[0] === 'dashboard' && !safeUser.isMaster;
 
@@ -67,19 +60,20 @@ const App: React.FC = () => {
         return user.permissions.modules.includes(moduleId);
     };
 
-    const menuItems: { id: View, label: string, icon: React.ReactNode, colorClass: string, description: string, requiredPerm: string }[] = [
-        { id: 'dashboard', label: 'Dashboard Gerencial', icon: <LayoutDashboard size={32} />, colorClass: 'bg-gray-800 text-white', description: 'Visão geral e indicadores', requiredPerm: 'dashboard' },
-        { id: 'pedidos', label: 'Cadastro de Pedidos', icon: <ShoppingCart size={32} />, colorClass: 'bg-heroRed text-white', description: 'Gerenciar pedidos e produtos', requiredPerm: 'pedidos' },
-        { id: 'novo_financeiro', label: 'Financeiro (Caixa)', icon: <Landmark size={32} />, colorClass: 'bg-blue-600 text-white', description: 'Lançamentos e Fluxo de Caixa', requiredPerm: 'novo_financeiro' },
-        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={32} />, colorClass: 'bg-gray-700 text-white', description: 'Lançamentos de conta 043', requiredPerm: 'controle043' },
-        { id: 'saldo', label: 'Saldo de Contas', icon: <Wallet size={32} />, colorClass: 'bg-gray-700 text-white', description: 'Balanço mensal de contas', requiredPerm: 'saldo' },
-        { id: 'financeiro', label: 'Entradas e Saídas', icon: <DollarSign size={32} />, colorClass: 'bg-gray-700 text-white', description: 'Registro financeiro consolidado (Antigo)', requiredPerm: 'financeiro' },
-        { id: 'backup', label: 'Backup e Dados', icon: <Database size={32} />, colorClass: 'bg-gray-600 text-white', description: 'Salvar e restaurar dados', requiredPerm: 'backup' },
-        { id: 'admin', label: 'Administração', icon: <Settings size={32} />, colorClass: 'bg-black text-white', description: 'Gerenciar usuários e acessos', requiredPerm: 'admin' },
+    // Updated Menu Items with modern color palette classes
+    const menuItems: { id: View, label: string, icon: React.ReactNode, color: string, description: string, requiredPerm: string }[] = [
+        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={24} />, color: 'text-slate-700 bg-slate-100', description: 'Visão geral e indicadores', requiredPerm: 'dashboard' },
+        { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={24} />, color: 'text-red-600 bg-red-50', description: 'Cadastro e gestão de compras', requiredPerm: 'pedidos' },
+        { id: 'novo_financeiro', label: 'Financeiro', icon: <Landmark size={24} />, color: 'text-blue-600 bg-blue-50', description: 'Fluxo de caixa e lançamentos', requiredPerm: 'novo_financeiro' },
+        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={24} />, color: 'text-emerald-600 bg-emerald-50', description: 'Gestão de conta 043', requiredPerm: 'controle043' },
+        { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={24} />, color: 'text-violet-600 bg-violet-50', description: 'Balanço mensal consolidado', requiredPerm: 'saldo' },
+        { id: 'financeiro', label: 'Entradas/Saídas', icon: <DollarSign size={24} />, color: 'text-amber-600 bg-amber-50', description: 'Registro consolidado (Legado)', requiredPerm: 'financeiro' },
+        { id: 'backup', label: 'Backup', icon: <Database size={24} />, color: 'text-cyan-600 bg-cyan-50', description: 'Segurança dos dados', requiredPerm: 'backup' },
+        { id: 'admin', label: 'Admin', icon: <Settings size={24} />, color: 'text-slate-800 bg-slate-200', description: 'Usuários e permissões', requiredPerm: 'admin' },
     ];
 
     return (
-        <div className="min-h-screen flex flex-col bg-gray-50">
+        <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
             {/* Header */}
             <Header 
                 isHome={currentView === 'home'}
@@ -90,57 +84,58 @@ const App: React.FC = () => {
             />
 
             {/* Main Content */}
-            <main className="flex-grow">
-                {/* Se a view for HOME e NÃO for restrito, mostra o menu.
-                    Se for restrito (isDashboardOnly), ele nunca deve cair aqui, mas se cair, não mostra nada. */}
+            <main className="flex-grow w-full">
                 {currentView === 'home' && !isDashboardOnly ? (
-                    <div className="max-w-7xl mx-auto p-6 animate-fadeIn">
-                        <div className="mb-8 text-center">
-                            <h1 className="text-3xl font-black text-heroBlack uppercase italic tracking-tighter mb-2">Painel Principal</h1>
-                            <p className="text-gray-500">Selecione um módulo para começar</p>
+                    <div className="max-w-5xl mx-auto p-6 sm:p-8 animate-fadeIn">
+                        <div className="mb-10 text-center">
+                            <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Painel Principal</h1>
+                            <p className="text-slate-500 text-sm max-w-md mx-auto">Selecione um módulo abaixo para acessar as funcionalidades do sistema.</p>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                             {menuItems.filter(item => hasPermission(item.requiredPerm)).map(item => (
                                 <button
                                     key={item.id}
                                     onClick={() => setCurrentView(item.id)}
-                                    className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group text-left border border-gray-100 hover:-translate-y-1"
+                                    className="group relative bg-white rounded-xl p-6 shadow-card hover:shadow-lg transition-all duration-300 border border-slate-200 hover:border-slate-300 text-left flex flex-col h-full overflow-hidden"
                                 >
-                                    <div className={`p-6 flex items-start gap-4`}>
-                                        <div className={`p-4 rounded-lg shadow-sm ${item.colorClass} group-hover:scale-110 transition-transform duration-300`}>
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className={`p-3 rounded-lg ${item.color} transition-transform group-hover:scale-110 duration-300`}>
                                             {item.icon}
                                         </div>
-                                        <div>
-                                            <h3 className="text-xl font-bold text-gray-800 group-hover:text-heroRed transition-colors">{item.label}</h3>
-                                            <p className="text-sm text-gray-500 mt-1">{item.description}</p>
+                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-x-2 group-hover:translate-x-0">
+                                            <ChevronRight size={20} className="text-slate-300" />
                                         </div>
                                     </div>
-                                    <div className="h-1.5 w-full bg-gray-100 mt-auto">
-                                        <div className={`h-full w-0 group-hover:w-full transition-all duration-500 ${item.colorClass.split(' ')[0]}`}></div>
+                                    
+                                    <div className="mt-auto">
+                                        <h3 className="text-lg font-bold text-slate-800 group-hover:text-heroRed transition-colors">{item.label}</h3>
+                                        <p className="text-sm text-slate-500 mt-1 leading-relaxed">{item.description}</p>
                                     </div>
+                                    
+                                    <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-heroRed/0 to-heroRed/0 group-hover:via-heroRed/10 group-hover:to-heroRed/20 transition-all duration-500"></div>
                                 </button>
                             ))}
+                            
                             {menuItems.filter(item => hasPermission(item.requiredPerm)).length === 0 && (
-                                <div className="col-span-full text-center p-10 bg-white rounded-lg shadow">
-                                    <p className="text-gray-400 font-bold">Nenhum módulo liberado para seu perfil.</p>
-                                    <p className="text-xs text-gray-400 mt-2">Contate o administrador.</p>
+                                <div className="col-span-full text-center p-12 bg-white rounded-xl border border-dashed border-slate-300">
+                                    <p className="text-slate-400 font-medium">Nenhum módulo liberado para seu perfil.</p>
+                                    <p className="text-xs text-slate-400 mt-1">Contate o administrador.</p>
                                 </div>
                             )}
                         </div>
 
-                         <div className="mt-12 flex justify-center">
+                         <div className="mt-16 flex justify-center">
                             <button 
                                 onClick={() => setShowPasswordModal(true)}
-                                className="text-gray-400 hover:text-gray-600 flex items-center gap-2 text-sm font-bold py-2 px-4 rounded-full hover:bg-gray-200 transition-colors"
+                                className="text-slate-400 hover:text-slate-600 flex items-center gap-2 text-xs font-semibold py-2 px-4 rounded-full hover:bg-slate-100 transition-colors"
                             >
-                                <KeyRound size={16} /> Alterar Minha Senha
+                                <KeyRound size={14} /> Alterar Minha Senha
                             </button>
                         </div>
                     </div>
                 ) : (
-                    <div className="py-6">
-                        {/* Renderiza o módulo correspondente */}
+                    <div className="py-6 sm:py-8">
                         {currentView === 'dashboard' && <DashboardModule user={user} />}
                         {currentView === 'pedidos' && <PedidosModule user={user} />}
                         {currentView === 'controle043' && <Controle043Module user={user} />}
@@ -154,8 +149,10 @@ const App: React.FC = () => {
             </main>
 
             {/* Footer */}
-            <footer className="bg-white border-t py-6 text-center text-gray-400 text-sm">
-                <p>&copy; {new Date().getFullYear()} Hero Grill Manager. Todos os direitos reservados.</p>
+            <footer className="bg-white border-t border-slate-200 py-6 text-center">
+                <p className="text-slate-400 text-xs font-medium">
+                    &copy; {new Date().getFullYear()} <span className="font-bold text-slate-600">Hero Grill Self-service</span>. Todos os direitos reservados.
+                </p>
             </footer>
 
             {showPasswordModal && <ChangePasswordModal user={user} onClose={() => setShowPasswordModal(false)} />}

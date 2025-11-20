@@ -13,56 +13,47 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onHomeClick, user, onLogout, isHome, disableNavigation }) => {
     return (
-        <header className="bg-white border-t-4 border-heroRed shadow-sm sticky top-0 z-50 h-20 flex items-center transition-all duration-300">
-            <div className="w-full max-w-7xl mx-auto px-6 flex justify-between items-center relative h-full">
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-50 h-16 flex items-center shadow-sm">
+            <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 flex justify-between items-center h-full">
                 {/* Logo Area */}
                 <button 
                     onClick={!disableNavigation ? onHomeClick : undefined} 
-                    className={`flex items-end group gap-2 focus:outline-none transition-all duration-500 ${
-                        isHome || disableNavigation
-                        ? 'relative translate-x-0 translate-y-0 cursor-default' 
-                        : 'absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 hover:scale-105 cursor-pointer'
-                    }`}
+                    className={`flex items-center gap-2 focus:outline-none transition-opacity duration-300 ${!disableNavigation ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}
                 >
-                    <div className="flex flex-col leading-none">
-                        <span 
-                            className={`font-black text-heroRed italic tracking-tighter transition-all duration-500 ${isHome || disableNavigation ? 'text-3xl' : 'text-4xl md:text-5xl'}`} 
-                            style={{ fontFamily: 'Arial Black, sans-serif' }}
-                        >
+                    <div className="flex items-baseline gap-1 select-none">
+                        <span className="font-black text-heroRed text-2xl italic tracking-tighter" style={{ fontFamily: 'Arial Black, sans-serif' }}>
                             HERO
                         </span>
-                    </div>
-                    <div className="flex flex-col leading-none">
-                        <span 
-                            className={`font-black text-heroBlack italic tracking-tighter transition-all duration-500 ${isHome || disableNavigation ? 'text-3xl' : 'text-4xl md:text-5xl'}`} 
-                            style={{ fontFamily: 'Arial Black, sans-serif' }}
-                        >
+                        <span className="font-black text-heroBlack text-2xl italic tracking-tighter" style={{ fontFamily: 'Arial Black, sans-serif' }}>
                             GRILL
                         </span>
                     </div>
-                    <span 
-                        className={`font-bold tracking-widest text-gray-400 uppercase mb-1 ml-1 transition-all duration-500 ${isHome || disableNavigation ? 'text-[10px] opacity-100' : 'text-[0px] opacity-0 w-0 overflow-hidden'}`}
-                    >
-                        Self Service
-                    </span>
+                    {!isHome && (
+                        <div className="hidden md:flex h-6 w-px bg-slate-300 mx-2"></div>
+                    )}
+                    {!isHome && (
+                        <span className="hidden md:block text-slate-400 text-xs font-semibold uppercase tracking-widest">
+                            Self-service
+                        </span>
+                    )}
                 </button>
 
-                {/* User Area - Always forced to the right */}
+                {/* User Area */}
                 {user && (
-                    <div className="ml-auto flex items-center gap-6">
-                        <div className="flex flex-col items-end">
-                            <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Bem-vindo</span>
-                            <span className="text-sm font-bold text-gray-800 flex items-center gap-1">
-                                Olá, {user.name.split(' ')[0]}
+                    <div className="flex items-center gap-4">
+                        <div className="hidden md:flex flex-col items-end">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Logado como</span>
+                            <span className="text-sm font-semibold text-slate-700 leading-tight">
+                                {user.name.split(' ')[0]}
                             </span>
                         </div>
-                        <div className="h-8 w-px bg-gray-200"></div>
+                        
                         <button 
                             onClick={onLogout}
-                            className="text-heroRed hover:bg-red-50 p-2 rounded-full transition-colors"
-                            title="Sair"
+                            className="group flex items-center justify-center w-9 h-9 rounded-full bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 transition-all duration-200"
+                            title="Sair do Sistema"
                         >
-                            <LogOut size={20} />
+                            <LogOut size={18} className="text-slate-500 group-hover:text-heroRed transition-colors" />
                         </button>
                     </div>
                 )}

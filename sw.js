@@ -1,5 +1,5 @@
 
-// Service Worker para Hero Grill Manager
+// Service Worker para Hero Grill Self-service
 // Necessário para PWA ser instalável
 
 const CACHE_NAME = 'hero-grill-cache-v1';
