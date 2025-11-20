@@ -1,10 +1,14 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getAppData, saveOrder, getLastOrderForProduct, formatCurrency } from '../../services/storageService';
-import { AppData } from '../../types';
+import { AppData, User } from '../../types';
 import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 
-export const CadastroPedido: React.FC = () => {
+interface CadastroPedidoProps {
+    user: User;
+}
+
+export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
     const [data, setData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loadingData, setLoadingData] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -32,6 +36,22 @@ export const CadastroPedido: React.FC = () => {
         };
         load();
     }, []);
+
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (user.isMaster) return data.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return data.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return data.stores;
+    }, [data.stores, user]);
+
+    // Auto-select if only one store available
+    useEffect(() => {
+        if (availableStores.length === 1) {
+            setStore(availableStores[0]);
+        }
+    }, [availableStores]);
 
     useEffect(() => {
         const checkHistory = async () => {
@@ -129,8 +149,8 @@ export const CadastroPedido: React.FC = () => {
 
     if (loadingData) return <div className="text-center p-10"><Loader2 className="animate-spin mx-auto" size={40}/></div>;
 
-    const getInputClass = (hasError: boolean) => 
-        `w-full p-2.5 border rounded text-sm outline-none transition-all ${hasError ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white focus:border-heroRed focus:ring-1 focus:ring-heroRed'}`;
+    const getInputClass = (hasError: boolean, disabled: boolean = false) => 
+        `w-full p-2.5 border rounded text-sm outline-none transition-all ${disabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} ${hasError ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white focus:border-heroRed focus:ring-1 focus:ring-heroRed'}`;
 
     return (
         <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 max-w-5xl mx-auto animate-fadeIn">
@@ -157,9 +177,14 @@ export const CadastroPedido: React.FC = () => {
 
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Loja {errors.store && '*'}</label>
-                    <select value={store} onChange={(e) => setStore(e.target.value)} className={getInputClass(errors.store)}>
+                    <select 
+                        value={store} 
+                        onChange={(e) => setStore(e.target.value)} 
+                        className={getInputClass(errors.store, availableStores.length === 1)}
+                        disabled={availableStores.length === 1}
+                    >
                         <option value="">Selecione...</option>
-                        {data.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
 

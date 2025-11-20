@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
     getAppData, 
     getFinancialAccounts, 
@@ -78,6 +78,24 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         setOrders(o);
         setLoading(false);
     };
+
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (user.isMaster) return appData.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return appData.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return appData.stores;
+    }, [appData.stores, user]);
+
+    // Auto-select if only one store available
+    useEffect(() => {
+        if (availableStores.length === 1) {
+            const singleStore = availableStores[0];
+            setStore(singleStore);
+            setFilterStore(singleStore);
+        }
+    }, [availableStores]);
 
     const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawValue = e.target.value.replace(/\D/g, '');
@@ -234,7 +252,14 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 }
             }
 
-            return matchesDate && matchesStore && matchesSupplier && matchesAccount && matchesClassification;
+            // Permission Check
+            let allowed = true;
+            if (availableStores.length > 0 && !user.isMaster) {
+                // For transfers, check if user has access to origin store
+                allowed = availableStores.includes(t.store);
+            }
+
+            return matchesDate && matchesStore && matchesSupplier && matchesAccount && matchesClassification && allowed;
         });
         
         const existingIds = new Set(transactions.map(t => t.id));
@@ -248,7 +273,13 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 const matchesAccount = !filterAccount;
                 const matchesClassification = !filterClassification || (o.type || 'Variável') === filterClassification;
 
-                return matchesDate && matchesStore && matchesSupplier && matchesAccount && matchesClassification;
+                 // Permission Check
+                let allowed = true;
+                if (availableStores.length > 0 && !user.isMaster) {
+                    allowed = availableStores.includes(o.store);
+                }
+
+                return matchesDate && matchesStore && matchesSupplier && matchesAccount && matchesClassification && allowed;
             })
             .filter(o => !existingIds.has(o.id))
             .map(o => ({
@@ -297,6 +328,8 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const totalReceitas = filteredList.filter(i => i.type === 'Receita').reduce((acc, i) => acc + i.value, 0);
     const totalDespesas = filteredList.filter(i => i.type === 'Despesa').reduce((acc, i) => acc + i.value, 0);
     const totalSaldo = totalReceitas - totalDespesas;
+
+    const isSingleStore = availableStores.length === 1;
 
     return (
         <div className="space-y-8 pb-20">
@@ -379,9 +412,14 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                             <h4 className="font-bold text-blue-800 border-b border-blue-200 pb-1">Origem (De onde sai?)</h4>
                             <div>
                                 <label className="block text-xs font-bold text-gray-600 mb-1">Loja Origem</label>
-                                <select value={store} onChange={e => setStore(e.target.value)} className="w-full p-2 border rounded">
+                                <select 
+                                    value={store} 
+                                    onChange={e => setStore(e.target.value)} 
+                                    className={`w-full p-2 border rounded ${isSingleStore ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                    disabled={isSingleStore}
+                                >
                                     <option value="">Selecione...</option>
-                                    {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                                    {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
                             <div>
@@ -418,9 +456,14 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div>
                             <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
-                            <select value={store} onChange={e => setStore(e.target.value)} className="w-full p-2 border rounded">
+                            <select 
+                                value={store} 
+                                onChange={e => setStore(e.target.value)} 
+                                className={`w-full p-2 border rounded ${isSingleStore ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                disabled={isSingleStore}
+                            >
                                 <option value="">Selecione...</option>
-                                {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                                {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
                         <div>
@@ -589,9 +632,14 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         </div>
                         <div className="md:col-span-1">
                             <label className="block text-xs font-bold text-gray-500 mb-1">Filtrar Loja</label>
-                            <select value={filterStore} onChange={e => setFilterStore(e.target.value)} className="w-full border p-2 rounded text-sm">
-                                <option value="">Todas</option>
-                                {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                            <select 
+                                value={filterStore} 
+                                onChange={e => setFilterStore(e.target.value)} 
+                                className={`w-full border p-2 rounded text-sm ${isSingleStore ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                disabled={isSingleStore}
+                            >
+                                {isSingleStore ? null : <option value="">Todas</option>}
+                                {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
                         <div className="md:col-span-1">
@@ -620,7 +668,17 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         </div>
 
                         <div className="md:col-span-6 flex justify-end">
-                             <button onClick={() => {setFilterStore(''); setFilterAccount(''); setFilterSupplier(''); setFilterClassification(''); setFilterStart(getTodayLocalISO()); setFilterEnd(getTodayLocalISO());}} className="text-xs text-gray-500 hover:text-red-500 font-bold flex items-center gap-1">
+                             <button 
+                                onClick={() => {
+                                    if(!isSingleStore) setFilterStore(''); 
+                                    setFilterAccount(''); 
+                                    setFilterSupplier(''); 
+                                    setFilterClassification(''); 
+                                    setFilterStart(getTodayLocalISO()); 
+                                    setFilterEnd(getTodayLocalISO());
+                                }} 
+                                className="text-xs text-gray-500 hover:text-red-500 font-bold flex items-center gap-1"
+                            >
                                 <Filter size={12}/> Limpar Filtros
                              </button>
                         </div>

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
     getDailyTransactions, 
     getAppData, 
@@ -11,7 +11,7 @@ import {
     formatDateBr,
     getTodayLocalISO
 } from '../../services/storageService';
-import { AppData, DailyTransaction, FinancialAccount } from '../../types';
+import { AppData, DailyTransaction, FinancialAccount, User } from '../../types';
 import { 
     CheckCircle, 
     Trash2, 
@@ -27,7 +27,11 @@ import {
 import { EditLancamentoModal } from './EditLancamentoModal';
 import { ConfirmPaymentModal } from './ConfirmPaymentModal';
 
-export const ConsultaFinanceiro: React.FC = () => {
+interface ConsultaFinanceiroProps {
+    user?: User;
+}
+
+export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) => {
     const [transactions, setTransactions] = useState<DailyTransaction[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<DailyTransaction[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
@@ -54,7 +58,7 @@ export const ConsultaFinanceiro: React.FC = () => {
 
     useEffect(() => {
         applyFilters();
-    }, [transactions, startDate, endDate, filterStore, filterAccount, filterCategory, filterSupplier, filterStatus, dateType]);
+    }, [transactions, startDate, endDate, filterStore, filterAccount, filterCategory, filterSupplier, filterStatus, dateType, user]);
 
     const loadData = async () => {
         setLoading(true);
@@ -103,6 +107,23 @@ export const ConsultaFinanceiro: React.FC = () => {
         }
     };
 
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (!user) return appData.stores;
+        if (user.isMaster) return appData.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return appData.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return appData.stores;
+    }, [appData.stores, user]);
+
+    // Auto-select if only one store available and lock it
+    useEffect(() => {
+        if (availableStores.length === 1) {
+            setFilterStore(availableStores[0]);
+        }
+    }, [availableStores]);
+
     const applyFilters = () => {
         const result = transactions.filter(t => {
             // Filtro de Data
@@ -133,7 +154,13 @@ export const ConsultaFinanceiro: React.FC = () => {
                 }
             }
 
-            return matchesDate && matchesStore && matchesCategory && matchesSupplier && matchesAccount && matchesStatus;
+            // Permission Check
+            let allowed = true;
+            if (user && !user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
+                 allowed = user.permissions.stores.includes(t.store);
+            }
+
+            return matchesDate && matchesStore && matchesCategory && matchesSupplier && matchesAccount && matchesStatus && allowed;
         });
 
         // Ordenação
@@ -269,7 +296,9 @@ export const ConsultaFinanceiro: React.FC = () => {
     };
 
     const clearFilters = () => {
-        setFilterStore(''); 
+        if (availableStores.length !== 1) {
+             setFilterStore(''); 
+        }
         setFilterAccount(''); 
         setFilterCategory(''); 
         setFilterSupplier(''); 
@@ -284,6 +313,8 @@ export const ConsultaFinanceiro: React.FC = () => {
     const saldo = totalReceitas - totalDespesas;
 
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" size={40}/></div>;
+
+    const isSingleStore = availableStores.length === 1;
 
     return (
         <div className="space-y-6">
@@ -331,9 +362,14 @@ export const ConsultaFinanceiro: React.FC = () => {
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
-                        <select value={filterStore} onChange={e => setFilterStore(e.target.value)} className="w-full border p-2 rounded text-sm">
-                            <option value="">Todas</option>
-                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        <select 
+                            value={filterStore} 
+                            onChange={e => setFilterStore(e.target.value)} 
+                            className={`w-full border p-2 rounded text-sm ${isSingleStore ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                            disabled={isSingleStore}
+                        >
+                            {!isSingleStore && <option value="">Todas</option>}
+                            {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                     <div>

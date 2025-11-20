@@ -1,11 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getOrders, getAppData, updateOrder, deleteOrder, exportToXML, formatCurrency, getTodayLocalISO, formatDateBr } from '../../services/storageService';
-import { AppData, Order } from '../../types';
+import { AppData, Order, User } from '../../types';
 import { CheckCircle, Download, Trash2, Edit, Printer, Package, DollarSign, Loader2 } from 'lucide-react';
 import { EditOrderModal } from './EditOrderModal';
 
-export const ConsultaPedidos: React.FC = () => {
+interface ConsultaPedidosProps {
+    user: User;
+}
+
+export const ConsultaPedidos: React.FC<ConsultaPedidosProps> = ({ user }) => {
     const [allOrders, setAllOrders] = useState<Order[]>([]);
     const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
@@ -40,6 +44,22 @@ export const ConsultaPedidos: React.FC = () => {
         load();
     }, []);
 
+     // Determine available stores based on user permissions
+     const availableStores = useMemo(() => {
+        if (user.isMaster) return appData.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return appData.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return appData.stores;
+    }, [appData.stores, user]);
+
+    // Auto-select if only one store available and lock it
+    useEffect(() => {
+        if (availableStores.length === 1) {
+            setFilters(prev => ({ ...prev, store: availableStores[0] }));
+        }
+    }, [availableStores]);
+
     useEffect(() => {
         let result = allOrders.filter(o => {
             const orderDate = o.date;
@@ -52,15 +72,21 @@ export const ConsultaPedidos: React.FC = () => {
             const matchesCategory = filters.category === '' || o.category === filters.category;
             // Handle Type filter - o.type might be undefined for old records, default to 'Variável' usually, but search matches exactly if set
             const matchesType = filters.type === '' || (o.type || 'Variável') === filters.type;
+            
+            // Force Permission Check: even if filter is empty, if user has restrictions, we must filter data
+            let allowedStore = true;
+            if (!user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
+                 allowedStore = user.permissions.stores.includes(o.store);
+            }
 
-            return matchesDate && matchesStore && matchesProduct && matchesBrand && matchesSupplier && matchesCategory && matchesType;
+            return matchesDate && matchesStore && matchesProduct && matchesBrand && matchesSupplier && matchesCategory && matchesType && allowedStore;
         });
 
         // Ordenação: Mais recente para o mais antigo
         result.sort((a, b) => b.date.localeCompare(a.date));
 
         setFilteredOrders(result);
-    }, [allOrders, filters]);
+    }, [allOrders, filters, user]);
 
     const quickDeliver = async (order: Order, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -104,9 +130,14 @@ export const ConsultaPedidos: React.FC = () => {
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
-                        <select value={filters.store} onChange={e => setFilters({...filters, store: e.target.value})} className="w-full border p-2 rounded">
-                            <option value="">Todas</option>
-                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        <select 
+                            value={filters.store} 
+                            onChange={e => setFilters({...filters, store: e.target.value})} 
+                            className={`w-full border p-2 rounded ${availableStores.length === 1 ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                            disabled={availableStores.length === 1}
+                        >
+                            {availableStores.length !== 1 && <option value="">Todas</option>}
+                            {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                     <div>

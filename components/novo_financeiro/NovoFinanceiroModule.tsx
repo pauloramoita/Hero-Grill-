@@ -52,7 +52,7 @@ export const NovoFinanceiroModule: React.FC<NovoFinanceiroModuleProps> = ({ user
             {/* Content */}
             <div className="animate-fadeIn">
                 {activeTab === 'lancamentos' && <LancamentosFinanceiro user={user} />}
-                {activeTab === 'consulta' && <ConsultaFinanceiro />}
+                {activeTab === 'consulta' && <ConsultaFinanceiro user={user} />}
                 {activeTab === 'campos' && canConfigFinanceiro && <CamposFinanceiro />}
                 {activeTab === 'relatorios' && (
                     <div className="p-10 text-center text-gray-400 bg-gray-50 border border-dashed rounded-lg">

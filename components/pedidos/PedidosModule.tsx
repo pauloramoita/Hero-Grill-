@@ -48,8 +48,8 @@ export const PedidosModule: React.FC<PedidosModuleProps> = ({ user }) => {
 
             {/* Content */}
             <div className="animate-fadeIn">
-                {activeTab === 'cadastrar' && <CadastroPedido />}
-                {activeTab === 'consulta' && <ConsultaPedidos />}
+                {activeTab === 'cadastrar' && <CadastroPedido user={user} />}
+                {activeTab === 'consulta' && <ConsultaPedidos user={user} />}
                 {activeTab === 'relatorios' && <RelatorioPedidos />}
                 {activeTab === 'campos' && canConfigCampos && <CamposConfig />}
             </div>
