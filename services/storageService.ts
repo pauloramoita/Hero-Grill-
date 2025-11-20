@@ -2,7 +2,7 @@
 
 // ... existing imports ...
 import { createClient } from '@supabase/supabase-js';
-import { AppData, Order, Transaction043, AccountBalance, FinancialRecord, User, FinancialAccount, DailyTransaction, MeatInventoryLog } from '../types';
+import { AppData, Order, Transaction043, AccountBalance, FinancialRecord, User, FinancialAccount, DailyTransaction, MeatInventoryLog, MeatStockAdjustment } from '../types';
 
 // ... existing config setup ...
 let supabaseUrl = '';
@@ -153,6 +153,16 @@ CREATE TABLE IF NOT EXISTS meat_inventory_logs (
   date date NOT NULL,
   product text NOT NULL,
   quantity_consumed numeric DEFAULT 0,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Tabela de Ajustes Manuais de Estoque
+CREATE TABLE IF NOT EXISTS meat_stock_adjustments (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  date date NOT NULL,
+  product text NOT NULL,
+  quantity numeric NOT NULL, -- Pode ser negativo para perda/saída
+  reason text,
   created_at timestamptz DEFAULT now()
 );
 
@@ -454,6 +464,31 @@ export const deleteMeatConsumption = async (id: string) => {
     if (error) throw new Error(error.message);
 }
 
+// ... Ajustes de Estoque ...
+
+export const getMeatAdjustments = async (): Promise<MeatStockAdjustment[]> => {
+    const { data, error } = await supabase.from('meat_stock_adjustments').select('*');
+    if (error) return [];
+    return data.map((a: any) => ({
+        id: a.id,
+        date: a.date,
+        product: a.product,
+        quantity: a.quantity,
+        reason: a.reason,
+        created_at: a.created_at
+    }));
+}
+
+export const saveMeatAdjustment = async (adj: MeatStockAdjustment) => {
+    const { error } = await supabase.from('meat_stock_adjustments').insert({
+        date: adj.date,
+        product: adj.product,
+        quantity: adj.quantity,
+        reason: adj.reason
+    });
+    if (error) throw new Error(error.message);
+}
+
 // ... Other functions (043, Saldo, Helpers, Export, Backup) remain mostly same ...
 
 export const getTransactions043 = async (): Promise<Transaction043[]> => {
@@ -623,8 +658,18 @@ export const exportFinancialToXML = (records: any[], filename: string) => {
 // ... Backup ... (Keeping original logic)
 export const createBackup = async () => {
     try {
-        const [appData, orders, transactions043, saldoContas, financeiro, users, financialAccounts, dailyTransactions] = await Promise.all([getAppData(), getOrders(), getTransactions043(), getAccountBalances(), getFinancialRecords(), getUsers(), getFinancialAccounts(), getDailyTransactions()]);
-        const backupObj = { version: 11, timestamp: new Date().toISOString(), source: 'supabase_cloud', appData, orders, transactions043, saldoContas, financeiro, users, financialAccounts, dailyTransactions };
+        const [appData, orders, transactions043, saldoContas, financeiro, users, financialAccounts, dailyTransactions, meatLogs, meatAdjustments] = await Promise.all([
+            getAppData(), getOrders(), getTransactions043(), getAccountBalances(), getFinancialRecords(), getUsers(), getFinancialAccounts(), getDailyTransactions(), getMeatConsumptionLogs(), getMeatAdjustments()
+        ]);
+        
+        const backupObj = { 
+            version: 12, 
+            timestamp: new Date().toISOString(), 
+            source: 'supabase_cloud', 
+            appData, orders, transactions043, saldoContas, financeiro, users, financialAccounts, dailyTransactions,
+            meatLogs, meatAdjustments // New tables
+        };
+        
         const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a'); link.href = url; link.download = `HERO_GRILL_BACKUP_${getTodayLocalISO().replace(/-/g, '')}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);

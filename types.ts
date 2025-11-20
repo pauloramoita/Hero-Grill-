@@ -119,6 +119,15 @@ export interface MeatInventoryLog {
     created_at?: string;
 }
 
+export interface MeatStockAdjustment {
+    id: string;
+    date: string;
+    product: string;
+    quantity: number; // Pode ser positivo (entrada) ou negativo (saída/perda)
+    reason: string;
+    created_at?: string;
+}
+
 export interface UserPermissions {
     modules: string[]; // 'dashboard', 'pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro', 'estoque', etc
     stores: string[]; // Lista de lojas permitidas
