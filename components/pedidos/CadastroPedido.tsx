@@ -84,6 +84,7 @@ export const CadastroPedido: React.FC = () => {
 
         const newErrors = {
             store: !store,
+            category: !category,
             product: !product,
             brand: !brand,
             supplier: !supplier,
@@ -139,10 +140,21 @@ export const CadastroPedido: React.FC = () => {
             </div>
             
             <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* Linha 1: Datas e Loja */}
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Data do Pedido</label>
                     <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-2.5 border border-gray-300 rounded text-sm"/>
                 </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Data do Vencimento</label>
+                    <div className="flex gap-2">
+                        <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="w-full p-2.5 border border-gray-300 rounded text-sm"/>
+                        <button type="button" onClick={() => setDeliveryDate(new Date().toISOString().split('T')[0])} className="bg-heroBlack text-white px-3 rounded text-xs font-bold uppercase hover:bg-gray-800">Hoje</button>
+                    </div>
+                </div>
+
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Loja {errors.store && '*'}</label>
                     <select value={store} onChange={(e) => setStore(e.target.value)} className={getInputClass(errors.store)}>
@@ -150,6 +162,16 @@ export const CadastroPedido: React.FC = () => {
                         {data.stores.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
+
+                {/* Linha 2: Categoria e Produto */}
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Categoria {errors.category && '*'}</label>
+                    <select value={category} onChange={(e) => setCategory(e.target.value)} className={getInputClass(errors.category)}>
+                        <option value="">Selecione...</option>
+                        {data.categories.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </div>
+
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Produto {errors.product && '*'}</label>
                     <select value={product} onChange={(e) => setProduct(e.target.value)} className={getInputClass(errors.product)}>
@@ -165,6 +187,8 @@ export const CadastroPedido: React.FC = () => {
                         {data.brands.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
+
+                {/* Linha 3: Detalhes do Item */}
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Fornecedor {errors.supplier && '*'}</label>
                     <select value={supplier} onChange={(e) => setSupplier(e.target.value)} className={getInputClass(errors.supplier)}>
@@ -179,30 +203,23 @@ export const CadastroPedido: React.FC = () => {
                         {data.units.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
-
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Valor Unitário (R$) {errors.unitValue && '*'}</label>
-                    <input type="text" value={formatCurrency(unitValue)} onChange={handleCurrencyChange} className={`${getInputClass(errors.unitValue)} text-right`}/>
-                </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Quantidade {errors.quantity && '*'}</label>
                     <input type="text" value={quantity} onChange={handleQuantityChange} className={`${getInputClass(errors.quantity)} text-right`} placeholder="0,000"/>
                 </div>
+
+                {/* Linha 4: Valores e Tipo */}
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Valor Unitário (R$) {errors.unitValue && '*'}</label>
+                    <input type="text" value={formatCurrency(unitValue)} onChange={handleCurrencyChange} className={`${getInputClass(errors.unitValue)} text-right`}/>
+                </div>
+                
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Valor Total</label>
                     <div className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded text-right font-black text-gray-800">{calculateTotal()}</div>
                 </div>
 
-                <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Data do Vencimento</label>
-                    <div className="flex gap-2">
-                        <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="w-full p-2.5 border border-gray-300 rounded text-sm"/>
-                        <button type="button" onClick={() => setDeliveryDate(new Date().toISOString().split('T')[0])} className="bg-heroBlack text-white px-4 rounded text-xs font-bold uppercase hover:bg-gray-800">Hoje</button>
-                    </div>
-                </div>
-
-                 {/* Additional Fields (Type/Category) - kept but simplified */}
-                 <div>
+                <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tipo (Opcional)</label>
                     <select value={type} onChange={(e) => setType(e.target.value)} className={getInputClass(errors.type)}>
                          {data.types.map(s => <option key={s} value={s}>{s}</option>)}
