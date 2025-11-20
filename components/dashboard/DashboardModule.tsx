@@ -29,36 +29,65 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     const [activeTab, setActiveTab] = useState('geral');
     const [loading, setLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [orders, setOrders] = useState<Order[]>([]);
     const [transactions, setTransactions] = useState<DailyTransaction[]>([]);
     const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
     const [transactions043, setTransactions043] = useState<Transaction043[]>([]);
     const [accountBalances, setAccountBalances] = useState<AccountBalance[]>([]);
 
-    const [selectedStore, setSelectedStore] = useState('');
     const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
-
     const [sortFixed, setSortFixed] = useState<'alpha' | 'value'>('value');
     const [sortVariable, setSortVariable] = useState<'alpha' | 'value'>('value');
+
+    // Determine available stores based on user permissions (Memoized to be stable)
+    const availableStores = useMemo(() => {
+        // Safely access stores, defaulting to empty if loading or undefined
+        const allStores = appData?.stores || [];
+        
+        if (user.isMaster) return allStores;
+        
+        if (user.permissions?.stores && user.permissions.stores.length > 0) {
+            return allStores.filter(s => user.permissions.stores.includes(s));
+        }
+        
+        // If user is restricted (like Observer) but has NO specific stores in permissions,
+        // we might want to show ALL or NONE.
+        // Requirement: "Ao dar permissão apenas para uma loja..." implies explicit permission.
+        // However, generic observers might see everything.
+        return allStores;
+    }, [appData.stores, user]);
+
+    // Initial State for Store Selection: Respect Lock IMMEDIATELY
+    const [selectedStore, setSelectedStore] = useState(() => {
+         if (user.permissions?.stores && user.permissions.stores.length === 1) {
+             return user.permissions.stores[0];
+         }
+         return '';
+    });
 
     useEffect(() => {
         loadData();
     }, []);
 
+    // Ensure lock persists if data loads later
+    useEffect(() => {
+        if (availableStores.length === 1) {
+            setSelectedStore(availableStores[0]);
+        }
+    }, [availableStores]);
+
     const loadData = async () => {
         setLoading(true);
         setErrorMsg(null);
         try {
-            // Load basic data first to avoid total crash
             const [d, o, acc] = await Promise.all([
                 getAppData(),
                 getOrders().catch(e => { console.error('Orders load error', e); return []; }),
                 getFinancialAccounts().catch(e => { console.error('Acc load error', e); return []; }),
             ]);
             
-            // Load transactional data separately to handle potential missing tables
             const t = await getDailyTransactions().catch(e => { console.error('Trans load error', e); return []; });
             const t043 = await getTransactions043().catch(e => { console.error('043 load error', e); return []; });
             const ab = await getAccountBalances().catch(e => { console.error('Balances load error', e); return []; });
@@ -77,51 +106,38 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
         }
     };
 
-    // Determine available stores based on user permissions
-    const availableStores = useMemo(() => {
-        if (user.isMaster) return appData.stores;
-        if (user.permissions.stores && user.permissions.stores.length > 0) {
-            return appData.stores.filter(s => user.permissions.stores.includes(s));
-        }
-        return appData.stores;
-    }, [appData.stores, user]);
-
-    // Auto-select if only one store available
-    useEffect(() => {
-        if (availableStores.length === 1) {
-            setSelectedStore(availableStores[0]);
-        }
-    }, [availableStores]);
-
     const filterStore = (storeName: string | null | undefined) => !selectedStore || storeName === selectedStore;
 
     // --- KPIs Calculations ---
 
     const calculateFinancialMetrics = () => {
+        // Safety check
+        if (!transactions || !orders) return { totalRevenues: 0, totalFixed: 0, totalVariable: 0, netResult: 0 };
+
         const periodTransactions = transactions.filter(t => 
-            t.date.startsWith(currentMonth) && 
+            t.date && t.date.startsWith(currentMonth) && 
             filterStore(t.store)
         );
         
         const periodOrders = orders.filter(o => 
-            o.date.startsWith(currentMonth) && 
+            o.date && o.date.startsWith(currentMonth) && 
             filterStore(o.store)
         );
 
         const totalRevenues = periodTransactions
             .filter(t => t.type === 'Receita')
-            .reduce((acc, t) => acc + t.value, 0);
+            .reduce((acc, t) => acc + (t.value || 0), 0);
 
         const totalFixed = periodTransactions
             .filter(t => t.type === 'Despesa' && (t.classification === 'Fixa' || t.classification === 'Fixo'))
-            .reduce((acc, t) => acc + t.value, 0);
+            .reduce((acc, t) => acc + (t.value || 0), 0);
 
         const variableTrans = periodTransactions
             .filter(t => t.type === 'Despesa' && t.classification !== 'Fixa' && t.classification !== 'Fixo')
-            .reduce((acc, t) => acc + t.value, 0);
+            .reduce((acc, t) => acc + (t.value || 0), 0);
             
         const variableOrders = periodOrders
-            .reduce((acc, o) => acc + o.totalValue, 0);
+            .reduce((acc, o) => acc + (o.totalValue || 0), 0);
 
         const totalVariable = variableTrans + variableOrders;
         const netResult = totalRevenues - (totalFixed + totalVariable);
@@ -135,11 +151,12 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     };
 
     const calculateTotalBalance = () => {
+        if (!accounts) return 0;
         let total = 0;
         const accountsToSum = accounts.filter(a => filterStore(a.store));
 
         accountsToSum.forEach(acc => {
-            let bal = acc.initialBalance;
+            let bal = acc.initialBalance || 0;
             const accTrans = transactions.filter(t => t.status === 'Pago');
             accTrans.forEach(t => {
                 if (t.accountId === acc.id) {
@@ -159,33 +176,30 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     const getStorePerformance = () => {
         const storeStats: Record<string, { sales: number, expenses: number }> = {};
         
-        // Init stores (to show even those with 0)
+        // Init stores
         availableStores.forEach(s => {
             storeStats[s] = { sales: 0, expenses: 0 };
         });
 
-        // Sales
         transactions
-            .filter(t => t.date.startsWith(currentMonth) && t.type === 'Receita' && filterStore(t.store))
+            .filter(t => t.date && t.date.startsWith(currentMonth) && t.type === 'Receita' && filterStore(t.store))
             .forEach(t => {
                 if (!storeStats[t.store]) storeStats[t.store] = { sales: 0, expenses: 0 };
-                storeStats[t.store].sales += t.value;
+                storeStats[t.store].sales += (t.value || 0);
             });
 
-        // Expenses (Transactions)
         transactions
-            .filter(t => t.date.startsWith(currentMonth) && t.type === 'Despesa' && filterStore(t.store))
+            .filter(t => t.date && t.date.startsWith(currentMonth) && t.type === 'Despesa' && filterStore(t.store))
             .forEach(t => {
                 if (!storeStats[t.store]) storeStats[t.store] = { sales: 0, expenses: 0 };
-                storeStats[t.store].expenses += t.value;
+                storeStats[t.store].expenses += (t.value || 0);
             });
 
-        // Expenses (Orders)
         orders
-            .filter(o => o.date.startsWith(currentMonth) && filterStore(o.store))
+            .filter(o => o.date && o.date.startsWith(currentMonth) && filterStore(o.store))
             .forEach(o => {
                 if (!storeStats[o.store]) storeStats[o.store] = { sales: 0, expenses: 0 };
-                storeStats[o.store].expenses += o.totalValue;
+                storeStats[o.store].expenses += (o.totalValue || 0);
             });
 
         return Object.entries(storeStats)
@@ -200,26 +214,26 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
 
     const getExpenseLists = () => {
         const periodTransactions = transactions.filter(t => 
-            t.date.startsWith(currentMonth) && 
+            t.date && t.date.startsWith(currentMonth) && 
             filterStore(t.store) &&
             t.type === 'Despesa'
         );
         
         const periodOrders = orders.filter(o => 
-            o.date.startsWith(currentMonth) && 
+            o.date && o.date.startsWith(currentMonth) && 
             filterStore(o.store)
         );
 
         const fixedList = periodTransactions
             .filter(t => t.classification === 'Fixa' || t.classification === 'Fixo')
-            .map(t => ({ name: t.description || t.category || t.supplier, value: t.value }));
+            .map(t => ({ name: t.description || t.category || t.supplier || 'Sem Descrição', value: t.value || 0 }));
 
         const variableList = [
             ...periodTransactions
                 .filter(t => t.classification !== 'Fixa' && t.classification !== 'Fixo')
-                .map(t => ({ name: t.description || t.category || t.supplier, value: t.value })),
+                .map(t => ({ name: t.description || t.category || t.supplier || 'Sem Descrição', value: t.value || 0 })),
             ...periodOrders
-                .map(o => ({ name: o.product, value: o.totalValue }))
+                .map(o => ({ name: o.product || 'Produto', value: o.totalValue || 0 }))
         ];
 
         const groupAndSum = (list: any[]) => {
@@ -244,65 +258,46 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
         };
     };
 
-    // --- 043 DATA (LAST 12 MONTHS) ---
     const get043History = () => {
-        // 1. Filter by Store (if selected) and include all dates up to current month
         const relevant = transactions043.filter(t => 
             filterStore(t.store) && t.date.slice(0, 7) <= currentMonth
         );
-
-        // 2. Group by Month
         const grouped: Record<string, { credit: number, debit: number }> = {};
         
         relevant.forEach(t => {
-            const key = t.date.slice(0, 7); // YYYY-MM
+            const key = t.date.slice(0, 7);
             if (!grouped[key]) grouped[key] = { credit: 0, debit: 0 };
-            
             if (t.type === 'CREDIT') grouped[key].credit += t.value;
             if (t.type === 'DEBIT') grouped[key].debit += t.value;
         });
 
-        // 3. Convert to Array, Sort and Take Last 12
         const sortedKeys = Object.keys(grouped).sort();
         const last12Keys = sortedKeys.slice(-12);
 
         return last12Keys.map(key => {
             const [y, m] = key.split('-');
-            return {
-                name: `${m}/${y}`,
-                Credito: grouped[key].credit,
-                Debito: grouped[key].debit
-            };
+            return { name: `${m}/${y}`, Credito: grouped[key].credit, Debito: grouped[key].debit };
         });
     };
 
-    // --- SALDO CONTAS DATA (LAST 12 MONTHS) ---
     const getSaldosHistory = () => {
-        // 1. Filter by Store (if selected) and include all dates up to current month
         const relevant = accountBalances.filter(b => {
             const key = `${b.year}-${b.month}`;
             return filterStore(b.store) && key <= currentMonth;
         });
-
-        // 2. Group by Month (summing up all stores if 'Todas' is selected)
         const grouped: Record<string, number> = {};
-
         relevant.forEach(b => {
             const key = `${b.year}-${b.month}`;
             if (!grouped[key]) grouped[key] = 0;
             grouped[key] += b.totalBalance;
         });
 
-        // 3. Convert to Array, Sort and Take Last 12
         const sortedKeys = Object.keys(grouped).sort();
         const last12Keys = sortedKeys.slice(-12);
 
         return last12Keys.map(key => {
             const [y, m] = key.split('-');
-            return {
-                name: `${m}/${y}`,
-                value: grouped[key]
-            };
+            return { name: `${m}/${y}`, value: grouped[key] };
         });
     };
 

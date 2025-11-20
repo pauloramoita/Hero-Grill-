@@ -12,33 +12,43 @@ import { AdminModule } from './components/admin/AdminModule';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { View, User } from './types';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard, Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
     const [currentView, setCurrentView] = useState<View>('home');
     const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [isRedirecting, setIsRedirecting] = useState(false);
 
     // Determine if user is restricted to Dashboard only
     const isDashboardOnly = useMemo(() => {
         if (!user || user.isMaster) return false;
         const modules = user.permissions?.modules || [];
+        // Check if Dashboard is the ONLY module permission
         return modules.length === 1 && modules.includes('dashboard');
     }, [user]);
 
     // Enforce Dashboard View for restricted users
     useEffect(() => {
         if (isDashboardOnly && currentView !== 'dashboard') {
+            setIsRedirecting(true);
             setCurrentView('dashboard');
+            setTimeout(() => setIsRedirecting(false), 100); // Smooth transition
         }
     }, [isDashboardOnly, currentView]);
 
     const handleLogin = (loggedUser: User) => {
-        setUser(loggedUser);
+        // Ensure permissions object exists
+        const safeUser = {
+            ...loggedUser,
+            permissions: loggedUser.permissions || { modules: [], stores: [] }
+        };
         
-        // Check restriction immediately upon login
-        const modules = loggedUser.permissions?.modules || [];
-        const restricted = modules.length === 1 && modules.includes('dashboard') && !loggedUser.isMaster;
+        setUser(safeUser);
+        
+        // Immediate check for redirection to avoid flashing Home
+        const modules = safeUser.permissions.modules || [];
+        const restricted = modules.length === 1 && modules.includes('dashboard') && !safeUser.isMaster;
 
         if (restricted) {
             setCurrentView('dashboard');
@@ -50,10 +60,25 @@ const App: React.FC = () => {
     const handleLogout = () => {
         setUser(null);
         setCurrentView('home');
+        setIsRedirecting(false);
     };
 
     if (!user) {
         return <LoginScreen onLogin={handleLogin} />;
+    }
+
+    if (isRedirecting) {
+        return (
+            <div className="min-h-screen flex flex-col bg-gray-50">
+                <Header isHome={false} onHomeClick={() => {}} user={user} onLogout={handleLogout} disableNavigation={true}/>
+                <div className="flex-grow flex items-center justify-center">
+                    <div className="text-center">
+                        <Loader2 className="animate-spin w-10 h-10 text-heroRed mx-auto mb-4" />
+                        <p className="text-gray-500 font-bold">Carregando Perfil...</p>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     const hasPermission = (moduleId: string) => {
@@ -86,7 +111,7 @@ const App: React.FC = () => {
 
             {/* Main Content */}
             <main className="flex-grow">
-                {currentView === 'home' ? (
+                {currentView === 'home' && !isDashboardOnly ? (
                     <div className="max-w-7xl mx-auto p-6 animate-fadeIn">
                         <div className="mb-8 text-center">
                             <h1 className="text-3xl font-black text-heroBlack uppercase italic tracking-tighter mb-2">Painel Principal</h1>
@@ -114,6 +139,12 @@ const App: React.FC = () => {
                                     </div>
                                 </button>
                             ))}
+                            {menuItems.filter(item => hasPermission(item.requiredPerm)).length === 0 && (
+                                <div className="col-span-full text-center p-10 bg-white rounded-lg shadow">
+                                    <p className="text-gray-400 font-bold">Nenhum módulo liberado para seu perfil.</p>
+                                    <p className="text-xs text-gray-400 mt-2">Contate o administrador.</p>
+                                </div>
+                            )}
                         </div>
 
                          <div className="mt-12 flex justify-center">
