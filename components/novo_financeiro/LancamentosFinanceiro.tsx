@@ -337,8 +337,33 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             groups[acc.store].totalBalance += currentBal;
         });
 
-        // Ordena por Nome da Loja
-        return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+        // Ordenar as contas alfabeticamente dentro de cada loja
+        Object.values(groups).forEach(group => {
+            group.accounts.sort((a, b) => a.name.localeCompare(b.name));
+        });
+
+        // Ordem personalizada das lojas
+        const customOrder = ['Hero Joquei', 'Hero Shopping', 'Hero Centro'];
+
+        return Object.entries(groups).sort((a, b) => {
+            const storeA = a[0];
+            const storeB = b[0];
+            
+            const indexA = customOrder.indexOf(storeA);
+            const indexB = customOrder.indexOf(storeB);
+
+            // Se ambas estão na lista personalizada, ordena pelo índice
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            
+            // Se apenas A está na lista, A vem primeiro
+            if (indexA !== -1) return -1;
+            
+            // Se apenas B está na lista, B vem primeiro
+            if (indexB !== -1) return 1;
+            
+            // Se nenhuma está, ordem alfabética
+            return storeA.localeCompare(storeB);
+        });
     }, [accounts, transactions, store]);
 
     if (loading) return <Loader2 className="animate-spin mx-auto mt-10" />;
