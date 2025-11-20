@@ -117,7 +117,7 @@ export const CadastroPedido: React.FC = () => {
             setUnitMeasure('');
             setUnitValue(0);
             setQuantity('');
-            setDeliveryDate('');
+            // setDeliveryDate(''); // Mantendo a data de vencimento preenchida conforme solicitado
             setErrors({});
             alert('Cadastro realizado!');
         } catch (err: any) {
