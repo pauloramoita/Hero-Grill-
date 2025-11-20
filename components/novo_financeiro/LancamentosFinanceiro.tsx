@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
     getAppData, 
@@ -22,40 +23,34 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     
-    // Data Sources
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
     const [transactions, setTransactions] = useState<DailyTransaction[]>([]);
     const [orders, setOrders] = useState<Order[]>([]);
 
-    // Form State
-    const [date, setDate] = useState(getTodayLocalISO()); // Data Vencimento
-    const [paymentDate, setPaymentDate] = useState(getTodayLocalISO()); // Data Pagamento
+    const [date, setDate] = useState(getTodayLocalISO()); 
+    const [paymentDate, setPaymentDate] = useState(getTodayLocalISO()); 
     const [store, setStore] = useState('');
-    const [type, setType] = useState<'Receita' | 'Despesa' | 'Transferência'>('Despesa'); // Default Despesa
+    const [type, setType] = useState<'Receita' | 'Despesa' | 'Transferência'>('Despesa'); 
     const [accountId, setAccountId] = useState('');
     
-    // Transfer Specifics
     const [destinationStore, setDestinationStore] = useState('');
     const [destinationAccountId, setDestinationAccountId] = useState('');
 
-    const [paymentMethod, setPaymentMethod] = useState('Boleto'); // Default Boleto
+    const [paymentMethod, setPaymentMethod] = useState('Boleto'); 
     const [product, setProduct] = useState('');
     const [category, setCategory] = useState('');
-    const [classification, setClassification] = useState(''); // Novo campo: Tipo (Fixo/Variável)
+    const [classification, setClassification] = useState(''); 
     const [supplier, setSupplier] = useState('');
     const [value, setValue] = useState(0);
     const [status, setStatus] = useState<'Pago' | 'Pendente'>('Pendente');
-    const [description, setDescription] = useState(''); // Moved to top level for better control
+    const [description, setDescription] = useState(''); 
 
-    // Recurrence State
     const [recurrenceType, setRecurrenceType] = useState<'none' | 'installment' | 'fixed'>('none');
     const [recurrenceCount, setRecurrenceCount] = useState<number>(2);
 
-    // Edit State
     const [editingItem, setEditingItem] = useState<DailyTransaction | null>(null);
 
-    // Filter State
     const [filterStart, setFilterStart] = useState(getTodayLocalISO());
     const [filterEnd, setFilterEnd] = useState(getTodayLocalISO());
     const [filterStore, setFilterStore] = useState('');
@@ -63,7 +58,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [filterSupplier, setFilterSupplier] = useState('');
     const [filterClassification, setFilterClassification] = useState('');
 
-    // Permission Check
     const canViewBalances = user.isMaster || (user.permissions?.modules && user.permissions.modules.includes('view_balances'));
 
     useEffect(() => {
@@ -128,10 +122,8 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             const loopCount = recurrenceType === 'none' ? 1 : recurrenceCount;
 
             for (let i = 0; i < loopCount; i++) {
-                // Calculate Date
                 const currentDueDate = i === 0 ? date : addMonths(date, i);
                 
-                // Calculate Description
                 let currentDesc = description;
                 if (recurrenceType === 'installment') {
                     currentDesc = description ? `${description} (${i + 1}/${loopCount})` : `Parcela (${i + 1}/${loopCount})`;
@@ -161,10 +153,8 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 });
             }
 
-            // Parallel Execution
             await Promise.all(transactionsToCreate.map(t => saveDailyTransaction(t)));
             
-            // Reset form basics
             setValue(0);
             setProduct('');
             setDescription('');
@@ -450,7 +440,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                             </select>
                         </div>
                         
-                        {/* Fornecedor (Apenas para Despesa) */}
                         {type === 'Despesa' && (
                             <div>
                                 <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
@@ -501,7 +490,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                     </div>
                 </div>
 
-                {/* REPETIÇÃO / PARCELAMENTO */}
                 <div className="bg-gray-50 p-4 rounded border border-gray-200 mb-6">
                     <div className="flex flex-col md:flex-row md:items-center gap-4">
                         <div className="flex items-center gap-2 text-gray-700 font-bold min-w-fit">

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { getFinancialRecords, getAppData, formatCurrency, exportFinancialToXML } from '../../services/storageService';
 import { AppData, FinancialRecord } from '../../types';
@@ -136,7 +137,6 @@ export const RelatorioFinanceiro: React.FC = () => {
 
     return (
         <div className="space-y-8">
-            {/* Filters */}
             <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Parâmetros do Relatório</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
@@ -181,11 +181,9 @@ export const RelatorioFinanceiro: React.FC = () => {
                 </div>
             </div>
 
-            {/* Results */}
             {filteredData.length > 0 ? (
                 <div className="space-y-8 animate-fadeIn">
                     
-                    {/* Chart */}
                     <div className="bg-white p-6 rounded-lg shadow border border-gray-200 h-96 break-inside-avoid">
                          <h3 className="text-lg font-bold text-gray-800 mb-4 text-center uppercase">Evolução Financeira (Receitas x Despesas)</h3>
                          <ResponsiveContainer width="100%" height="100%">
@@ -201,7 +199,6 @@ export const RelatorioFinanceiro: React.FC = () => {
                         </ResponsiveContainer>
                     </div>
 
-                    {/* Table */}
                     <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
                          <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-100">

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
@@ -32,7 +33,6 @@ const App: React.FC = () => {
         return <LoginScreen onLogin={handleLogin} />;
     }
 
-    // Filtra módulos baseados nas permissões do usuário
     const hasPermission = (moduleId: string) => {
         if (user.isMaster) return true;
         if (!user.permissions || !user.permissions.modules) return false;
@@ -44,8 +44,8 @@ const App: React.FC = () => {
         { id: 'pedidos', label: 'Cadastro', icon: <ShoppingCart size={48} />, color: 'bg-heroRed', disabled: false, requiredPerm: 'pedidos' },
         { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={48} />, color: 'bg-heroBlack', disabled: false, requiredPerm: 'controle043' },
         { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={48} />, color: 'bg-gray-800', disabled: false, requiredPerm: 'saldo' },
-        { id: 'financeiro', label: 'Entradas e Saídas', icon: <DollarSign size={48} />, color: 'bg-gray-700', disabled: false, requiredPerm: 'financeiro' }, // Renamed old module
-        { id: 'novo_financeiro', label: 'Financeiro', icon: <Landmark size={48} />, color: 'bg-green-700', disabled: false, requiredPerm: 'novo_financeiro' }, // New Module
+        { id: 'financeiro', label: 'Entradas e Saídas', icon: <DollarSign size={48} />, color: 'bg-gray-700', disabled: false, requiredPerm: 'financeiro' }, 
+        { id: 'novo_financeiro', label: 'Financeiro', icon: <Landmark size={48} />, color: 'bg-green-700', disabled: false, requiredPerm: 'novo_financeiro' }, 
         { id: 'backup', label: 'Backup', icon: <Database size={48} />, color: 'bg-gray-700', disabled: false, requiredPerm: 'backup' },
         { id: 'admin', label: 'Administração', icon: <Settings size={48} />, color: 'bg-gray-900', disabled: false, requiredPerm: 'admin' },
     ];
@@ -133,7 +133,7 @@ const App: React.FC = () => {
             <footer className="bg-heroBlack text-white text-center py-6 mt-auto">
                 <p className="text-sm opacity-50">
                     &copy; {new Date().getFullYear()} Hero Grill System. Todos os direitos reservados. 
-                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v2.6.1 (Stable)</span>
+                    <span className="ml-2 text-xs bg-green-900 px-2 py-1 rounded-full text-green-100">v2.8.0 (Stable)</span>
                 </p>
             </footer>
 
