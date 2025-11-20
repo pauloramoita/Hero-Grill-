@@ -8,8 +8,7 @@ import {
     deleteDailyTransaction,
     formatCurrency, 
     formatDateBr,
-    getTodayLocalISO,
-    exportToXML
+    getTodayLocalISO
 } from '../../services/storageService';
 import { AppData, DailyTransaction, FinancialAccount } from '../../types';
 import { 
@@ -18,12 +17,8 @@ import {
     Edit, 
     Printer, 
     Download, 
-    Search, 
     Filter, 
-    DollarSign, 
-    TrendingUp, 
-    TrendingDown, 
-    Calendar,
+    Calculator,
     Loader2,
     ArrowRight
 } from 'lucide-react';
@@ -36,10 +31,10 @@ export const ConsultaFinanceiro: React.FC = () => {
     const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
     const [loading, setLoading] = useState(true);
     
-    // Modals
     const [editingItem, setEditingItem] = useState<DailyTransaction | null>(null);
 
     // Filters
+    const [dateType, setDateType] = useState<'due' | 'payment'>('due'); // due = Vencimento, payment = Pagamento
     const [startDate, setStartDate] = useState(getTodayLocalISO());
     const [endDate, setEndDate] = useState(getTodayLocalISO());
     
@@ -55,7 +50,7 @@ export const ConsultaFinanceiro: React.FC = () => {
 
     useEffect(() => {
         applyFilters();
-    }, [transactions, startDate, endDate, filterStore, filterAccount, filterCategory, filterSupplier, filterStatus]);
+    }, [transactions, startDate, endDate, filterStore, filterAccount, filterCategory, filterSupplier, filterStatus, dateType]);
 
     const loadData = async () => {
         setLoading(true);
@@ -72,9 +67,14 @@ export const ConsultaFinanceiro: React.FC = () => {
 
     const applyFilters = () => {
         const result = transactions.filter(t => {
-            // Filtro de Data (Baseado no Vencimento)
-            const tDate = t.date;
-            const matchesDate = tDate >= startDate && tDate <= endDate;
+            // Filtro de Data (Vencimento vs Pagamento)
+            const targetDate = dateType === 'payment' ? (t.paymentDate || '') : t.date;
+            
+            // Se filtrar por pagamento, item sem data de pagamento (pendente) não deve aparecer,
+            // exceto se quisermos mostrar pendentes "devidos" no periodo? Não, regime de caixa é estrito.
+            if (dateType === 'payment' && !targetDate) return false;
+
+            const matchesDate = targetDate >= startDate && targetDate <= endDate;
             
             const matchesStore = !filterStore || t.store === filterStore;
             const matchesCategory = !filterCategory || t.category === filterCategory;
@@ -83,7 +83,6 @@ export const ConsultaFinanceiro: React.FC = () => {
             
             let matchesAccount = true;
             if (filterAccount) {
-                // Se for transferência, verifica origem ou destino
                 if (t.type === 'Transferência') {
                     matchesAccount = t.accountId === filterAccount || t.destinationAccountId === filterAccount;
                 } else {
@@ -94,17 +93,22 @@ export const ConsultaFinanceiro: React.FC = () => {
             return matchesDate && matchesStore && matchesCategory && matchesSupplier && matchesAccount && matchesStatus;
         });
 
-        // Ordenar: Pendentes primeiro, depois por data
+        // Ordenação
         result.sort((a, b) => {
+            // Se filtrar por Pagamento, ordenar por data Pagamento
+            if (dateType === 'payment') {
+                const dateA = a.paymentDate || '';
+                const dateB = b.paymentDate || '';
+                return dateB.localeCompare(dateA);
+            }
+            // Padrão: Pendentes primeiro, depois vencimento
             if (a.status === 'Pendente' && b.status === 'Pago') return -1;
             if (a.status === 'Pago' && b.status === 'Pendente') return 1;
-            return a.date.localeCompare(b.date); // Data crescente (mais antigo primeiro nos pendentes faz sentido)
+            return a.date.localeCompare(b.date);
         });
 
         setFilteredTransactions(result);
     };
-
-    // --- Date Presets ---
 
     const setDateRange = (type: 'hoje' | 'semana' | 'mes' | 'ano') => {
         const today = new Date();
@@ -115,8 +119,8 @@ export const ConsultaFinanceiro: React.FC = () => {
             setStartDate(str);
             setEndDate(str);
         } else if (type === 'semana') {
-            const day = today.getDay(); // 0 (Dom) - 6 (Sab)
-            const diffToMon = today.getDate() - day + (day === 0 ? -6 : 1); // Ajusta para segunda
+            const day = today.getDay();
+            const diffToMon = today.getDate() - day + (day === 0 ? -6 : 1);
             const monday = new Date(today.setDate(diffToMon));
             const sunday = new Date(today.setDate(monday.getDate() + 6));
             setStartDate(formatDate(monday));
@@ -134,8 +138,6 @@ export const ConsultaFinanceiro: React.FC = () => {
         }
     };
 
-    // --- Actions ---
-
     const handlePay = async (t: DailyTransaction) => {
         if (!t.accountId) {
             alert("Conta não definida. Edite o lançamento para selecionar uma conta antes de pagar.");
@@ -148,7 +150,6 @@ export const ConsultaFinanceiro: React.FC = () => {
                 paymentDate: getTodayLocalISO()
             };
             await saveDailyTransaction(updated);
-            // Atualiza localmente para agilidade
             setTransactions(prev => prev.map(item => item.id === t.id ? updated : item));
         }
     };
@@ -163,20 +164,18 @@ export const ConsultaFinanceiro: React.FC = () => {
     const handleModalSave = async (updated: DailyTransaction) => {
         await saveDailyTransaction(updated);
         setEditingItem(null);
-        loadData(); // Recarrega tudo para garantir consistência
+        loadData();
     };
 
     const handleExport = () => {
         let xmlContent = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Financeiro"><Table>';
         
-        // Header
         xmlContent += '<Row>';
         ['Data Vencimento', 'Data Pagamento', 'Loja', 'Tipo', 'Descrição', 'Conta', 'Categoria', 'Fornecedor', 'Valor', 'Status'].forEach(h => {
             xmlContent += `<Cell><Data ss:Type="String">${h}</Data></Cell>`;
         });
         xmlContent += '</Row>';
 
-        // Rows
         filteredTransactions.forEach(t => {
             xmlContent += '<Row>';
             xmlContent += `<Cell><Data ss:Type="String">${formatDateBr(t.date)}</Data></Cell>`;
@@ -208,12 +207,6 @@ export const ConsultaFinanceiro: React.FC = () => {
         return accounts.find(a => a.id === id)?.name || 'Conta Removida';
     };
 
-    // --- Totals ---
-
-    const totalReceitas = filteredTransactions.filter(t => t.type === 'Receita').reduce((acc, t) => acc + t.value, 0);
-    const totalDespesas = filteredTransactions.filter(t => t.type === 'Despesa').reduce((acc, t) => acc + t.value, 0);
-    const saldo = totalReceitas - totalDespesas;
-
     const clearFilters = () => {
         setFilterStore(''); 
         setFilterAccount(''); 
@@ -221,7 +214,13 @@ export const ConsultaFinanceiro: React.FC = () => {
         setFilterSupplier(''); 
         setFilterStatus('');
         setDateRange('hoje');
+        setDateType('due');
     };
+
+    // Totais
+    const totalReceitas = filteredTransactions.filter(t => t.type === 'Receita').reduce((acc, t) => acc + t.value, 0);
+    const totalDespesas = filteredTransactions.filter(t => t.type === 'Despesa').reduce((acc, t) => acc + t.value, 0);
+    const saldo = totalReceitas - totalDespesas;
 
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" size={40}/></div>;
 
@@ -229,26 +228,40 @@ export const ConsultaFinanceiro: React.FC = () => {
         <div className="space-y-6">
             {/* Filters Panel */}
             <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
-                {/* Date Presets */}
-                <div className="flex flex-wrap gap-2 mb-4 border-b pb-4">
-                    <button onClick={() => setDateRange('hoje')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase">Hoje</button>
-                    <button onClick={() => setDateRange('semana')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase">Esta Semana</button>
-                    <button onClick={() => setDateRange('mes')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase">Este Mês</button>
-                    <button onClick={() => setDateRange('ano')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase">Este Ano</button>
+                
+                {/* Header & Presets */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b pb-4">
+                    <div className="flex gap-2">
+                        <button onClick={() => setDateRange('hoje')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Hoje</button>
+                        <button onClick={() => setDateRange('semana')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Esta Semana</button>
+                        <button onClick={() => setDateRange('mes')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Este Mês</button>
+                        <button onClick={() => setDateRange('ano')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Este Ano</button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-500 uppercase">Referência de Data:</span>
+                        <select 
+                            value={dateType} 
+                            onChange={e => setDateType(e.target.value as any)} 
+                            className={`border p-2 rounded text-sm font-bold uppercase cursor-pointer ${dateType === 'payment' ? 'bg-blue-50 border-blue-300 text-blue-800' : 'bg-yellow-50 border-yellow-300 text-yellow-800'}`}
+                        >
+                            <option value="due">Data de Vencimento</option>
+                            <option value="payment">Data de Pagamento</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Início (Vencimento)</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Início ({dateType === 'due' ? 'Vencimento' : 'Pagamento'})</label>
                         <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border p-2 rounded text-sm"/>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Fim (Vencimento)</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Fim ({dateType === 'due' ? 'Vencimento' : 'Pagamento'})</label>
                         <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border p-2 rounded text-sm"/>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Status</label>
-                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full border p-2 rounded text-sm font-bold">
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Status (Pagamento)</label>
+                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full border p-2 rounded text-sm font-bold bg-gray-50">
                             <option value="">Todos (Pagos e Pendentes)</option>
                             <option value="Pago">Apenas Pagos</option>
                             <option value="Pendente">Apenas Pendentes</option>
@@ -286,33 +299,39 @@ export const ConsultaFinanceiro: React.FC = () => {
                     </button>
 
                     <div className="flex gap-2">
-                        <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">
+                        <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm transition-colors">
                             <Download size={18}/> Excel
                         </button>
-                        <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow-sm">
+                        <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow-sm transition-colors">
                             <Printer size={18}/> Imprimir
                         </button>
                     </div>
                 </div>
             </div>
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-gray-50 p-4 rounded border flex flex-col">
-                    <span className="text-gray-500 font-bold text-xs uppercase flex items-center gap-2"><Filter size={14}/> Itens</span>
-                    <div className="text-2xl font-black">{filteredTransactions.length}</div>
+            {/* Summary Bar (New Layout) */}
+            <div className="bg-blue-50 p-4 border-b border-blue-100 flex flex-wrap gap-4 justify-between items-center text-sm rounded-lg shadow-sm">
+                <div className="flex items-center gap-2">
+                    <Calculator size={16} className="text-blue-600"/>
+                    <span className="font-bold text-gray-600">RESUMO DA SELEÇÃO:</span>
                 </div>
-                <div className="bg-green-50 p-4 rounded border border-green-100 flex flex-col">
-                    <span className="text-green-600 font-bold text-xs uppercase flex items-center gap-2"><TrendingUp size={14}/> Receitas</span>
-                    <div className="text-2xl font-black text-green-700">{formatCurrency(totalReceitas)}</div>
-                </div>
-                <div className="bg-red-50 p-4 rounded border border-red-100 flex flex-col">
-                    <span className="text-red-600 font-bold text-xs uppercase flex items-center gap-2"><TrendingDown size={14}/> Despesas</span>
-                    <div className="text-2xl font-black text-red-700">{formatCurrency(totalDespesas)}</div>
-                </div>
-                 <div className={`p-4 rounded border flex flex-col ${saldo >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-yellow-50 border-yellow-100'}`}>
-                    <span className={`font-bold text-xs uppercase flex items-center gap-2 ${saldo >= 0 ? 'text-blue-600' : 'text-yellow-700'}`}><DollarSign size={14}/> Saldo</span>
-                    <div className={`text-2xl font-black ${saldo >= 0 ? 'text-blue-800' : 'text-yellow-800'}`}>{formatCurrency(saldo)}</div>
+                <div className="flex gap-6 flex-wrap">
+                    <div className="flex flex-col">
+                        <span className="text-xs font-bold text-gray-500 uppercase">Qtd. Registros</span>
+                        <span className="font-bold text-gray-800 text-lg">{filteredTransactions.length}</span>
+                    </div>
+                    <div className="flex flex-col items-end">
+                        <span className="text-xs font-bold text-green-600 uppercase">Receitas</span>
+                        <span className="font-bold text-green-700">{formatCurrency(totalReceitas)}</span>
+                    </div>
+                    <div className="flex flex-col items-end">
+                        <span className="text-xs font-bold text-red-600 uppercase">Despesas</span>
+                        <span className="font-bold text-red-700">{formatCurrency(totalDespesas)}</span>
+                    </div>
+                    <div className="flex flex-col items-end border-l pl-6 border-blue-200">
+                        <span className="text-xs font-black text-blue-800 uppercase">Saldo (Total)</span>
+                        <span className={`font-black text-lg ${saldo >= 0 ? 'text-blue-800' : 'text-red-600'}`}>{formatCurrency(saldo)}</span>
+                    </div>
                 </div>
             </div>
 
@@ -325,7 +344,7 @@ export const ConsultaFinanceiro: React.FC = () => {
                             <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Loja</th>
                             <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Descrição / Detalhes</th>
                             <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Conta</th>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Cat/Forn</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Categoria</th>
                             <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">Valor</th>
                             <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase">Status</th>
                             <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase no-print">Ações</th>
@@ -337,7 +356,9 @@ export const ConsultaFinanceiro: React.FC = () => {
                                 <td className="px-4 py-3 whitespace-nowrap">
                                     <div className="font-medium">{formatDateBr(t.date)}</div>
                                     {t.paymentDate && t.status === 'Pago' && (
-                                        <div className="text-[10px] text-green-600 font-bold">PG: {formatDateBr(t.paymentDate)}</div>
+                                        <div className="text-[10px] text-green-600 font-bold mt-1 bg-green-50 px-1 rounded inline-block border border-green-100">
+                                            PG: {formatDateBr(t.paymentDate)}
+                                        </div>
                                     )}
                                 </td>
                                 <td className="px-4 py-3 text-gray-700">{t.store}</td>
@@ -349,6 +370,7 @@ export const ConsultaFinanceiro: React.FC = () => {
                                     ) : (
                                         <>
                                             <div className="font-bold text-gray-800">{t.description || t.product || 'Sem descrição'}</div>
+                                            {t.supplier && <div className="text-xs text-gray-500">{t.supplier}</div>}
                                         </>
                                     )}
                                 </td>
@@ -364,9 +386,8 @@ export const ConsultaFinanceiro: React.FC = () => {
                                         </span>
                                     )}
                                 </td>
-                                <td className="px-4 py-3 text-xs">
-                                    <div className="font-medium">{t.category || '-'}</div>
-                                    <div className="text-gray-500">{t.supplier}</div>
+                                <td className="px-4 py-3 text-xs text-gray-600">
+                                    {t.category || '-'}
                                 </td>
                                 <td className={`px-4 py-3 text-right font-bold ${t.type === 'Receita' ? 'text-green-600' : t.type === 'Transferência' ? 'text-purple-600' : 'text-red-600'}`}>
                                     {t.type === 'Receita' ? '+' : ''}{formatCurrency(t.value)}
