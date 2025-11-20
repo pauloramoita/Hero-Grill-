@@ -1,7 +1,9 @@
+
 import React, { useState } from 'react';
 import { NovoFinanceiroSubView, User } from '../../types';
 import { LancamentosFinanceiro } from './LancamentosFinanceiro';
 import { CamposFinanceiro } from './CamposFinanceiro';
+import { ConsultaFinanceiro } from './ConsultaFinanceiro';
 
 interface NovoFinanceiroModuleProps {
     user: User;
@@ -13,7 +15,7 @@ export const NovoFinanceiroModule: React.FC<NovoFinanceiroModuleProps> = ({ user
 
     const tabs: { id: NovoFinanceiroSubView, label: string, disabled?: boolean, visible: boolean }[] = [
         { id: 'lancamentos', label: 'LANÇAMENTOS', visible: true },
-        { id: 'consulta', label: 'CONSULTAS', disabled: true, visible: true },
+        { id: 'consulta', label: 'CONSULTAS', disabled: false, visible: true },
         { id: 'relatorios', label: 'RELATÓRIOS', disabled: true, visible: true },
         { id: 'campos', label: 'CAMPOS FINANCEIRO!', visible: canConfigFinanceiro },
     ];
@@ -50,8 +52,9 @@ export const NovoFinanceiroModule: React.FC<NovoFinanceiroModuleProps> = ({ user
             {/* Content */}
             <div className="animate-fadeIn">
                 {activeTab === 'lancamentos' && <LancamentosFinanceiro user={user} />}
+                {activeTab === 'consulta' && <ConsultaFinanceiro />}
                 {activeTab === 'campos' && canConfigFinanceiro && <CamposFinanceiro />}
-                {(activeTab === 'consulta' || activeTab === 'relatorios') && (
+                {activeTab === 'relatorios' && (
                     <div className="p-10 text-center text-gray-400 bg-gray-50 border border-dashed rounded-lg">
                         <h3 className="text-xl font-bold">Em Construção</h3>
                         <p>Este módulo estará disponível em breve.</p>
