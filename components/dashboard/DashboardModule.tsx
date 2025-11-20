@@ -4,16 +4,15 @@ import {
     getOrders, 
     getDailyTransactions, 
     getFinancialAccounts,
-    getAccountBalances,
     formatCurrency
 } from '../../services/storageService';
-import { AppData, Order, DailyTransaction, FinancialAccount, AccountBalance } from '../../types';
+import { AppData, Order, DailyTransaction, FinancialAccount } from '../../types';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     AreaChart, Area
 } from 'recharts';
 import { 
-    LayoutDashboard, Store, Loader2, BarChart2, ArrowUpRight, SortAsc, SortDesc
+    Loader2
 } from 'lucide-react';
 
 export const DashboardModule: React.FC = () => {
@@ -23,7 +22,6 @@ export const DashboardModule: React.FC = () => {
     const [orders, setOrders] = useState<Order[]>([]);
     const [transactions, setTransactions] = useState<DailyTransaction[]>([]);
     const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
-    const [accountBalances, setAccountBalances] = useState<AccountBalance[]>([]);
 
     const [selectedStore, setSelectedStore] = useState('');
     const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -38,18 +36,16 @@ export const DashboardModule: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [d, o, t, a, ab] = await Promise.all([
+            const [d, o, t, a] = await Promise.all([
                 getAppData(),
                 getOrders(),
                 getDailyTransactions(),
-                getFinancialAccounts(),
-                getAccountBalances()
+                getFinancialAccounts()
             ]);
             setAppData(d);
             setOrders(o);
             setTransactions(t);
             setAccounts(a);
-            setAccountBalances(ab);
         } catch (error) {
             console.error("Error loading dashboard data", error);
         } finally {
@@ -59,108 +55,160 @@ export const DashboardModule: React.FC = () => {
 
     const filterStore = (storeName: string | null | undefined) => !selectedStore || storeName === selectedStore;
 
-    const getProjectionFactor = () => {
-        const today = new Date();
-        const [year, month] = currentMonth.split('-').map(Number);
-        const selectedDate = new Date(year, month - 1, 1);
+    // --- KPIs Calculations (Financial Module) ---
+
+    const calculateFinancialMetrics = () => {
+        // Filter for period and store
+        const periodTransactions = transactions.filter(t => 
+            t.date.startsWith(currentMonth) && 
+            filterStore(t.store)
+        );
         
-        if (today.getMonth() !== selectedDate.getMonth() || today.getFullYear() !== selectedDate.getFullYear()) {
-            return 1;
-        }
+        const periodOrders = orders.filter(o => 
+            o.date.startsWith(currentMonth) && 
+            filterStore(o.store)
+        );
 
-        const daysInMonth = new Date(year, month, 0).getDate();
-        const daysPassed = today.getDate();
-        
-        if (daysPassed === 0) return 1;
-        return daysInMonth / daysPassed;
-    };
+        // 1. Vendas Mês (Todas as Receitas do módulo financeiro)
+        const totalRevenues = periodTransactions
+            .filter(t => t.type === 'Receita')
+            .reduce((acc, t) => acc + t.value, 0);
 
-    const calculateMetrics = () => {
-        const factor = getProjectionFactor();
+        // 2. Despesas Fixas (Do módulo financeiro)
+        // Consideramos que 'classification' armazena 'Fixa' ou 'Fixo'
+        const totalFixed = periodTransactions
+            .filter(t => t.type === 'Despesa' && (t.classification === 'Fixa' || t.classification === 'Fixo'))
+            .reduce((acc, t) => acc + t.value, 0);
 
-        const expensesList = [
-            ...orders
-                .filter(o => o.date.startsWith(currentMonth) && filterStore(o.store))
-                .map(o => ({
-                    name: o.product,
-                    value: o.totalValue,
-                    type: o.type || 'Variável',
-                    store: o.store
-                })),
-            ...transactions
-                .filter(t => t.date.startsWith(currentMonth) && t.type === 'Despesa' && filterStore(t.store))
-                .map(t => ({
-                    name: t.description || t.category || t.supplier,
-                    value: t.value,
-                    type: t.classification || 'Variável',
-                    store: t.store
-                }))
-        ];
+        // 3. Despesas Variáveis (Do módulo financeiro + Pedidos)
+        // Pedidos são considerados despesas variáveis de estoque
+        const variableTrans = periodTransactions
+            .filter(t => t.type === 'Despesa' && t.classification !== 'Fixa' && t.classification !== 'Fixo')
+            .reduce((acc, t) => acc + t.value, 0);
+            
+        const variableOrders = periodOrders
+            .reduce((acc, o) => acc + o.totalValue, 0);
 
-        const revenuesList = transactions
-            .filter(t => t.date.startsWith(currentMonth) && t.type === 'Receita' && filterStore(t.store))
-            .map(t => ({
-                name: t.description || t.category,
-                value: t.value,
-                store: t.store
-            }));
+        const totalVariable = variableTrans + variableOrders;
 
-        const totalRevenues = revenuesList.reduce((acc, item) => acc + item.value, 0);
-        const totalExpenses = expensesList.reduce((acc, item) => acc + item.value, 0);
-        const totalFixed = expensesList.filter(e => e.type === 'Fixa' || e.type === 'Fixo').reduce((acc, item) => acc + item.value, 0);
-        
+        // 4. Lucro Líquido (Receitas - Despesas Totais)
+        const netResult = totalRevenues - (totalFixed + totalVariable);
+
         return {
             totalRevenues,
-            totalExpenses,
             totalFixed,
-            netResult: totalRevenues - totalExpenses,
-            projectedRevenues: totalRevenues * factor,
-            projectedExpenses: totalExpenses * factor,
-            expensesList,
-            revenuesList
+            totalVariable,
+            netResult
         };
     };
 
-    const metrics = calculateMetrics();
+    const calculateTotalBalance = () => {
+        // Somar o saldo de todas as contas (considerando apenas o que foi PAGO/REALIZADO)
+        let total = 0;
+        
+        // Contas pertencentes à loja selecionada (ou todas)
+        const accountsToSum = accounts.filter(a => filterStore(a.store));
 
-    const getStorePerformance = () => {
-        const stores = appData.stores.filter(s => filterStore(s));
-        const factor = getProjectionFactor();
-        const performanceData: any[] = [];
-
-        stores.forEach(store => {
-            const storeRev = transactions
-                .filter(t => t.date.startsWith(currentMonth) && t.type === 'Receita' && t.store === store)
-                .reduce((acc, t) => acc + t.value, 0);
-
-            const storeOrd = orders
-                .filter(o => o.date.startsWith(currentMonth) && o.store === store)
-                .reduce((acc, o) => acc + o.totalValue, 0);
+        accountsToSum.forEach(acc => {
+            let bal = acc.initialBalance;
             
-            const storeTransExp = transactions
-                .filter(t => t.date.startsWith(currentMonth) && t.type === 'Despesa' && t.store === store)
-                .reduce((acc, t) => acc + t.value, 0);
-
-            const storeExp = storeOrd + storeTransExp;
-
-            performanceData.push({
-                store,
-                revenue: storeRev,
-                projRevenue: storeRev * factor,
-                expense: storeExp,
-                projExpense: storeExp * factor,
-                result: storeRev - storeExp
+            // Transações PAGAS afetam o saldo real
+            const accTrans = transactions.filter(t => t.status === 'Pago');
+            
+            accTrans.forEach(t => {
+                // Se a conta é a origem/principal
+                if (t.accountId === acc.id) {
+                    if (t.type === 'Receita') bal += t.value;
+                    else if (t.type === 'Despesa') bal -= t.value;
+                    else if (t.type === 'Transferência') bal -= t.value;
+                }
+                // Se a conta é destino de uma transferência
+                if (t.type === 'Transferência' && t.destinationAccountId === acc.id) {
+                    bal += t.value;
+                }
             });
+            total += bal;
         });
-
-        return performanceData.sort((a, b) => b.revenue - a.revenue);
+        return total;
     };
 
-    const storePerformance = getStorePerformance();
+    const getFinancialBalanceHistory = () => {
+        // Histórico baseado nas transações reais (Fluxo de Caixa Realizado)
+        const accountsToSum = accounts.filter(a => filterStore(a.store));
+        const initialTotal = accountsToSum.reduce((acc, a) => acc + a.initialBalance, 0);
+
+        // Transações pagas ordenadas por data de pagamento
+        const sortedTrans = transactions
+            .filter(t => t.status === 'Pago')
+            .sort((a, b) => (a.paymentDate || a.date).localeCompare(b.paymentDate || b.date));
+
+        // Últimos 12 meses
+        const today = new Date();
+        const history = [];
+        
+        for(let i=11; i>=0; i--) {
+             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+             const y = d.getFullYear();
+             const m = d.getMonth(); // 0-11
+             const monthKey = `${y}-${String(m + 1).padStart(2, '0')}`;
+             const endOfMonth = new Date(y, m + 1, 0).toISOString().slice(0, 10);
+
+             // Calcula saldo acumulado até o fim deste mês
+             // Filtrar transações que ocorreram até endOfMonth
+             const transUpToNow = sortedTrans.filter(t => (t.paymentDate || t.date) <= endOfMonth);
+
+             let change = 0;
+             transUpToNow.forEach(t => {
+                // Verifica se a transação afeta as contas selecionadas
+                // Otimização: poderíamos pré-filtrar transUpToNow, mas iterar é seguro
+                
+                const isOriginInFilter = t.accountId && accountsToSum.some(a => a.id === t.accountId);
+                const isDestInFilter = t.destinationAccountId && accountsToSum.some(a => a.id === t.destinationAccountId);
+
+                if (isOriginInFilter) {
+                    if (t.type === 'Receita') change += t.value;
+                    if (t.type === 'Despesa') change -= t.value;
+                    if (t.type === 'Transferência') change -= t.value;
+                }
+                if (t.type === 'Transferência' && isDestInFilter) {
+                    change += t.value;
+                }
+             });
+
+             history.push({
+                name: `${String(m + 1).padStart(2, '0')}/${String(y).slice(2)}`,
+                Saldo: initialTotal + change
+             });
+        }
+        
+        return history;
+    };
+
+    // --- Expense Lists for Details ---
 
     const getExpenseLists = () => {
-        const fixed = metrics.expensesList.filter(e => e.type === 'Fixa' || e.type === 'Fixo');
-        const variable = metrics.expensesList.filter(e => e.type === 'Variável' || e.type === 'Variavel' || !e.type);
+        const periodTransactions = transactions.filter(t => 
+            t.date.startsWith(currentMonth) && 
+            filterStore(t.store) &&
+            t.type === 'Despesa'
+        );
+        
+        const periodOrders = orders.filter(o => 
+            o.date.startsWith(currentMonth) && 
+            filterStore(o.store)
+        );
+
+        const fixedList = periodTransactions
+            .filter(t => t.classification === 'Fixa' || t.classification === 'Fixo')
+            .map(t => ({ name: t.description || t.category || t.supplier, value: t.value }));
+
+        const variableList = [
+            ...periodTransactions
+                .filter(t => t.classification !== 'Fixa' && t.classification !== 'Fixo')
+                .map(t => ({ name: t.description || t.category || t.supplier, value: t.value })),
+            ...periodOrders
+                .map(o => ({ name: o.product, value: o.totalValue }))
+        ];
 
         const groupAndSum = (list: any[]) => {
             const grouped: Record<string, number> = {};
@@ -170,8 +218,8 @@ export const DashboardModule: React.FC = () => {
             return Object.entries(grouped).map(([name, value]) => ({ name, value }));
         };
 
-        const groupedFixed = groupAndSum(fixed);
-        const groupedVariable = groupAndSum(variable);
+        const groupedFixed = groupAndSum(fixedList);
+        const groupedVariable = groupAndSum(variableList);
 
         const sortFn = (type: 'alpha' | 'value') => (a: any, b: any) => {
             if (type === 'value') return b.value - a.value;
@@ -184,45 +232,10 @@ export const DashboardModule: React.FC = () => {
         };
     };
 
+    const metrics = calculateFinancialMetrics();
+    const totalBalance = calculateTotalBalance();
+    const balanceHistory = getFinancialBalanceHistory();
     const expenseLists = getExpenseLists();
-
-    // --- Total Saldo Logic (from AccountBalances) ---
-    const getCurrentTotalBalance = () => {
-        const [y, m] = currentMonth.split('-');
-        // Filter balances for current month selection
-        const relevant = accountBalances.filter(b => 
-            b.year === parseInt(y) && 
-            b.month === m && 
-            filterStore(b.store)
-        );
-        return relevant.reduce((acc, b) => acc + b.totalBalance, 0);
-    };
-    const totalBalance = getCurrentTotalBalance();
-
-    const getBalanceHistory = () => {
-        const grouped: Record<string, number> = {};
-        accountBalances.forEach(b => {
-            if (selectedStore && b.store !== selectedStore) return;
-            const sortKey = `${b.year}-${b.month}`;
-            if (!grouped[sortKey]) grouped[sortKey] = 0;
-            grouped[sortKey] += b.totalBalance;
-        });
-
-        const data = Object.entries(grouped)
-            .map(([key, value]) => {
-                const [year, month] = key.split('-');
-                return {
-                    sortKey: key,
-                    name: `${month}/${year.slice(2)}`,
-                    Saldo: value
-                };
-            })
-            .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-
-        return data.slice(-12);
-    };
-
-    const balanceHistory = getBalanceHistory();
 
     if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin w-12 h-12 text-heroRed"/></div>;
 
@@ -250,30 +263,36 @@ export const DashboardModule: React.FC = () => {
                 />
             </div>
 
-            {/* KPI Cards - New Design */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* KPI Cards - Updated to 5 items */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* 1. Saldo Total (Black) */}
-                <div className="bg-[#1A1A1A] text-white p-6 rounded-lg shadow-lg flex flex-col justify-center h-32">
+                <div className="bg-[#1A1A1A] text-white p-4 rounded-lg shadow-lg flex flex-col justify-center h-32">
                     <p className="text-xs font-bold uppercase opacity-70">SALDO TOTAL</p>
-                    <h3 className="text-3xl font-black mt-1">{formatCurrency(totalBalance)}</h3>
+                    <h3 className="text-2xl font-black mt-1 break-words">{formatCurrency(totalBalance)}</h3>
                 </div>
 
                 {/* 2. Vendas Mês (Red) */}
-                <div className="bg-[#C0392B] text-white p-6 rounded-lg shadow-lg flex flex-col justify-center h-32">
+                <div className="bg-[#C0392B] text-white p-4 rounded-lg shadow-lg flex flex-col justify-center h-32">
                     <p className="text-xs font-bold uppercase opacity-70">VENDAS MÊS</p>
-                    <h3 className="text-3xl font-black mt-1">{formatCurrency(metrics.totalRevenues)}</h3>
+                    <h3 className="text-2xl font-black mt-1 break-words">{formatCurrency(metrics.totalRevenues)}</h3>
                 </div>
 
                 {/* 3. Despesas Fixas (White) */}
-                <div className="bg-white text-gray-800 p-6 rounded-lg shadow border border-gray-200 flex flex-col justify-center h-32">
+                <div className="bg-white text-gray-800 p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-center h-32">
                     <p className="text-xs font-bold text-gray-500 uppercase">DESPESAS FIXAS</p>
-                    <h3 className="text-3xl font-black mt-1 text-heroBlack">{formatCurrency(metrics.totalFixed)}</h3>
+                    <h3 className="text-2xl font-black mt-1 text-heroBlack break-words">{formatCurrency(metrics.totalFixed)}</h3>
                 </div>
 
-                {/* 4. Lucro Líquido (White with Green Text) */}
-                <div className="bg-white p-6 rounded-lg shadow border border-gray-200 flex flex-col justify-center h-32">
+                {/* 4. Despesas Variáveis (White) */}
+                <div className="bg-white text-gray-800 p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-center h-32">
+                    <p className="text-xs font-bold text-gray-500 uppercase">DESP. VARIÁVEIS</p>
+                    <h3 className="text-2xl font-black mt-1 text-heroBlack break-words">{formatCurrency(metrics.totalVariable)}</h3>
+                </div>
+
+                {/* 5. Lucro Líquido (White with Green/Red Text) */}
+                <div className="bg-white p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-center h-32">
                     <p className="text-xs font-bold text-gray-500 uppercase">LUCRO LÍQUIDO</p>
-                    <h3 className={`text-3xl font-black mt-1 ${metrics.netResult >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <h3 className={`text-2xl font-black mt-1 break-words ${metrics.netResult >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatCurrency(metrics.netResult)}
                     </h3>
                 </div>
@@ -282,12 +301,16 @@ export const DashboardModule: React.FC = () => {
             {/* Main Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
-                {/* Receitas x Despesas (Simplified) */}
+                {/* Receitas x Despesas */}
                 <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
                     <h3 className="text-heroRed font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">RECEITAS X DESPESAS</h3>
                     <div className="h-64 w-full">
                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={[{ name: 'Atual', receitas: metrics.totalRevenues, despesas: metrics.totalExpenses }]}>
+                            <BarChart data={[{ 
+                                name: 'Atual', 
+                                receitas: metrics.totalRevenues, 
+                                despesas: metrics.totalFixed + metrics.totalVariable 
+                            }]}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <XAxis dataKey="name" hide />
                                 <YAxis tickFormatter={(val) => `R$${val/1000}k`} />
@@ -300,9 +323,9 @@ export const DashboardModule: React.FC = () => {
                     </div>
                 </div>
 
-                 {/* Evolução de Saldo */}
+                 {/* Evolução de Saldo (Histórico Real) */}
                  <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                    <h3 className="text-heroRed font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">EVOLUÇÃO DO SALDO</h3>
+                    <h3 className="text-heroRed font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">EVOLUÇÃO DO SALDO TOTAL</h3>
                     <div className="h-64 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={balanceHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -315,7 +338,7 @@ export const DashboardModule: React.FC = () => {
                                 <XAxis dataKey="name" tick={{fontSize: 10}} stroke="#9CA3AF" />
                                 <YAxis tick={{fontSize: 10}} tickFormatter={(val) => `${val/1000}k`} stroke="#9CA3AF" />
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <Tooltip />
+                                <Tooltip formatter={(value: number) => formatCurrency(value)}/>
                                 <Area 
                                     type="monotone" 
                                     dataKey="Saldo" 
@@ -335,65 +358,38 @@ export const DashboardModule: React.FC = () => {
                 {/* Despesas Fixas List */}
                 <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-gray-600 font-bold uppercase text-sm">Despesas Fixas</h3>
-                         <button onClick={() => setSortFixed(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded">
+                        <h3 className="text-gray-600 font-bold uppercase text-sm">Detalhamento: Despesas Fixas</h3>
+                         <button onClick={() => setSortFixed(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded hover:bg-gray-50">
                             {sortFixed === 'value' ? 'Ordenar: Valor' : 'Ordenar: A-Z'}
                         </button>
                     </div>
-                    <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
-                        {expenseLists.fixed.map((item, idx) => (
-                            <div key={idx} className="flex justify-between text-sm border-b border-gray-50 pb-1">
-                                <span className="text-gray-600">{item.name}</span>
+                    <div className="max-h-64 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                        {expenseLists.fixed.length > 0 ? expenseLists.fixed.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-sm border-b border-gray-50 pb-1 hover:bg-gray-50">
+                                <span className="text-gray-600 truncate flex-1 mr-2">{item.name}</span>
                                 <span className="font-bold text-gray-800">{formatCurrency(item.value)}</span>
                             </div>
-                        ))}
+                        )) : <p className="text-center text-gray-400 text-xs py-4">Nenhuma despesa fixa no período.</p>}
                     </div>
                 </div>
 
                 {/* Despesas Variáveis List */}
                 <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-gray-600 font-bold uppercase text-sm">Despesas Variáveis</h3>
-                        <button onClick={() => setSortVariable(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded">
+                        <h3 className="text-gray-600 font-bold uppercase text-sm">Detalhamento: Despesas Variáveis</h3>
+                        <button onClick={() => setSortVariable(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded hover:bg-gray-50">
                             {sortVariable === 'value' ? 'Ordenar: Valor' : 'Ordenar: A-Z'}
                         </button>
                     </div>
-                     <div className="max-h-64 overflow-y-auto pr-2 space-y-2">
-                        {expenseLists.variable.map((item, idx) => (
-                            <div key={idx} className="flex justify-between text-sm border-b border-gray-50 pb-1">
-                                <span className="text-gray-600">{item.name}</span>
+                     <div className="max-h-64 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                        {expenseLists.variable.length > 0 ? expenseLists.variable.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-sm border-b border-gray-50 pb-1 hover:bg-gray-50">
+                                <span className="text-gray-600 truncate flex-1 mr-2">{item.name}</span>
                                 <span className="font-bold text-gray-800">{formatCurrency(item.value)}</span>
                             </div>
-                        ))}
+                        )) : <p className="text-center text-gray-400 text-xs py-4">Nenhuma despesa variável no período.</p>}
                     </div>
                 </div>
-            </div>
-
-            {/* Store Performance */}
-             <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-                 <div className="p-4 bg-gray-50 border-b border-gray-200">
-                    <h3 className="text-gray-700 font-bold uppercase text-sm">Desempenho por Loja</h3>
-                 </div>
-                 <table className="min-w-full text-sm">
-                    <thead className="bg-white text-gray-500">
-                        <tr>
-                            <th className="px-6 py-3 text-left font-bold uppercase">Loja</th>
-                            <th className="px-6 py-3 text-right font-bold uppercase text-green-600">Vendas</th>
-                            <th className="px-6 py-3 text-right font-bold uppercase text-red-600">Despesas</th>
-                            <th className="px-6 py-3 text-right font-bold uppercase text-blue-600">Projeção Venda</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {storePerformance.map((s, i) => (
-                            <tr key={i} className="hover:bg-gray-50">
-                                <td className="px-6 py-3 font-bold text-gray-700">{s.store}</td>
-                                <td className="px-6 py-3 text-right font-mono text-green-700">{formatCurrency(s.revenue)}</td>
-                                <td className="px-6 py-3 text-right font-mono text-red-700">{formatCurrency(s.expense)}</td>
-                                <td className="px-6 py-3 text-right font-mono font-bold text-blue-700">{formatCurrency(s.projRevenue)}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                 </table>
             </div>
         </div>
     );
