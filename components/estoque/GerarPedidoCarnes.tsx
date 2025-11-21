@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getOrders, getMeatConsumptionLogs, getMeatAdjustments, getAppData } from '../../services/storageService';
 import { AppData } from '../../types';
-import { Printer, Loader2, Share2, Eye, EyeOff, Camera } from 'lucide-react';
+import { Loader2, Eye, EyeOff, Camera, Filter, XCircle } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
 export const GerarPedidoCarnes: React.FC = () => {
@@ -11,6 +11,9 @@ export const GerarPedidoCarnes: React.FC = () => {
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [selectedStore, setSelectedStore] = useState('');
     const [showStock, setShowStock] = useState(false);
+    
+    // Estado para controlar filtro de itens zerados
+    const [hideZero, setHideZero] = useState(false);
 
     const printRef = useRef<HTMLDivElement>(null);
 
@@ -78,7 +81,7 @@ export const GerarPedidoCarnes: React.FC = () => {
                 currentStock: totalBought - totalConsumed + totalAdjusted,
                 orderQtyStr: '0,000',
                 orderQtyNum: 0,
-                unit: 'KG' 
+                unit: 'PÇ' // Padrão alterado para PÇ conforme solicitado
             };
         });
 
@@ -87,25 +90,37 @@ export const GerarPedidoCarnes: React.FC = () => {
 
     const formatWeight = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
-    const handleQtyChange = (index: number, value: string) => {
-        const newData = [...orderData];
-        const raw = value.replace(/\D/g, '');
-        
-        if (!raw) {
-            newData[index].orderQtyStr = '0,000';
-            newData[index].orderQtyNum = 0;
-        } else {
-            const num = parseInt(raw, 10) / 1000;
-            newData[index].orderQtyStr = formatWeight(num);
-            newData[index].orderQtyNum = num;
-        }
-        setOrderData(newData);
+    // Função para atualizar quantidade usando o nome do produto como chave (seguro para filtros)
+    const handleQtyChange = (productName: string, value: string) => {
+        setOrderData(prevData => {
+            return prevData.map(item => {
+                if (item.name === productName) {
+                    const raw = value.replace(/\D/g, '');
+                    let orderQtyStr = '0,000';
+                    let orderQtyNum = 0;
+
+                    if (raw) {
+                        const num = parseInt(raw, 10) / 1000;
+                        orderQtyStr = formatWeight(num);
+                        orderQtyNum = num;
+                    }
+                    return { ...item, orderQtyStr, orderQtyNum };
+                }
+                return item;
+            });
+        });
     };
 
-    const handleUnitChange = (index: number, val: string) => {
-        const newData = [...orderData];
-        newData[index].unit = val;
-        setOrderData(newData);
+    // Função para atualizar unidade
+    const handleUnitChange = (productName: string, val: string) => {
+        setOrderData(prevData => {
+            return prevData.map(item => {
+                if (item.name === productName) {
+                    return { ...item, unit: val };
+                }
+                return item;
+            });
+        });
     };
 
     const handleShareImage = async () => {
@@ -113,7 +128,6 @@ export const GerarPedidoCarnes: React.FC = () => {
         setGeneratingImage(true);
 
         try {
-            // Delay para garantir renderização
             await new Promise(resolve => setTimeout(resolve, 200));
 
             const canvas = await html2canvas(printRef.current, {
@@ -143,7 +157,6 @@ export const GerarPedidoCarnes: React.FC = () => {
                             text: `Pedido de Compra - ${selectedStore}`
                         });
                     } catch (shareError) {
-                        // Usuário cancelou ou erro no share, fallback para download
                         console.log('Share cancelado, tentando download...');
                         downloadImage(canvas, fileName);
                     }
@@ -169,6 +182,11 @@ export const GerarPedidoCarnes: React.FC = () => {
         document.body.removeChild(link);
     };
 
+    // Lógica de Filtragem
+    const displayedData = hideZero 
+        ? orderData.filter(item => item.orderQtyNum > 0) 
+        : orderData;
+
     const totalItems = orderData.reduce((acc, item) => acc + (item.orderQtyNum > 0 ? 1 : 0), 0);
     const totalWeight = orderData.filter(i => i.unit === 'KG').reduce((acc, item) => acc + item.orderQtyNum, 0);
     const totalPieces = orderData.filter(i => i.unit === 'PÇ').reduce((acc, item) => acc + item.orderQtyNum, 0);
@@ -178,7 +196,7 @@ export const GerarPedidoCarnes: React.FC = () => {
     return (
         <div className="w-full max-w-md mx-auto animate-fadeIn pb-32 px-2 sm:px-0">
             
-            {/* Controls Header (No Print) */}
+            {/* Controles (Não sai na impressão) */}
             <div className="mb-4 no-print bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
                  <div className="flex flex-col gap-2">
                     <label className="block text-xs font-bold text-slate-500 uppercase">Loja Solicitante</label>
@@ -192,16 +210,26 @@ export const GerarPedidoCarnes: React.FC = () => {
                     </select>
                  </div>
                  
-                 <button 
-                    onClick={() => setShowStock(!showStock)}
-                    className={`w-full py-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${showStock ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
-                >
-                    {showStock ? <Eye size={16}/> : <EyeOff size={16}/>}
-                    {showStock ? 'Ocultar Coluna Estoque' : 'Mostrar Coluna Estoque'}
-                </button>
+                 <div className="flex gap-2">
+                    <button 
+                        onClick={() => setShowStock(!showStock)}
+                        className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${showStock ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
+                    >
+                        {showStock ? <Eye size={16}/> : <EyeOff size={16}/>}
+                        {showStock ? 'Ocultar Estoque' : 'Ver Estoque'}
+                    </button>
+                    
+                    <button 
+                        onClick={() => setHideZero(!hideZero)}
+                        className={`flex-1 py-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${hideZero ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
+                    >
+                        {hideZero ? <XCircle size={16}/> : <Filter size={16}/>}
+                        {hideZero ? 'Mostrar Todos' : 'Ocultar Zerados'}
+                    </button>
+                 </div>
             </div>
 
-            {/* PRINT AREA - VISIBLE BUT STYLED FOR CAPTURE */}
+            {/* ÁREA DE IMPRESSÃO */}
             <div className="flex justify-center w-full shadow-2xl rounded-sm overflow-hidden">
                 <div 
                     id="print-area" 
@@ -209,7 +237,7 @@ export const GerarPedidoCarnes: React.FC = () => {
                     className="bg-white w-full relative"
                     style={{ fontFamily: "'Courier New', Courier, monospace" }}
                 >
-                    {/* HEAD */}
+                    {/* CABEÇALHO */}
                     <div className="p-4 pb-2 text-center bg-white border-b-2 border-black">
                         <div className="flex justify-center items-baseline gap-1 mb-2">
                             <span className="font-black text-3xl italic tracking-tighter text-black" style={{ fontFamily: 'Arial Black, sans-serif' }}>HERO</span>
@@ -218,7 +246,7 @@ export const GerarPedidoCarnes: React.FC = () => {
                         
                         <h2 className="text-lg font-black uppercase tracking-[0.2em] border-y-2 border-black py-1 mb-4">PEDIDO DE COMPRA</h2>
                         
-                        {/* DESTAQUE UNIDADE - CAIXA PRETA */}
+                        {/* CAIXA PRETA DA LOJA */}
                         <div className="bg-black text-white p-3 mb-4 mx-auto w-full">
                             <span className="block text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">UNIDADE SOLICITANTE</span>
                             <span className="block text-2xl font-black uppercase leading-none break-words">{selectedStore}</span>
@@ -230,8 +258,8 @@ export const GerarPedidoCarnes: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* BODY */}
-                    <div className="bg-white">
+                    {/* TABELA */}
+                    <div className="bg-white min-h-[200px]">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b-2 border-black bg-gray-100">
@@ -242,8 +270,9 @@ export const GerarPedidoCarnes: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-dashed divide-gray-300">
-                                {orderData.map((item, idx) => {
+                                {displayedData.map((item) => {
                                     const hasOrder = item.orderQtyNum > 0;
+                                    
                                     return (
                                         <tr key={item.name} className={hasOrder ? 'bg-yellow-50' : ''}>
                                             <td className="py-3 pl-2 text-xs font-bold uppercase align-middle">
@@ -258,7 +287,7 @@ export const GerarPedidoCarnes: React.FC = () => {
                                                 <input 
                                                     type="text" 
                                                     value={item.orderQtyStr}
-                                                    onChange={(e) => handleQtyChange(idx, e.target.value)}
+                                                    onChange={(e) => handleQtyChange(item.name, e.target.value)}
                                                     className={`w-full text-center bg-transparent font-black text-lg outline-none p-0 m-0 ${hasOrder ? 'text-black' : 'text-gray-300'}`}
                                                     inputMode="numeric"
                                                 />
@@ -266,48 +295,60 @@ export const GerarPedidoCarnes: React.FC = () => {
                                             <td className="py-3 pr-2 text-right align-middle">
                                                 <select 
                                                     value={item.unit}
-                                                    onChange={(e) => handleUnitChange(idx, e.target.value)}
+                                                    onChange={(e) => handleUnitChange(item.name, e.target.value)}
                                                     className="bg-transparent font-bold outline-none text-right w-full text-[10px] uppercase p-0 m-0 border-none appearance-none"
                                                     style={{ textAlignLast: 'right' }}
                                                 >
-                                                    <option value="KG">KG</option>
                                                     <option value="PÇ">PÇ</option>
+                                                    <option value="KG">KG</option>
                                                 </select>
                                             </td>
                                         </tr>
                                     );
                                 })}
+                                {displayedData.length === 0 && (
+                                    <tr>
+                                        <td colSpan={4} className="py-12 text-center text-gray-400 text-xs italic">
+                                            {hideZero ? 'Nenhum item com pedido preenchido.' : 'Nenhum produto disponível.'}
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
 
-                    {/* FOOTER */}
+                    {/* RODAPÉ */}
                     <div className="bg-black text-white p-4">
                         <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
-                            <span className="text-[10px] font-bold uppercase opacity-70">Total de Itens:</span>
+                            <span className="text-[10px] font-bold uppercase opacity-70">Itens com Pedido:</span>
                             <span className="font-mono font-bold text-lg">{totalItems}</span>
                         </div>
                         <div className="flex justify-between items-center pt-1">
-                            <span className="text-xs font-black uppercase tracking-wider">TOTAL ESPERADO:</span>
+                            <span className="text-xs font-black uppercase tracking-wider">TOTAL GERAL:</span>
                             <div className="text-right leading-tight">
-                                <span className="text-2xl font-black block">{formatWeight(totalWeight)} <span className="text-base font-normal">Kg</span></span>
-                                {totalPieces > 0 && (
-                                    <span className="text-xs font-bold text-gray-400 block">+ {formatWeight(totalPieces)} Pçs</span>
+                                {/* Lógica de exibição priorizando PÇs */}
+                                {totalPieces > 0 ? (
+                                    <>
+                                        <span className="text-2xl font-black block text-yellow-400">{formatWeight(totalPieces)} <span className="text-base font-normal text-white">Pçs</span></span>
+                                        {totalWeight > 0 && <span className="text-xs font-bold text-gray-400 block mt-1">+ {formatWeight(totalWeight)} Kg</span>}
+                                    </>
+                                ) : (
+                                    <span className="text-2xl font-black block">{formatWeight(totalWeight)} <span className="text-base font-normal">Kg</span></span>
                                 )}
                             </div>
                         </div>
                     </div>
 
-                    {/* SIGNATURE */}
+                    {/* ASSINATURA */}
                     <div className="p-6 bg-white border-t border-gray-200 text-center mt-1">
                         <div className="h-10 border-b-2 border-black w-3/4 mx-auto mb-2"></div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">ASSINATURA DO RESPONSÁVEL</p>
-                        <p className="text-[7px] text-gray-300 mt-2 uppercase">Sistema Hero Grill Self-service</p>
+                        <p className="text-[7px] text-gray-300 mt-2 uppercase">Hero Grill Self-service &bull; Controle Interno</p>
                     </div>
                 </div>
             </div>
 
-            {/* Floating Action Button */}
+            {/* Botão Flutuante */}
             <div className="fixed bottom-6 left-0 w-full px-4 flex justify-center z-50 no-print">
                 <button 
                     onClick={handleShareImage}
