@@ -693,13 +693,13 @@ export const deleteUser = async (id: string) => {
 
 export const loginUser = async (username: string, password: string): Promise<{ success: boolean, user?: User, message?: string }> => {
     // Master Admin Hardcoded - SAFETY FALLBACK
-    if (username === 'admin' && password === 'admin123') {
+    if (username === 'Paulo' && password === 'Moita3033') {
         return { 
             success: true, 
             user: { 
                 id: 'master-admin', 
                 name: 'Administrador Master', 
-                username: 'admin', 
+                username: 'Paulo', 
                 permissions: { modules: [], stores: [] }, 
                 isMaster: true 
             } 
