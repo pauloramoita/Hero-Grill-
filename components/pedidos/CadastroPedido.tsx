@@ -147,10 +147,11 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
             setErrors({});
             alert('Pedido registrado com sucesso!');
         } catch (err: any) {
-            if (err.message.includes('column') || err.message.includes('schema cache')) {
-                setSubmitError(`ERRO DE BANCO DE DADOS: Coluna não encontrada (${err.message}).\nSOLUÇÃO: Vá ao menu "Backup", clique em "Ver SQL de Instalação" e execute o comando no Supabase para atualizar a tabela.`);
+            const msg = err.message || '';
+            if (msg.includes('column') || msg.includes('schema cache') || msg.includes('violates')) {
+                setSubmitError(`ERRO DE BANCO DE DADOS: Coluna não encontrada ou nula (${msg}).\nSOLUÇÃO: Vá ao menu "Backup", clique em "Ver SQL de Instalação" e execute o comando no Supabase para atualizar a tabela.`);
             } else {
-                setSubmitError(err.message);
+                setSubmitError(msg);
             }
         } finally {
             setSaving(false);

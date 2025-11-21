@@ -192,6 +192,7 @@ export const getOrders = async (): Promise<Order[]> => {
         product: safeString(order.product ?? order.Product),
         brand: safeString(order.brand ?? order.Brand),
         supplier: safeString(order.supplier ?? order.Supplier),
+        // Map variants (CamelCase, Lowercase, SnakeCase)
         unitValue: safeNumber(order.unitValue ?? order.unitvalue ?? order.unit_value),
         unitMeasure: safeString(order.unitMeasure ?? order.unitmeasure ?? order.unit_measure),
         quantity: safeNumber(order.quantity ?? order.Quantity),
@@ -205,26 +206,115 @@ export const getOrders = async (): Promise<Order[]> => {
 
 export const saveOrder = async (order: Order) => {
     const { id, ...rest } = order;
-    const safeOrder = {
+    
+    // Strategy: Try 3 Payloads (Camel, Snake, Lower)
+    // Reason: Database schema might vary depending on when/how it was created.
+
+    // 1. CamelCase (Default JS)
+    const payloadCamel = {
         ...rest,
         unitValue: safeNumber(rest.unitValue),
         quantity: safeNumber(rest.quantity),
         totalValue: safeNumber(rest.totalValue)
     };
-    const { error } = await supabase.from('orders').insert([safeOrder]);
-    if (error) throw new Error(error.message);
+
+    // 2. SnakeCase (Postgres Standard) - Likely needed for 'unit_measure' error
+    const payloadSnake = {
+        date: rest.date,
+        store: rest.store,
+        product: rest.product,
+        brand: rest.brand,
+        supplier: rest.supplier,
+        unit_value: safeNumber(rest.unitValue),
+        unit_measure: rest.unitMeasure,
+        quantity: safeNumber(rest.quantity),
+        total_value: safeNumber(rest.totalValue),
+        delivery_date: rest.deliveryDate,
+        type: rest.type,
+        category: rest.category,
+        created_at: rest.createdAt
+    };
+
+    // 3. Lowercase (Fallback)
+    const payloadLower: any = {};
+    Object.keys(payloadCamel).forEach(k => {
+        payloadLower[k.toLowerCase()] = (payloadCamel as any)[k];
+    });
+
+    // --- ATTEMPT 1: CamelCase ---
+    let { error } = await supabase.from('orders').insert([payloadCamel]);
+
+    if (!error) return; // Success!
+
+    // --- ATTEMPT 2: SnakeCase (If Column Error) ---
+    const msg = error.message.toLowerCase();
+    if (msg.includes('column') || msg.includes('find') || msg.includes('schema') || msg.includes('violates')) {
+        console.warn("CamelCase save failed, trying SnakeCase...", error.message);
+        const { error: errSnake } = await supabase.from('orders').insert([payloadSnake]);
+        
+        if (!errSnake) return; // Success!
+
+        // --- ATTEMPT 3: Lowercase ---
+        console.warn("SnakeCase save failed, trying Lowercase...", errSnake.message);
+        const { error: errLower } = await supabase.from('orders').insert([payloadLower]);
+        
+        if (!errLower) return; // Success!
+
+        // If all failed, throw the SnakeCase error (most likely specific) or Lowercase
+        throw new Error(`Erro ao salvar: ${errSnake.message} / ${errLower.message}`);
+    } else {
+        throw new Error(error.message);
+    }
 };
 
 export const updateOrder = async (order: Order) => {
     const { id, ...rest } = order;
-    const safeOrder = {
+    
+    // Payloads
+    const payloadCamel = {
         ...rest,
         unitValue: safeNumber(rest.unitValue),
         quantity: safeNumber(rest.quantity),
         totalValue: safeNumber(rest.totalValue)
     };
-    const { error } = await supabase.from('orders').update(safeOrder).eq('id', id);
-    if (error) throw new Error(error.message);
+
+    const payloadSnake = {
+        date: rest.date,
+        store: rest.store,
+        product: rest.product,
+        brand: rest.brand,
+        supplier: rest.supplier,
+        unit_value: safeNumber(rest.unitValue),
+        unit_measure: rest.unitMeasure,
+        quantity: safeNumber(rest.quantity),
+        total_value: safeNumber(rest.totalValue),
+        delivery_date: rest.deliveryDate,
+        type: rest.type,
+        category: rest.category,
+        created_at: rest.createdAt
+    };
+
+    const payloadLower: any = {};
+    Object.keys(payloadCamel).forEach(k => {
+        payloadLower[k.toLowerCase()] = (payloadCamel as any)[k];
+    });
+
+    // Try 1
+    let { error } = await supabase.from('orders').update(payloadCamel).eq('id', id);
+    if(!error) return;
+
+    // Try 2 & 3
+    const msg = error.message.toLowerCase();
+    if (msg.includes('column') || msg.includes('violates')) {
+         let { error: errSnake } = await supabase.from('orders').update(payloadSnake).eq('id', id);
+         if(!errSnake) return;
+
+         let { error: errLower } = await supabase.from('orders').update(payloadLower).eq('id', id);
+         if(!errLower) return;
+         
+         throw new Error(errLower.message);
+    }
+    throw new Error(error.message);
 };
 
 export const deleteOrder = async (id: string) => {
@@ -823,9 +913,19 @@ ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "classification" TEXT;
 ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "origin" TEXT;
 ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP DEFAULT NOW();
 
--- CORREÇÕES TABELA DE PEDIDOS
+-- CORREÇÕES TABELA DE PEDIDOS (ADICIONAR FORMATOS COMUNS)
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS "deliveryDate" DATE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "delivery_date" DATE;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS type TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP DEFAULT NOW();
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP DEFAULT NOW();
+
+-- Colunas numéricas importantes
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "totalValue" NUMERIC;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "total_value" NUMERIC;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "unitValue" NUMERIC;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "unit_value" NUMERIC;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "unitMeasure" TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS "unit_measure" TEXT;
 `;
