@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getAppData, saveOrder, getLastOrderForProduct, formatCurrency } from '../../services/storageService';
 import { AppData, User } from '../../types';
-import { AlertCircle, CheckCircle, Loader2, Save } from 'lucide-react';
+import { AlertCircle, CheckCircle, Loader2, Save, ShoppingCart, Calendar } from 'lucide-react';
 
 interface CadastroPedidoProps {
     user: User;
@@ -106,8 +106,8 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
             store: !store,
             category: !category,
             product: !product,
-            brand: !brand,
-            supplier: !supplier,
+            // brand: !brand, // Marca agora é opcional
+            // supplier: !supplier, // Fornecedor agora é opcional
             unitMeasure: !unitMeasure,
             unitValue: unitValue <= 0,
             quantity: qtyFloat <= 0,
@@ -118,6 +118,8 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
 
         if (Object.values(newErrors).some(Boolean)) {
             setSubmitError('Preencha os campos obrigatórios.');
+            // Scroll to top to see error
+            window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
         }
 
@@ -125,20 +127,25 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
         try {
             await saveOrder({
                 id: '', 
-                date, store, product, brand, supplier, unitValue, unitMeasure,
+                date, store, product, 
+                brand: brand || '-', // Save generic dash if empty
+                supplier: supplier || '-', // Save generic dash if empty
+                unitValue, unitMeasure,
                 quantity: qtyFloat, totalValue: unitValue * qtyFloat, 
                 deliveryDate: deliveryDate || null,
                 type,
                 category
             });
 
+            // Reset fields partially to allow quick entry
             setProduct('');
-            setBrand('');
-            setUnitMeasure('');
+            // setBrand(''); // Keep brand? No, reset.
+            // setSupplier(''); // Keep supplier? No, reset.
+            // setUnitMeasure('');
             setUnitValue(0);
             setQuantity('');
             setErrors({});
-            alert('Cadastro realizado!');
+            alert('Pedido registrado com sucesso!');
         } catch (err: any) {
             setSubmitError(err.message);
         } finally {
@@ -149,137 +156,168 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
     if (loadingData) return <div className="text-center p-10"><Loader2 className="animate-spin mx-auto text-heroRed" size={32}/></div>;
 
     // Design System Classes
-    const labelClass = "block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5";
+    const labelClass = "block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1";
     const inputClass = (hasError: boolean, disabled: boolean = false) => 
-        `w-full p-2.5 text-sm rounded-lg outline-none transition-all duration-200 
+        `w-full p-3 md:p-2.5 text-base md:text-sm rounded-lg outline-none transition-all duration-200 font-medium appearance-none
         ${disabled 
             ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' 
             : hasError 
                 ? 'bg-red-50 border border-red-300 text-red-900 focus:ring-2 focus:ring-red-200' 
-                : 'bg-slate-50 border border-slate-300 text-slate-700 focus:bg-white focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed hover:border-slate-400'
+                : 'bg-white border border-slate-300 text-slate-700 focus:border-heroRed focus:ring-2 focus:ring-heroRed/20 shadow-sm'
         }`;
 
     return (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-card border border-slate-200 max-w-5xl mx-auto animate-fadeIn overflow-hidden">
-            
-            {/* Header */}
-            <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <span className="w-1.5 h-6 bg-heroRed rounded-full inline-block"></span>
-                    Novo Pedido
-                </h2>
-                <p className="text-sm text-slate-500 mt-1 ml-3.5">Preencha os dados abaixo para registrar uma nova compra.</p>
-            </div>
-            
-            <div className="p-8">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                    {/* Linha 1 */}
+        <div className="pb-32 md:pb-0"> {/* Padding bottom for mobile sticky footer */}
+            <form onSubmit={handleSubmit} className="bg-white md:rounded-xl shadow-none md:shadow-card border-y md:border border-slate-200 max-w-5xl mx-auto animate-fadeIn overflow-hidden">
+                
+                {/* Header - Sticky on Mobile */}
+                <div className="sticky top-16 z-20 md:static bg-slate-50/95 md:bg-slate-50 backdrop-blur-sm px-6 py-4 md:px-8 md:py-6 border-b border-slate-200 shadow-sm md:shadow-none flex justify-between items-center">
                     <div>
-                        <label className={labelClass}>Data do Pedido</label>
-                        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass(false)}/>
+                        <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 uppercase">
+                            <ShoppingCart className="text-heroRed" size={24} />
+                            Novo Pedido
+                        </h2>
+                        <p className="text-xs text-slate-500 font-medium hidden md:block">Preencha os dados da compra.</p>
                     </div>
+                    <div className="bg-white border border-slate-200 rounded-lg px-3 py-1 flex items-center gap-2 text-xs font-bold text-slate-600 shadow-sm">
+                        <Calendar size={14} className="text-heroRed"/> {new Date().toLocaleDateString('pt-BR')}
+                    </div>
+                </div>
+                
+                <div className="p-6 md:p-8 space-y-6">
+                    {/* Bloco 1: Contexto */}
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className={labelClass}>Data do Pedido</label>
+                                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass(false)}/>
+                            </div>
 
-                    <div>
-                        <label className={labelClass}>Data de Vencimento</label>
-                        <div className="flex gap-2">
-                            <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className={inputClass(false)}/>
-                            <button type="button" onClick={() => setDeliveryDate(new Date().toISOString().split('T')[0])} className="bg-slate-200 text-slate-700 px-3 rounded-lg text-xs font-bold hover:bg-slate-300 transition-colors">Hoje</button>
+                            <div>
+                                <label className={labelClass}>Loja {errors.store && <span className="text-red-500">*</span>}</label>
+                                <select 
+                                    value={store} 
+                                    onChange={(e) => setStore(e.target.value)} 
+                                    className={inputClass(errors.store, availableStores.length === 1)}
+                                    disabled={availableStores.length === 1}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className={labelClass}>Vencimento (Opcional)</label>
+                                <div className="flex gap-2">
+                                    <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className={inputClass(false)}/>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div>
-                        <label className={labelClass}>Loja {errors.store && <span className="text-red-500">*</span>}</label>
-                        <select 
-                            value={store} 
-                            onChange={(e) => setStore(e.target.value)} 
-                            className={inputClass(errors.store, availableStores.length === 1)}
-                            disabled={availableStores.length === 1}
+                    {/* Bloco 2: Produto */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                        <div className="md:col-span-1">
+                            <label className={labelClass}>Categoria {errors.category && <span className="text-red-500">*</span>}</label>
+                            <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass(errors.category)}>
+                                <option value="">Selecione...</option>
+                                {data.categories.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <label className={labelClass}>Produto {errors.product && <span className="text-red-500">*</span>}</label>
+                            <select value={product} onChange={(e) => setProduct(e.target.value)} className={inputClass(errors.product)}>
+                                <option value="">Selecione...</option>
+                                {data.products.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className={labelClass}>Marca <span className="text-slate-400 font-normal text-[10px]">(Opcional)</span></label>
+                            <select value={brand} onChange={(e) => setBrand(e.target.value)} className={inputClass(false)}>
+                                <option value="">Selecione...</option>
+                                {data.brands.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <label className={labelClass}>Fornecedor <span className="text-slate-400 font-normal text-[10px]">(Opcional)</span></label>
+                            <select value={supplier} onChange={(e) => setSupplier(e.target.value)} className={inputClass(false)}>
+                                <option value="">Selecione...</option>
+                                {data.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Bloco 3: Valores */}
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                                <label className={labelClass}>Medida {errors.unitMeasure && <span className="text-red-500">*</span>}</label>
+                                <select value={unitMeasure} onChange={(e) => setUnitMeasure(e.target.value)} className={inputClass(errors.unitMeasure)}>
+                                    <option value="">...</option>
+                                    {data.units.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className={labelClass}>Qtd. {errors.quantity && <span className="text-red-500">*</span>}</label>
+                                <input type="text" value={quantity} onChange={handleQuantityChange} className={`${inputClass(errors.quantity)} text-right font-bold`} placeholder="0,000" inputMode="decimal"/>
+                            </div>
+
+                            <div className="col-span-2 md:col-span-1">
+                                <label className={labelClass}>Vl. Unitário {errors.unitValue && <span className="text-red-500">*</span>}</label>
+                                <input type="text" value={formatCurrency(unitValue)} onChange={handleCurrencyChange} className={`${inputClass(errors.unitValue)} text-right font-bold`} inputMode="numeric"/>
+                            </div>
+                            
+                            <div className="col-span-2 md:col-span-1">
+                                <label className={labelClass}>Tipo (Contábil)</label>
+                                <select value={type} onChange={(e) => setType(e.target.value)} className={inputClass(errors.type)}>
+                                     {data.types.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    {submitError && (
+                        <div className="text-red-600 text-sm font-medium flex items-center gap-2 bg-red-50 px-4 py-3 rounded-lg border border-red-100 animate-shake">
+                            <AlertCircle size={18} className="flex-shrink-0"/> {submitError}
+                        </div>
+                    )}
+
+                    {/* Desktop Footer */}
+                    <div className="hidden md:flex justify-end items-center gap-4 pt-6 border-t border-slate-100">
+                        <div className="text-right mr-4">
+                            <span className="block text-xs font-bold text-slate-400 uppercase">Total do Pedido</span>
+                            <span className="text-3xl font-black text-slate-800">{calculateTotal()}</span>
+                        </div>
+                        <button 
+                            disabled={saving} 
+                            type="submit" 
+                            className="bg-heroRed text-white font-bold py-3 px-10 rounded-lg shadow-md hover:bg-heroRedDark hover:shadow-lg transition-all flex items-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
-                            <option value="">Selecione...</option>
-                            {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-
-                    {/* Linha 2 */}
-                    <div>
-                        <label className={labelClass}>Categoria {errors.category && <span className="text-red-500">*</span>}</label>
-                        <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass(errors.category)}>
-                            <option value="">Selecione...</option>
-                            {data.categories.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className={labelClass}>Produto {errors.product && <span className="text-red-500">*</span>}</label>
-                        <select value={product} onChange={(e) => setProduct(e.target.value)} className={inputClass(errors.product)}>
-                            <option value="">Selecione...</option>
-                            {data.products.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className={labelClass}>Marca {errors.brand && <span className="text-red-500">*</span>}</label>
-                        <select value={brand} onChange={(e) => setBrand(e.target.value)} className={inputClass(errors.brand)}>
-                            <option value="">Selecione...</option>
-                            {data.brands.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-
-                    {/* Linha 3 */}
-                    <div>
-                        <label className={labelClass}>Fornecedor {errors.supplier && <span className="text-red-500">*</span>}</label>
-                        <select value={supplier} onChange={(e) => setSupplier(e.target.value)} className={inputClass(errors.supplier)}>
-                            <option value="">Selecione...</option>
-                            {data.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className={labelClass}>Medida {errors.unitMeasure && <span className="text-red-500">*</span>}</label>
-                        <select value={unitMeasure} onChange={(e) => setUnitMeasure(e.target.value)} className={inputClass(errors.unitMeasure)}>
-                            <option value="">Selecione...</option>
-                            {data.units.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className={labelClass}>Quantidade {errors.quantity && <span className="text-red-500">*</span>}</label>
-                        <input type="text" value={quantity} onChange={handleQuantityChange} className={`${inputClass(errors.quantity)} text-right font-medium`} placeholder="0,000"/>
-                    </div>
-
-                    {/* Linha 4 */}
-                    <div>
-                        <label className={labelClass}>Valor Unitário (R$) {errors.unitValue && <span className="text-red-500">*</span>}</label>
-                        <input type="text" value={formatCurrency(unitValue)} onChange={handleCurrencyChange} className={`${inputClass(errors.unitValue)} text-right font-medium`}/>
-                    </div>
-                    
-                    <div className="relative">
-                        <label className={labelClass}>Valor Total</label>
-                        <div className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-lg text-right font-bold text-slate-800">{calculateTotal()}</div>
-                    </div>
-
-                    <div>
-                        <label className={labelClass}>Tipo (Opcional)</label>
-                        <select value={type} onChange={(e) => setType(e.target.value)} className={inputClass(errors.type)}>
-                             {data.types.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
+                            {saving ? <Loader2 className="animate-spin" size={22}/> : <Save size={22}/>}
+                            {saving ? 'Salvando...' : 'REGISTRAR PEDIDO'}
+                        </button>
                     </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row justify-end items-center gap-4 pt-6 border-t border-slate-100">
-                    {submitError && (
-                        <span className="text-red-600 text-sm font-medium flex items-center gap-1.5 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100">
-                            <AlertCircle size={16}/> {submitError}
-                        </span>
-                    )}
+                {/* Mobile Sticky Footer */}
+                <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 flex justify-between items-center gap-4">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Total Estimado</span>
+                        <span className="text-2xl font-black text-slate-800 leading-none">{calculateTotal()}</span>
+                    </div>
                     <button 
                         disabled={saving} 
                         type="submit" 
-                        className="w-full sm:w-auto bg-heroRed text-white font-semibold py-2.5 px-8 rounded-lg shadow-sm hover:bg-heroRedDark hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="flex-1 bg-heroRed text-white font-bold py-3 px-4 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
                     >
                         {saving ? <Loader2 className="animate-spin" size={20}/> : <Save size={20}/>}
-                        {saving ? 'Salvando...' : 'Registrar Pedido'}
+                        SALVAR
                     </button>
                 </div>
-            </div>
-        </form>
+            </form>
+        </div>
     );
 };

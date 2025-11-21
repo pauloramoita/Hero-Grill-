@@ -4,9 +4,31 @@ import {
     DailyTransaction, FinancialAccount, MeatInventoryLog, MeatStockAdjustment, User 
 } from '../types';
 
-// Initialize Supabase
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// --- SAFE INITIALIZATION ---
+// Helper to safely access environment variables without crashing
+const getEnv = (key: string) => {
+    try {
+        // Check if import.meta.env exists (Vite standard)
+        if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+            return (import.meta as any).env[key] || '';
+        }
+    } catch (e) {
+        console.warn('Error accessing environment variables:', e);
+    }
+    return '';
+};
+
+const rawSupabaseUrl = getEnv('VITE_SUPABASE_URL');
+const rawSupabaseKey = getEnv('VITE_SUPABASE_ANON_KEY');
+
+// Ensure createClient receives a valid URL format to prevent throwing an error immediately
+// If credentials are missing, we use a placeholder so the app loads (and shows connection error in UI) rather than crashing white screen.
+const supabaseUrl = rawSupabaseUrl && rawSupabaseUrl.startsWith('http') 
+    ? rawSupabaseUrl 
+    : 'https://placeholder.supabase.co';
+
+const supabaseKey = rawSupabaseKey || 'placeholder-key';
+
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- HELPERS ---
@@ -69,7 +91,6 @@ export const getLastOrderForProduct = async (product: string): Promise<Order | n
 };
 
 export const exportToXML = (data: Order[], filename: string) => {
-    // Simple stub for XML/Excel export
     console.log("Exporting to XML...", filename, data.length);
     alert("Exportação iniciada (Simulação).");
 };
@@ -276,7 +297,6 @@ export const deleteDailyTransaction = async (id: string) => {
 export const getUsers = async (): Promise<User[]> => {
     const { data, error } = await supabase.from('system_users').select('*');
     if (error) {
-        // Fallback/Init logic could be here, but returning empty allows error handling in component
         console.error(error);
         return [];
     }
@@ -362,10 +382,7 @@ export const restoreBackup = async (file: File): Promise<{ success: boolean, mes
                 
                 for (const [table, rows] of Object.entries(backup)) {
                     if (Array.isArray(rows) && rows.length > 0) {
-                        // Clean table first? Or upsert? Upsert is safer usually but clean helps with deleted items.
-                        // For simple restore, we usually delete all then insert.
-                        await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all logic roughly
-                        
+                        await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000'); 
                         const { error } = await supabase.from(table).insert(rows);
                         if (error) console.warn(`Error restoring table ${table}`, error);
                     }
@@ -391,8 +408,8 @@ export const checkConnection = async () => {
 
 export const getConfigStatus = () => {
     return { 
-        urlConfigured: !!supabaseUrl, 
-        urlPreview: supabaseUrl ? `${supabaseUrl.substring(0, 15)}...` : 'Não configurado' 
+        urlConfigured: !!rawSupabaseUrl, 
+        urlPreview: rawSupabaseUrl ? `${rawSupabaseUrl.substring(0, 15)}...` : 'Não configurado' 
     };
 };
 
