@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { 
     AppData, Order, Transaction043, AccountBalance, FinancialRecord, 
@@ -26,7 +27,6 @@ const rawSupabaseUrl = getEnv('VITE_SUPABASE_URL');
 const rawSupabaseKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
 // Ensure createClient receives a valid URL format to prevent throwing an error immediately
-// If credentials are missing, we use a placeholder so the app loads (and shows connection error in UI) rather than crashing white screen.
 const supabaseUrl = rawSupabaseUrl && rawSupabaseUrl.startsWith('http') 
     ? rawSupabaseUrl 
     : 'https://placeholder.supabase.co';
@@ -37,47 +37,35 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- HELPERS ---
 
-// Robust number parser to recover data saved as text, currency strings, or with commas
+// Robust number parser
 const safeNumber = (val: any): number => {
-    if (typeof val === 'number') {
-        return isNaN(val) ? 0 : val;
-    }
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
     if (val === null || val === undefined) return 0;
     
     if (typeof val === 'string') {
         let clean = val.trim();
         if (!clean || clean === 'NaN' || clean === 'null') return 0;
 
-        // Remove currency symbols and standard text
         clean = clean.replace(/[R$\s]/g, '');
 
-        // Check Brazilian format "1.200,50"
-        // If it has a comma at the end (last 3 chars) and dot before, or just comma
         if (clean.includes(',') && !clean.includes('.')) {
-             // "10,50" -> "10.50"
              clean = clean.replace(',', '.');
         } else if (clean.includes('.') && clean.includes(',')) {
-            // "1.200,50" -> Remove dots, replace comma with dot
-            // Find last separator
             const lastComma = clean.lastIndexOf(',');
             const lastDot = clean.lastIndexOf('.');
-            
             if (lastComma > lastDot) {
-                // Brazilian: 1.000,00
                 clean = clean.replace(/\./g, '').replace(',', '.');
             } else {
-                // US: 1,000.00
                 clean = clean.replace(/,/g, '');
             }
         }
-        
         const num = parseFloat(clean);
         return isNaN(num) ? 0 : num;
     }
     return 0;
 };
 
-// Robust string parser to handle nulls and trimming
+// Robust string parser
 const safeString = (val: any): string => {
     if (val === null || val === undefined) return '';
     return String(val).trim();
@@ -90,7 +78,6 @@ export const formatCurrency = (value: number | string | undefined | null) => {
 
 export const formatDateBr = (dateStr: string) => {
     if(!dateStr) return '-';
-    // Handle timestamps if necessary
     const cleanDate = dateStr.split('T')[0];
     const [y, m, d] = cleanDate.split('-');
     return `${d}/${m}/${y}`;
@@ -105,32 +92,23 @@ export const getTodayLocalISO = () => {
 // --- APP CONFIG / DATA ---
 
 export const getAppData = async (): Promise<AppData> => {
-    // Default empty structure
     const defaults: AppData = { stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] };
     let loadedData: any = null;
 
     try {
-        // 1. Try to fetch configuration from app_config
-        // We select everything to inspect structure if needed
         let { data, error } = await supabase.from('app_config').select('*').limit(1);
-        
         if (data && data.length > 0) {
             const row = data[0];
-            // Robustly find the data column regardless of casing (data, Data, DATA)
             const rowKeys = Object.keys(row);
             const dataKey = rowKeys.find(k => k.toLowerCase() === 'data');
-            if (dataKey) {
-                loadedData = row[dataKey];
-            }
+            if (dataKey) loadedData = row[dataKey];
         }
     } catch (e) {
         console.error("Error fetching AppData", e);
     }
 
-    // Prepare config object
     const config = { ...defaults };
 
-    // 2. Parse loaded JSON with Case-Insensitivity inside the JSON object
     if (loadedData) {
         const keys = Object.keys(loadedData);
         const findKey = (target: string) => keys.find(k => k.toLowerCase() === target.toLowerCase());
@@ -144,14 +122,10 @@ export const getAppData = async (): Promise<AppData> => {
         config.categories = loadedData[findKey('categories') || 'categories'] || [];
     }
 
-    // 3. AUTO-RECONSTRUCTION (Self-Healing)
-    // If crucial data like stores or products are missing, assume data loss/read error
-    // and reconstruct from the Orders history.
+    // AUTO-RECONSTRUCTION
     if (config.stores.length === 0 || config.products.length === 0) {
-        console.warn("Configuration appears empty. Initiating Auto-Reconstruction from Orders history...");
         try {
             const { data: orders } = await supabase.from('orders').select('*');
-            
             if (orders && orders.length > 0) {
                 const uniqueStores = new Set<string>(config.stores);
                 const uniqueProducts = new Set<string>(config.products);
@@ -182,7 +156,6 @@ export const getAppData = async (): Promise<AppData> => {
                 config.suppliers = Array.from(uniqueSuppliers).sort();
                 config.types = Array.from(uniqueTypes).sort();
                 config.categories = Array.from(uniqueCategories).sort();
-                
                 if (config.units.length === 0) config.units = ['Kg', 'Un', 'Lt', 'Cx', 'Pç'];
             }
         } catch (recError) {
@@ -190,7 +163,6 @@ export const getAppData = async (): Promise<AppData> => {
         }
     }
 
-    // Ensure we return arrays to prevent crashes
     return {
         stores: Array.isArray(config.stores) ? config.stores : [],
         products: Array.isArray(config.products) ? config.products : [],
@@ -203,12 +175,11 @@ export const getAppData = async (): Promise<AppData> => {
 };
 
 export const saveAppData = async (appData: AppData) => {
-    // We try to update ID 1. If it doesn't exist, upsert handles insertion.
     const { error } = await supabase.from('app_config').upsert({ id: 1, data: appData });
     if (error) throw new Error(error.message);
 };
 
-// --- ORDERS (PEDIDOS) ---
+// --- ORDERS ---
 
 export const getOrders = async (): Promise<Order[]> => {
     const { data, error } = await supabase.from('orders').select('*');
@@ -217,17 +188,14 @@ export const getOrders = async (): Promise<Order[]> => {
     return (data || []).map((order: any) => ({
         id: order.id,
         date: order.date ?? order.Date,
-        // DATA RECOVERY: Check multiple casing variations
         store: safeString(order.store ?? order.Store),
         product: safeString(order.product ?? order.Product),
         brand: safeString(order.brand ?? order.Brand),
         supplier: safeString(order.supplier ?? order.Supplier),
-        
         unitValue: safeNumber(order.unitValue ?? order.unitvalue ?? order.unit_value),
         unitMeasure: safeString(order.unitMeasure ?? order.unitmeasure ?? order.unit_measure),
         quantity: safeNumber(order.quantity ?? order.Quantity),
         totalValue: safeNumber(order.totalValue ?? order.totalvalue ?? order.total_value),
-        
         deliveryDate: order.deliveryDate ?? order.deliverydate ?? order.delivery_date ?? null,
         type: safeString(order.type ?? order.Type),
         category: safeString(order.category ?? order.Category),
@@ -237,7 +205,6 @@ export const getOrders = async (): Promise<Order[]> => {
 
 export const saveOrder = async (order: Order) => {
     const { id, ...rest } = order;
-    // Ensure we save numbers, not strings
     const safeOrder = {
         ...rest,
         unitValue: safeNumber(rest.unitValue),
@@ -282,22 +249,9 @@ export const getLastOrderForProduct = async (product: string): Promise<Order | n
 export const exportToXML = (data: Order[], filename: string) => {
     let csvContent = "data:text/csv;charset=utf-8,";
     csvContent += "Data,Loja,Produto,Marca,Fornecedor,Qtd,Valor Unit,Total,Vencimento\n";
-    
     data.forEach(row => {
-        const line = [
-            row.date,
-            row.store,
-            row.product,
-            row.brand,
-            row.supplier,
-            safeNumber(row.quantity),
-            safeNumber(row.unitValue),
-            safeNumber(row.totalValue),
-            row.deliveryDate || ''
-        ].join(",");
-        csvContent += line + "\n";
+        csvContent += `${row.date},${row.store},${row.product},${row.brand},${row.supplier},${safeNumber(row.quantity)},${safeNumber(row.unitValue)},${safeNumber(row.totalValue)},${row.deliveryDate||''}\n`;
     });
-
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -307,7 +261,7 @@ export const exportToXML = (data: Order[], filename: string) => {
     document.body.removeChild(link);
 };
 
-// --- MEAT STOCK (ESTOQUE CARNES) ---
+// --- MEAT STOCK ---
 
 export const getMeatConsumptionLogs = async (): Promise<MeatInventoryLog[]> => {
     const { data, error } = await supabase.from('meat_inventory_logs').select('*');
@@ -317,8 +271,8 @@ export const getMeatConsumptionLogs = async (): Promise<MeatInventoryLog[]> => {
         date: log.date ?? log.Date,
         store: safeString(log.store ?? log.Store),
         product: safeString(log.product ?? log.Product),
-        quantity_consumed: safeNumber(log.quantity_consumed ?? log.quantityconsumed ?? log.quantity_Consumed ?? log.Quantity_Consumed ?? log.quantityConsumed),
-        created_at: log.created_at ?? log.createdAt
+        quantity_consumed: safeNumber(log.quantity_consumed ?? log.quantityconsumed),
+        created_at: log.created_at
     }));
 };
 
@@ -343,12 +297,12 @@ export const getMeatAdjustments = async (): Promise<MeatStockAdjustment[]> => {
     if (error) console.error(error);
     return (data || []).map((adj: any) => ({
         id: adj.id,
-        date: adj.date ?? adj.Date,
-        store: safeString(adj.store ?? adj.Store),
-        product: safeString(adj.product ?? adj.Product),
-        quantity: safeNumber(adj.quantity ?? adj.Quantity),
-        reason: safeString(adj.reason ?? adj.Reason),
-        created_at: adj.created_at ?? adj.createdAt
+        date: adj.date,
+        store: safeString(adj.store),
+        product: safeString(adj.product),
+        quantity: safeNumber(adj.quantity),
+        reason: safeString(adj.reason),
+        created_at: adj.created_at
     }));
 };
 
@@ -363,15 +317,12 @@ export const deleteMeatAdjustment = async (id: string) => {
     if (error) throw new Error(error.message);
 };
 
-// --- FINANCEIRO 043 ---
+// --- TRANSACTION 043 ---
 
 export const getTransactions043 = async (): Promise<Transaction043[]> => {
     const { data, error } = await supabase.from('transactions_043').select('*');
     if (error) throw new Error(error.message);
-    return (data || []).map((t: any) => ({
-        ...t,
-        value: safeNumber(t.value)
-    }));
+    return (data || []).map((t: any) => ({ ...t, value: safeNumber(t.value) }));
 };
 
 export const saveTransaction043 = async (t: Transaction043) => {
@@ -405,14 +356,13 @@ export const exportTransactionsToXML = (data: Transaction043[], filename: string
     document.body.removeChild(link);
 };
 
-// --- SALDO DE CONTAS ---
+// --- ACCOUNT BALANCES ---
 
 export const getAccountBalances = async (): Promise<AccountBalance[]> => {
     const { data, error } = await supabase.from('account_balances').select('*');
     if (error) throw new Error(error.message);
     return (data || []).map((b: any) => ({
         ...b,
-        // Robust retrieval for mixed casing
         caixaEconomica: safeNumber(b.caixaEconomica ?? b.caixaeconomica ?? b.caixa_economica),
         cofre: safeNumber(b.cofre),
         loteria: safeNumber(b.loteria),
@@ -441,7 +391,6 @@ export const deleteAccountBalance = async (id: string) => {
 };
 
 export const getPreviousMonthBalance = async (store: string, year: number, month: string): Promise<AccountBalance | null> => {
-    // Logic to calculate previous month
     let prevMonth = parseInt(month) - 1;
     let prevYear = year;
     if (prevMonth === 0) {
@@ -480,14 +429,13 @@ export const exportBalancesToXML = (data: AccountBalance[], filename: string) =>
     document.body.removeChild(link);
 };
 
-// --- FINANCEIRO (ENTRADAS/SAIDAS - OLD) ---
+// --- OLD FINANCEIRO ---
 
 export const getFinancialRecords = async (): Promise<FinancialRecord[]> => {
     const { data, error } = await supabase.from('financial_records').select('*');
     if (error) throw new Error(error.message);
     return (data || []).map((r: any) => ({
         ...r,
-        // Robust casing retrieval
         creditCaixa: safeNumber(r.creditCaixa ?? r.creditcaixa ?? r.credit_caixa),
         creditDelta: safeNumber(r.creditDelta ?? r.creditdelta ?? r.credit_delta),
         creditPagBankH: safeNumber(r.creditPagBankH ?? r.creditpagbankh ?? r.credit_pagbank_h),
@@ -524,7 +472,7 @@ export const exportFinancialToXML = (data: FinancialRecord[], filename: string) 
     console.log("Exporting Financial...", filename);
 };
 
-// --- NOVO FINANCEIRO (DAILY TRANSACTIONS) ---
+// --- DAILY TRANSACTIONS (NOVO FINANCEIRO) ---
 
 export const getFinancialAccounts = async (): Promise<FinancialAccount[]> => {
     const { data, error } = await supabase.from('financial_accounts').select('*');
@@ -557,52 +505,71 @@ export const getDailyTransactions = async (): Promise<DailyTransaction[]> => {
     if (error) throw new Error(error.message);
     return (data || []).map((t: any) => ({
         ...t,
-        paymentDate: t.paymentDate ?? t.paymentdate ?? t.payment_date,
-        accountId: t.accountId ?? t.accountid ?? t.account_id,
-        destinationStore: t.destinationStore ?? t.destinationstore ?? t.destination_store,
-        destinationAccountId: t.destinationAccountId ?? t.destinationaccountid ?? t.destination_account_id,
-        paymentMethod: t.paymentMethod ?? t.paymentmethod ?? t.payment_method,
-        value: safeNumber(t.value),
-        createdAt: t.createdAt ?? t.createdat ?? t.created_at
+        // Prioritize Snake Case, fallback to CamelCase or Lowercase
+        paymentDate: t.payment_date ?? t.paymentDate ?? t.paymentdate,
+        accountId: t.account_id ?? t.accountId ?? t.accountid,
+        destinationStore: t.destination_store ?? t.destinationStore ?? t.destinationstore,
+        destinationAccountId: t.destination_account_id ?? t.destinationAccountId ?? t.destinationaccountid,
+        paymentMethod: t.payment_method ?? t.paymentMethod ?? t.paymentmethod,
+        createdAt: t.created_at ?? t.createdAt ?? t.createdat,
+        value: safeNumber(t.value)
     }));
 };
 
 export const saveDailyTransaction = async (t: DailyTransaction) => {
     const { id, ...rest } = t;
     
-    // Helper to allow recursive retry
-    const performSave = async (payload: any) => {
-        if (id) {
-            return await supabase.from('daily_transactions').update(payload).eq('id', id);
-        } else {
-            return await supabase.from('daily_transactions').insert([payload]);
-        }
+    // MAPPING: Try to save using snake_case first (Postgres Standard)
+    const snakeCasePayload = {
+        date: rest.date,
+        store: rest.store,
+        type: rest.type,
+        account_id: rest.accountId, // Map
+        destination_store: rest.destinationStore, // Map
+        destination_account_id: rest.destinationAccountId, // Map
+        payment_method: rest.paymentMethod, // Map
+        payment_date: rest.paymentDate, // Map
+        product: rest.product,
+        category: rest.category,
+        supplier: rest.supplier,
+        value: rest.value,
+        status: rest.status,
+        description: rest.description,
+        classification: rest.classification,
+        origin: rest.origin,
+        // created_at usually auto-generated, but if we pass it:
+        created_at: rest.createdAt
     };
 
-    let { error } = await performSave(rest);
+    // Legacy fallback payload (CamelCase)
+    const camelCasePayload = { ...rest };
 
-    if (error) {
-        // CASE INSENSITIVE FALLBACK
-        // If the database has columns in lowercase (accountid) but we sent CamelCase (accountId),
-        // PostgREST might throw an error if it doesn't find the exact column.
-        // We try to map everything to lowercase and save again.
-        if (error.message.includes('Could not find the') || error.message.includes('column')) {
-            console.warn("Column error detected, attempting fallback with lowercase keys...", error.message);
-            
-            const lowerCasePayload: any = {};
-            Object.keys(rest).forEach(key => {
-                lowerCasePayload[key.toLowerCase()] = (rest as any)[key];
-            });
+    const performSave = async (payload: any) => {
+        if (id) return await supabase.from('daily_transactions').update(payload).eq('id', id);
+        else return await supabase.from('daily_transactions').insert([payload]);
+    };
 
-            const retry = await performSave(lowerCasePayload);
-            if (retry.error) {
-                console.error("Fallback failed:", retry.error);
-                throw new Error(`Erro de Banco de Dados: ${retry.error.message}. Tente executar o SQL de correção no menu Backup.`);
-            }
-            return; // Success on fallback
-        }
-        
-        throw new Error(error.message);
+    // 1. Try Snake Case (Preferred)
+    let result = await performSave(snakeCasePayload);
+
+    // 2. If fail, try Camel Case (Legacy)
+    if (result.error) {
+        console.warn("Snake_case save failed, retrying with CamelCase...", result.error.message);
+        result = await performSave(camelCasePayload);
+    }
+
+    // 3. If still fail, try Lower Case (Nuclear Option)
+    if (result.error && (result.error.message.includes('column') || result.error.message.includes('find'))) {
+        console.warn("CamelCase failed, retrying with lowercase...", result.error.message);
+        const lowerCasePayload: any = {};
+        Object.keys(camelCasePayload).forEach(key => {
+            lowerCasePayload[key.toLowerCase()] = (camelCasePayload as any)[key];
+        });
+        result = await performSave(lowerCasePayload);
+    }
+
+    if (result.error) {
+        throw new Error(`Erro de Banco de Dados: ${result.error.message}. \nTente executar o SQL de correção no menu Backup.`);
     }
 };
 
@@ -611,14 +578,11 @@ export const deleteDailyTransaction = async (id: string) => {
     if (error) throw new Error(error.message);
 };
 
-// --- USERS & AUTH ---
+// --- USERS ---
 
 export const getUsers = async (): Promise<User[]> => {
     const { data, error } = await supabase.from('system_users').select('*');
-    if (error) {
-        console.error(error);
-        return [];
-    }
+    if (error) return [];
     return data || [];
 };
 
@@ -639,48 +603,33 @@ export const deleteUser = async (id: string) => {
 };
 
 export const loginUser = async (username: string, password: string): Promise<{ success: boolean, user?: User, message?: string }> => {
-    // 1. Master Admin Hardcoded
-    // Updated to Paulo/Moita3033
     if (username === 'Paulo' && password === 'Moita3033') {
         return { success: true, user: { id: 'master', name: 'Paulo (Mestre)', username: 'Paulo', permissions: { modules: [], stores: [] }, isMaster: true } };
     }
-
-    // 2. Database Users
     const { data, error } = await supabase.from('system_users').select('*').eq('username', username).single();
-    
-    if (error || !data) {
-        return { success: false, message: 'Usuário não encontrado.' };
-    }
-
-    if (data.password !== password) {
-        return { success: false, message: 'Senha incorreta.' };
-    }
-
+    if (error || !data) return { success: false, message: 'Usuário não encontrado.' };
+    if (data.password !== password) return { success: false, message: 'Senha incorreta.' };
     return { success: true, user: data };
 };
 
 export const changeUserPassword = async (userId: string, current: string, newPass: string) => {
     if (userId === 'master') throw new Error("Não é possível alterar senha do Admin Mestre por aqui.");
-    
     const { data } = await supabase.from('system_users').select('password').eq('id', userId).single();
     if (data.password !== current) throw new Error("Senha atual incorreta.");
-
     const { error } = await supabase.from('system_users').update({ password: newPass }).eq('id', userId);
     if (error) throw new Error(error.message);
 };
 
-// --- BACKUP & DIAGNOSTICS ---
+// --- BACKUP & UTILS ---
 
 export const createBackup = async () => {
     try {
         const tables = ['app_config', 'orders', 'meat_inventory_logs', 'meat_stock_adjustments', 'transactions_043', 'account_balances', 'financial_records', 'financial_accounts', 'daily_transactions', 'system_users'];
         const backup: Record<string, any> = {};
-
         for (const table of tables) {
             const { data } = await supabase.from(table).select('*');
             backup[table] = data;
         }
-
         const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -699,10 +648,8 @@ export const restoreBackup = async (file: File): Promise<{ success: boolean, mes
         reader.onload = async (e) => {
             try {
                 const backup = JSON.parse(e.target?.result as string);
-                
                 for (const [table, rows] of Object.entries(backup)) {
                     if (Array.isArray(rows) && rows.length > 0) {
-                        // WARNING: This deletes all data in table except special ID (if exists)
                         await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000'); 
                         const { error } = await supabase.from(table).insert(rows);
                         if (error) console.warn(`Error restoring table ${table}`, error);
@@ -861,10 +808,18 @@ CREATE TABLE IF NOT EXISTS system_users (
     "isMaster" BOOLEAN DEFAULT FALSE
 );
 
--- CORREÇÕES DE COLUNAS (ADICIONAR SE FALTAR)
-ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "accountId" TEXT;
-ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "destinationStore" TEXT;
-ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "destinationAccountId" TEXT;
+-- CORREÇÕES DE COLUNAS (ADICIONAR SE FALTAR) - PREFERÊNCIA SNAKE_CASE
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "accountId" TEXT; -- Legacy
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "account_id" TEXT; -- Standard
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "destinationStore" TEXT; -- Legacy
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "destination_store" TEXT; -- Standard
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "destinationAccountId" TEXT; -- Legacy
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "destination_account_id" TEXT; -- Standard
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "paymentMethod" TEXT; -- Legacy
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "payment_method" TEXT; -- Standard
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "paymentDate" DATE; -- Legacy
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "payment_date" DATE; -- Standard
 ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "classification" TEXT;
 ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "origin" TEXT;
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP DEFAULT NOW();
 `;

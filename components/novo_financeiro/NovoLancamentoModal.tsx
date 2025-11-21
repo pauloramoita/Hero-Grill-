@@ -23,7 +23,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
 
-    // Form States (Mirrors LancamentosFinanceiro)
+    // Form States
     const [date, setDate] = useState(getTodayLocalISO()); 
     const [paymentDate, setPaymentDate] = useState(getTodayLocalISO()); 
     const [store, setStore] = useState('');
@@ -152,7 +152,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
         } catch (err: any) {
             let msg = err.message;
             if (msg.includes('column') || msg.includes('schema cache') || msg.includes('does not exist')) {
-                alert(`ERRO DE BANCO DE DADOS:\n\n${msg}\n\nSOLUÇÃO: Vá ao módulo 'Backup', clique em 'Ver SQL de Instalação' e execute o comando no Supabase para criar as colunas ou tabelas faltantes.`);
+                alert(`ERRO DE BANCO DE DADOS:\n\n${msg}\n\nSOLUÇÃO: Vá ao módulo 'Backup', clique em 'Ver SQL de Instalação' e execute o comando no Supabase.`);
             } else {
                 alert('Erro ao salvar: ' + msg);
             }
@@ -372,28 +372,6 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
                             placeholder="Ex: Pagamento de conta de luz ref. Janeiro"
                             maxLength={100}
                         />
-                    </div>
-
-                    {/* Repetição */}
-                    <div className="bg-purple-50 p-4 rounded-lg border border-purple-100 mb-6">
-                        <div className="flex flex-col md:flex-row md:items-center gap-4">
-                            <div className="flex items-center gap-2 text-purple-800 font-bold min-w-fit">
-                                <Repeat size={18} />
-                                <span className="text-sm">Repetição:</span>
-                            </div>
-                            <div className="flex gap-2 flex-1">
-                                <button type="button" onClick={() => setRecurrenceType('none')} className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${recurrenceType === 'none' ? 'bg-purple-700 text-white' : 'bg-white text-purple-700 border-purple-200'}`}>Único</button>
-                                <button type="button" onClick={() => { setRecurrenceType('installment'); setRecurrenceCount(2); }} className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${recurrenceType === 'installment' ? 'bg-purple-700 text-white' : 'bg-white text-purple-700 border-purple-200'}`}>Parcelado (x)</button>
-                                <button type="button" onClick={() => { setRecurrenceType('fixed'); setRecurrenceCount(12); }} className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${recurrenceType === 'fixed' ? 'bg-purple-700 text-white' : 'bg-white text-purple-700 border-purple-200'}`}>Fixo (Mensal)</button>
-                            </div>
-                            {recurrenceType !== 'none' && (
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-purple-800">{recurrenceType === 'installment' ? 'Qtd:' : 'Meses:'}</span>
-                                    <input type="number" min="2" max="120" value={recurrenceCount} onChange={(e) => setRecurrenceCount(parseInt(e.target.value) || 2)} className="w-16 p-1 text-center border border-purple-300 rounded font-bold text-purple-900 focus:outline-none"/>
-                                </div>
-                            )}
-                        </div>
-                        {recurrenceType !== 'none' && <p className="text-xs text-purple-600 mt-2 flex items-center gap-1"><CalendarClock size={12}/> O sistema gerará {recurrenceCount} lançamentos automaticamente.</p>}
                     </div>
 
                     <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
