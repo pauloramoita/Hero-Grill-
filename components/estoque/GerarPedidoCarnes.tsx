@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { getOrders, getMeatConsumptionLogs, getMeatAdjustments, getAppData } from '../../services/storageService';
 import { AppData } from '../../types';
-import { Printer, Loader2, ShoppingBag } from 'lucide-react';
+import { Printer, Loader2, ShoppingBag, Eye, EyeOff } from 'lucide-react';
 
 export const GerarPedidoCarnes: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [selectedStore, setSelectedStore] = useState('');
+    const [showStock, setShowStock] = useState(true);
 
     const [orderData, setOrderData] = useState<{
         name: string;
@@ -74,7 +75,7 @@ export const GerarPedidoCarnes: React.FC = () => {
                 currentStock: totalBought - totalConsumed + totalAdjusted,
                 orderQtyStr: '0,000',
                 orderQtyNum: 0,
-                unit: 'Kg' 
+                unit: 'KG' 
             };
         });
 
@@ -99,13 +100,20 @@ export const GerarPedidoCarnes: React.FC = () => {
         setOrderData(newData);
     };
 
+    const handleUnitChange = (index: number, val: string) => {
+        const newData = [...orderData];
+        newData[index].unit = val;
+        setOrderData(newData);
+    };
+
     const handlePrint = () => {
         window.print();
     };
 
     // Calculations for Footer
     const totalItems = orderData.reduce((acc, item) => acc + (item.orderQtyNum > 0 ? 1 : 0), 0);
-    const totalWeight = orderData.reduce((acc, item) => acc + item.orderQtyNum, 0);
+    const totalWeight = orderData.filter(i => i.unit === 'KG').reduce((acc, item) => acc + item.orderQtyNum, 0);
+    const totalPieces = orderData.filter(i => i.unit === 'PÇ').reduce((acc, item) => acc + item.orderQtyNum, 0);
 
     if (loading && appData.stores.length === 0) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" size={40}/></div>;
 
@@ -114,17 +122,29 @@ export const GerarPedidoCarnes: React.FC = () => {
             
             {/* Screen-Only Controls */}
             <div className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4 no-print bg-white p-6 rounded-xl shadow-card border border-slate-200">
-                 <div className="w-full md:w-auto">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Selecionar Loja do Pedido</label>
-                    <select 
-                        value={selectedStore} 
-                        onChange={(e) => setSelectedStore(e.target.value)}
-                        className="w-full md:w-72 p-3 border border-slate-300 rounded-lg font-bold text-slate-800 bg-slate-50 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none"
+                 <div className="w-full md:w-auto flex flex-col gap-2">
+                    <div className="flex flex-col">
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Selecionar Loja do Pedido</label>
+                        <select 
+                            value={selectedStore} 
+                            onChange={(e) => setSelectedStore(e.target.value)}
+                            className="w-full md:w-72 p-3 border border-slate-300 rounded-lg font-bold text-slate-800 bg-slate-50 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none"
+                        >
+                            {appData.stores.length === 0 && <option value="">Sem lojas</option>}
+                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    
+                    {/* Toggle Estoque */}
+                    <button 
+                        onClick={() => setShowStock(!showStock)}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 w-full md:w-fit ${showStock ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
                     >
-                        {appData.stores.length === 0 && <option value="">Sem lojas</option>}
-                        {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                        {showStock ? <Eye size={16}/> : <EyeOff size={16}/>}
+                        {showStock ? 'Ocultar Coluna Estoque' : 'Exibir Coluna Estoque'}
+                    </button>
                  </div>
+
                 <button 
                     onClick={handlePrint}
                     className="w-full md:w-auto bg-heroBlack text-white px-8 py-3 rounded-lg font-bold flex items-center justify-center gap-3 hover:bg-slate-900 transition-colors shadow-lg"
@@ -162,8 +182,8 @@ export const GerarPedidoCarnes: React.FC = () => {
                             .no-print { display: none !important; }
                             /* Force black text for thermal printers */
                             * { color: black !important; }
-                            /* Remove input borders for print */
-                            input { border: none !important; background: transparent !important; }
+                            /* Remove input/select borders for print */
+                            input, select { border: none !important; background: transparent !important; appearance: none !important; }
                         }
                         .print-container {
                             font-family: 'Courier New', Courier, monospace; /* Receipt style font fallback */
@@ -196,9 +216,9 @@ export const GerarPedidoCarnes: React.FC = () => {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b-2 border-black">
-                                    <th className="py-2 text-left font-black uppercase w-5/12">Produto</th>
-                                    <th className="py-2 text-center font-bold uppercase text-[10px] text-gray-600 w-2/12">Estoque</th>
-                                    <th className="py-2 text-center font-black uppercase bg-gray-200 w-3/12">PEDIDO</th>
+                                    <th className={`py-2 text-left font-black uppercase ${showStock ? 'w-5/12' : 'w-6/12'}`}>Produto</th>
+                                    {showStock && <th className="py-2 text-center font-bold uppercase text-[10px] text-gray-600 w-2/12">Estoque</th>}
+                                    <th className={`py-2 text-center font-black uppercase bg-gray-200 ${showStock ? 'w-3/12' : 'w-4/12'}`}>PEDIDO</th>
                                     <th className="py-2 text-right font-bold uppercase text-[10px] w-2/12">Unid.</th>
                                 </tr>
                             </thead>
@@ -210,9 +230,11 @@ export const GerarPedidoCarnes: React.FC = () => {
                                             <td className="py-3 pl-1 text-sm uppercase">
                                                 {item.name}
                                             </td>
-                                            <td className="py-3 text-center font-mono text-xs text-gray-500">
-                                                {formatWeight(item.currentStock)}
-                                            </td>
+                                            {showStock && (
+                                                <td className="py-3 text-center font-mono text-xs text-gray-500">
+                                                    {formatWeight(item.currentStock)}
+                                                </td>
+                                            )}
                                             <td className="py-1 text-center bg-gray-100 border-x border-gray-200">
                                                 <input 
                                                     type="text" 
@@ -221,8 +243,16 @@ export const GerarPedidoCarnes: React.FC = () => {
                                                     className={`w-full text-center bg-transparent font-black text-lg outline-none p-0 m-0 ${hasOrder ? 'text-black' : 'text-gray-300'}`}
                                                 />
                                             </td>
-                                            <td className="py-3 pr-1 text-right text-xs uppercase">
-                                                {item.unit}
+                                            <td className="py-3 pr-1 text-right">
+                                                <select 
+                                                    value={item.unit}
+                                                    onChange={(e) => handleUnitChange(idx, e.target.value)}
+                                                    className="bg-transparent font-bold outline-none text-right w-full appearance-none cursor-pointer text-xs uppercase"
+                                                    style={{ textAlignLast: 'right' }}
+                                                >
+                                                    <option value="KG">KG</option>
+                                                    <option value="PÇ">PÇ</option>
+                                                </select>
                                             </td>
                                         </tr>
                                     );
@@ -238,8 +268,13 @@ export const GerarPedidoCarnes: React.FC = () => {
                             <span className="font-mono font-bold">{totalItems}</span>
                         </div>
                         <div className="flex justify-between items-center border-t border-gray-600 pt-2">
-                            <span className="text-sm font-black uppercase">TOTAL PESO ESPERADO:</span>
-                            <span className="text-2xl font-black">{formatWeight(totalWeight)} Kg</span>
+                            <span className="text-sm font-black uppercase">TOTAL ESPERADO:</span>
+                            <div className="text-right">
+                                <span className="text-2xl font-black block leading-none">{formatWeight(totalWeight)} Kg</span>
+                                {totalPieces > 0 && (
+                                    <span className="text-sm font-bold text-gray-400 block mt-1">+ {formatWeight(totalPieces)} Pçs</span>
+                                )}
+                            </div>
                         </div>
                     </div>
 
