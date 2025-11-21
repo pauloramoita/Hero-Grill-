@@ -48,24 +48,25 @@ const safeNumber = (val: any): number => {
         let clean = val.trim();
         if (!clean || clean === 'NaN' || clean === 'null') return 0;
 
-        // Remove symbols like R$
-        clean = clean.replace(/[^\d.,-]/g, '');
+        // Remove currency symbols and standard text
+        clean = clean.replace(/[R$\s]/g, '');
 
-        // Handle Brazilian format "1.200,50" vs International "1,200.50" vs Simple "1200.50"
-        // Logic: If comma is the last separator and looks like decimal
+        // Check Brazilian format "1.200,50"
+        // If it has a comma at the end (last 3 chars) and dot before, or just comma
         if (clean.includes(',') && !clean.includes('.')) {
-            // "10,50" -> "10.50"
-            clean = clean.replace(',', '.');
+             // "10,50" -> "10.50"
+             clean = clean.replace(',', '.');
         } else if (clean.includes('.') && clean.includes(',')) {
-            // Mixed. Usually the last one is the decimal.
-            const lastDot = clean.lastIndexOf('.');
+            // "1.200,50" -> Remove dots, replace comma with dot
+            // Find last separator
             const lastComma = clean.lastIndexOf(',');
+            const lastDot = clean.lastIndexOf('.');
             
             if (lastComma > lastDot) {
-                // "1.200,50" (BR) -> Remove dots, replace comma
+                // Brazilian: 1.000,00
                 clean = clean.replace(/\./g, '').replace(',', '.');
             } else {
-                // "1,200.50" (US) -> Remove commas
+                // US: 1,000.00
                 clean = clean.replace(/,/g, '');
             }
         }
@@ -145,14 +146,19 @@ export const getOrders = async (): Promise<Order[]> => {
     
     return (data || []).map((order: any) => ({
         ...order,
-        unitValue: safeNumber(order.unitValue),
+        // DATA RECOVERY: Check multiple casing variations
+        unitValue: safeNumber(order.unitValue ?? order.unitvalue ?? order.unit_value),
         quantity: safeNumber(order.quantity),
-        totalValue: safeNumber(order.totalValue)
+        totalValue: safeNumber(order.totalValue ?? order.totalvalue ?? order.total_value),
+        unitMeasure: order.unitMeasure ?? order.unitmeasure ?? order.unit_measure,
+        deliveryDate: order.deliveryDate ?? order.deliverydate ?? order.delivery_date ?? null,
+        createdAt: order.createdAt ?? order.createdat ?? order.created_at
     }));
 };
 
 export const saveOrder = async (order: Order) => {
     const { id, ...rest } = order;
+    // Ensure we save numbers, not strings
     const safeOrder = {
         ...rest,
         unitValue: safeNumber(rest.unitValue),
@@ -186,19 +192,15 @@ export const getLastOrderForProduct = async (product: string): Promise<Order | n
         const o = data[0];
         return {
             ...o,
-            unitValue: safeNumber(o.unitValue),
+            unitValue: safeNumber(o.unitValue ?? o.unitvalue ?? o.unit_value),
             quantity: safeNumber(o.quantity),
-            totalValue: safeNumber(o.totalValue)
+            totalValue: safeNumber(o.totalValue ?? o.totalvalue ?? o.total_value)
         };
     }
     return null;
 };
 
 export const exportToXML = (data: Order[], filename: string) => {
-    // Simplified export simulation
-    console.log("Exporting to XML...", filename, data.length);
-    
-    // Create a simple CSV for real download utility
     let csvContent = "data:text/csv;charset=utf-8,";
     csvContent += "Data,Loja,Produto,Marca,Fornecedor,Qtd,Valor Unit,Total,Vencimento\n";
     
@@ -233,7 +235,7 @@ export const getMeatConsumptionLogs = async (): Promise<MeatInventoryLog[]> => {
     if (error) console.error(error);
     return (data || []).map((log: any) => ({
         ...log,
-        quantity_consumed: safeNumber(log.quantity_consumed)
+        quantity_consumed: safeNumber(log.quantity_consumed ?? log.quantityconsumed)
     }));
 };
 
@@ -322,13 +324,14 @@ export const getAccountBalances = async (): Promise<AccountBalance[]> => {
     if (error) throw new Error(error.message);
     return (data || []).map((b: any) => ({
         ...b,
-        caixaEconomica: safeNumber(b.caixaEconomica),
+        // Robust retrieval for mixed casing
+        caixaEconomica: safeNumber(b.caixaEconomica ?? b.caixaeconomica ?? b.caixa_economica),
         cofre: safeNumber(b.cofre),
         loteria: safeNumber(b.loteria),
-        pagbankH: safeNumber(b.pagbankH),
-        pagbankD: safeNumber(b.pagbankD),
+        pagbankH: safeNumber(b.pagbankH ?? b.pagbankh ?? b.pagbank_h),
+        pagbankD: safeNumber(b.pagbankD ?? b.pagbankd ?? b.pagbank_d),
         investimentos: safeNumber(b.investimentos),
-        totalBalance: safeNumber(b.totalBalance)
+        totalBalance: safeNumber(b.totalBalance ?? b.totalbalance ?? b.total_balance)
     }));
 };
 
@@ -369,7 +372,7 @@ export const getPreviousMonthBalance = async (store: string, year: number, month
     if (data) {
         return {
             ...data,
-            totalBalance: safeNumber(data.totalBalance)
+            totalBalance: safeNumber(data.totalBalance ?? data.totalbalance ?? data.total_balance)
         } as AccountBalance;
     }
     return null;
@@ -396,18 +399,19 @@ export const getFinancialRecords = async (): Promise<FinancialRecord[]> => {
     if (error) throw new Error(error.message);
     return (data || []).map((r: any) => ({
         ...r,
-        creditCaixa: safeNumber(r.creditCaixa),
-        creditDelta: safeNumber(r.creditDelta),
-        creditPagBankH: safeNumber(r.creditPagBankH),
-        creditPagBankD: safeNumber(r.creditPagBankD),
-        creditIfood: safeNumber(r.creditIfood),
-        totalRevenues: safeNumber(r.totalRevenues),
-        debitCaixa: safeNumber(r.debitCaixa),
-        debitPagBankH: safeNumber(r.debitPagBankH),
-        debitPagBankD: safeNumber(r.debitPagBankD),
-        debitLoteria: safeNumber(r.debitLoteria),
-        totalExpenses: safeNumber(r.totalExpenses),
-        netResult: safeNumber(r.netResult)
+        // Robust casing retrieval
+        creditCaixa: safeNumber(r.creditCaixa ?? r.creditcaixa ?? r.credit_caixa),
+        creditDelta: safeNumber(r.creditDelta ?? r.creditdelta ?? r.credit_delta),
+        creditPagBankH: safeNumber(r.creditPagBankH ?? r.creditpagbankh ?? r.credit_pagbank_h),
+        creditPagBankD: safeNumber(r.creditPagBankD ?? r.creditpagbankd ?? r.credit_pagbank_d),
+        creditIfood: safeNumber(r.creditIfood ?? r.creditifood ?? r.credit_ifood),
+        totalRevenues: safeNumber(r.totalRevenues ?? r.totalrevenues ?? r.total_revenues),
+        debitCaixa: safeNumber(r.debitCaixa ?? r.debitcaixa ?? r.debit_caixa),
+        debitPagBankH: safeNumber(r.debitPagBankH ?? r.debitpagbankh ?? r.debit_pagbank_h),
+        debitPagBankD: safeNumber(r.debitPagBankD ?? r.debitpagbankd ?? r.debit_pagbank_d),
+        debitLoteria: safeNumber(r.debitLoteria ?? r.debitloteria ?? r.debit_loteria),
+        totalExpenses: safeNumber(r.totalExpenses ?? r.totalexpenses ?? r.total_expenses),
+        netResult: safeNumber(r.netResult ?? r.netresult ?? r.net_result)
     }));
 };
 
@@ -440,7 +444,7 @@ export const getFinancialAccounts = async (): Promise<FinancialAccount[]> => {
     if (error) throw new Error(error.message);
     return (data || []).map((a: any) => ({
         ...a,
-        initialBalance: safeNumber(a.initialBalance)
+        initialBalance: safeNumber(a.initialBalance ?? a.initialbalance ?? a.initial_balance)
     }));
 };
 
@@ -466,7 +470,13 @@ export const getDailyTransactions = async (): Promise<DailyTransaction[]> => {
     if (error) throw new Error(error.message);
     return (data || []).map((t: any) => ({
         ...t,
-        value: safeNumber(t.value)
+        paymentDate: t.paymentDate ?? t.paymentdate ?? t.payment_date,
+        accountId: t.accountId ?? t.accountid ?? t.account_id,
+        destinationStore: t.destinationStore ?? t.destinationstore ?? t.destination_store,
+        destinationAccountId: t.destinationAccountId ?? t.destinationaccountid ?? t.destination_account_id,
+        paymentMethod: t.paymentMethod ?? t.paymentmethod ?? t.payment_method,
+        value: safeNumber(t.value),
+        createdAt: t.createdAt ?? t.createdat ?? t.created_at
     }));
 };
 
