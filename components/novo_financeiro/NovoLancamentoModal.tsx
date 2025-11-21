@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
     getAppData, 
@@ -36,7 +37,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
     const [paymentMethod, setPaymentMethod] = useState('Boleto'); 
     const [product, setProduct] = useState('');
     const [category, setCategory] = useState('');
-    const [classification, setClassification] = useState(''); 
+    const [classification, setClassification] = useState('Variável'); 
     const [supplier, setSupplier] = useState('');
     const [value, setValue] = useState(0);
     const [status, setStatus] = useState<'Pago' | 'Pendente'>('Pendente');

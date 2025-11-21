@@ -41,7 +41,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [paymentMethod, setPaymentMethod] = useState('Boleto'); 
     const [product, setProduct] = useState('');
     const [category, setCategory] = useState('');
-    const [classification, setClassification] = useState(''); 
+    const [classification, setClassification] = useState('Variável'); 
     const [supplier, setSupplier] = useState('');
     const [value, setValue] = useState(0);
     const [status, setStatus] = useState<'Pago' | 'Pendente'>('Pendente');
@@ -179,6 +179,10 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             setDescription('');
             setRecurrenceType('none');
             setRecurrenceCount(2);
+            
+            // Nota: Campos como Store, Account, Category, Supplier e Classification 
+            // NÃO são resetados para facilitar lançamentos em sequência.
+            
             alert(loopCount > 1 ? `${loopCount} Lançamentos Gerados com Sucesso!` : 'Lançamento Salvo!');
             loadData(); 
         } catch (err: any) {
@@ -741,10 +745,10 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                             <select 
                                 value={filterStore} 
                                 onChange={e => setFilterStore(e.target.value)} 
-                                className={`w-full border p-2 rounded text-sm ${isSingleStore ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                                disabled={isSingleStore}
+                                className={`w-full border p-2 rounded text-sm ${availableStores.length === 1 ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                disabled={availableStores.length === 1}
                             >
-                                {isSingleStore ? null : <option value="">Todas</option>}
+                                {availableStores.length !== 1 && <option value="">Todas</option>}
                                 {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
@@ -776,7 +780,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         <div className="md:col-span-6 flex justify-end">
                              <button 
                                 onClick={() => {
-                                    if(!isSingleStore) setFilterStore(''); 
+                                    if(availableStores.length !== 1) setFilterStore(''); 
                                     setFilterAccount(''); 
                                     setFilterSupplier(''); 
                                     setFilterClassification(''); 
