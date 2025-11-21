@@ -1,13 +1,17 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { getOrders, getMeatConsumptionLogs, getMeatAdjustments, saveMeatConsumption, saveMeatAdjustment, getTodayLocalISO } from '../../services/storageService';
-import { MeatInventoryLog, Order, MeatStockAdjustment } from '../../types';
+import { getOrders, getMeatConsumptionLogs, getMeatAdjustments, saveMeatConsumption, saveMeatAdjustment, getTodayLocalISO, getAppData } from '../../services/storageService';
+import { MeatInventoryLog, Order, MeatStockAdjustment, AppData } from '../../types';
 import { Save, Loader2, AlertCircle, PenTool, X } from 'lucide-react';
 
 export const ControleCarnes: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    
+    const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
+    const [selectedStore, setSelectedStore] = useState('');
+
     const [inventoryData, setInventoryData] = useState<{
         name: string;
         totalBought: number;
@@ -41,8 +45,21 @@ export const ControleCarnes: React.FC = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [orders, logs, adjustments] = await Promise.all([getOrders(), getMeatConsumptionLogs(), getMeatAdjustments()]);
-            processData(orders, logs, adjustments);
+            const [d, orders, logs, adjustments] = await Promise.all([
+                getAppData(), 
+                getOrders(), 
+                getMeatConsumptionLogs(), 
+                getMeatAdjustments()
+            ]);
+            
+            setAppData(d);
+            
+            // Default store selection
+            if (d.stores.length > 0 && !selectedStore) {
+                setSelectedStore(d.stores[0]);
+            }
+
+            processData(orders, logs, adjustments, selectedStore || d.stores[0]);
         } catch (e) {
             console.error("Erro ao carregar dados de estoque", e);
         } finally {
@@ -50,27 +67,43 @@ export const ControleCarnes: React.FC = () => {
         }
     };
 
+    // Reload when store changes (simplified: reload all and re-process, better performance would store data in state)
+    useEffect(() => {
+        if (selectedStore) {
+           // Ideally we don't refetch everything, but for simplicity we call logic again with stored data would be better
+           // But here we can just trigger a refetch or just re-process if we stored raw data. 
+           // Let's just re-fetch for safety to ensure sync.
+           setLoading(true);
+           Promise.all([getOrders(), getMeatConsumptionLogs(), getMeatAdjustments()]).then(([o, l, a]) => {
+               processData(o, l, a, selectedStore);
+               setLoading(false);
+           });
+        }
+    }, [selectedStore]);
+
     const formatWeight = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
-    const processData = (orders: Order[], logs: MeatInventoryLog[], adjustments: MeatStockAdjustment[]) => {
+    const processData = (orders: Order[], logs: MeatInventoryLog[], adjustments: MeatStockAdjustment[], store: string) => {
+        if (!store) return;
+
         const data = MEAT_LIST.map(meat => {
-            // 1. Total Comprado (Histórico)
+            // 1. Total Comprado (Histórico) - Filtered by Store
             const totalBought = orders
-                .filter(o => o.product.toLowerCase() === meat.toLowerCase())
+                .filter(o => o.store === store && o.product.toLowerCase() === meat.toLowerCase())
                 .reduce((acc, o) => acc + (Number(o.quantity) || 0), 0);
 
-            // 2. Total Consumido (Histórico ANTES de hoje)
+            // 2. Total Consumido (Histórico ANTES de hoje) - Filtered by Store
             const totalConsumedPrev = logs
-                .filter(l => l.product.toLowerCase() === meat.toLowerCase() && l.date < today)
+                .filter(l => l.store === store && l.product.toLowerCase() === meat.toLowerCase() && l.date < today)
                 .reduce((acc, l) => acc + (Number(l.quantity_consumed) || 0), 0);
             
-            // 3. Total Ajustes (Correções manuais)
+            // 3. Total Ajustes (Correções manuais) - Filtered by Store
             const totalAdjustments = adjustments
-                .filter(a => a.product.toLowerCase() === meat.toLowerCase())
+                .filter(a => a.store === store && a.product.toLowerCase() === meat.toLowerCase())
                 .reduce((acc, a) => acc + (Number(a.quantity) || 0), 0);
 
-            // 4. Consumo de Hoje (se já existir salvo)
-            const todayLog = logs.find(l => l.product.toLowerCase() === meat.toLowerCase() && l.date === today);
+            // 4. Consumo de Hoje (se já existir salvo) - Filtered by Store
+            const todayLog = logs.find(l => l.store === store && l.product.toLowerCase() === meat.toLowerCase() && l.date === today);
             const todayConsumptionVal = todayLog ? todayLog.quantity_consumed : 0;
 
             // 5. Estoque Inicial do Dia
@@ -117,6 +150,10 @@ export const ControleCarnes: React.FC = () => {
     };
 
     const handleSave = async () => {
+        if (!selectedStore) {
+            alert("Selecione uma loja.");
+            return;
+        }
         setSaving(true);
         try {
             // Prepare logs to save
@@ -125,6 +162,7 @@ export const ControleCarnes: React.FC = () => {
                 .map(item => ({
                     id: '', // Generated by DB
                     date: today,
+                    store: selectedStore,
                     product: item.name,
                     quantity_consumed: item.todayConsumptionVal
                 }));
@@ -140,7 +178,9 @@ export const ControleCarnes: React.FC = () => {
             }
 
             alert("Dados salvos com sucesso!");
-            loadData(); 
+            // Force reload
+            const [o, l, a] = await Promise.all([getOrders(), getMeatConsumptionLogs(), getMeatAdjustments()]);
+            processData(o, l, a, selectedStore);
         } catch (e: any) {
             alert("Erro ao salvar: " + e.message);
         } finally {
@@ -149,6 +189,7 @@ export const ControleCarnes: React.FC = () => {
     };
 
     const handleSaveAdjustment = async () => {
+        if (!selectedStore) return;
         if (!adjProduct || adjValueNum <= 0 || !adjReason) {
             alert("Preencha todos os campos do ajuste.");
             return;
@@ -160,6 +201,7 @@ export const ControleCarnes: React.FC = () => {
             await saveMeatAdjustment({
                 id: '',
                 date: today,
+                store: selectedStore,
                 product: adjProduct,
                 quantity,
                 reason: adjReason
@@ -170,13 +212,15 @@ export const ControleCarnes: React.FC = () => {
             setAdjValueStr('0,000');
             setAdjValueNum(0);
             setAdjReason('');
-            loadData();
+            // Reload
+            const [o, l, a] = await Promise.all([getOrders(), getMeatConsumptionLogs(), getMeatAdjustments()]);
+            processData(o, l, a, selectedStore);
         } catch (e: any) {
             alert("Erro ao salvar ajuste: " + e.message);
         }
     };
 
-    if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" size={40}/></div>;
+    if (loading && appData.stores.length === 0) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" size={40}/></div>;
 
     return (
         <div className="max-w-5xl mx-auto animate-fadeIn">
@@ -186,12 +230,25 @@ export const ControleCarnes: React.FC = () => {
                         <h2 className="text-xl font-bold text-slate-800">Controle Diário de Churrasco</h2>
                         <p className="text-sm text-slate-500">Data: {new Date().toLocaleDateString('pt-BR')}</p>
                     </div>
-                    <div className="flex gap-3">
+                    
+                    {/* Store Selector */}
+                    <div className="w-full md:w-auto">
+                         <select 
+                            value={selectedStore} 
+                            onChange={(e) => setSelectedStore(e.target.value)}
+                            className="w-full md:w-48 p-2 border border-slate-300 rounded-lg font-bold text-slate-700 bg-white"
+                        >
+                            {appData.stores.length === 0 && <option value="">Sem lojas</option>}
+                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+
+                    <div className="flex gap-3 w-full md:w-auto justify-end">
                         <button 
                             onClick={() => setShowModal(true)}
                             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow transition-colors text-sm"
                         >
-                            <PenTool size={16}/> AJUSTE MANUAL
+                            <PenTool size={16}/> AJUSTE
                         </button>
                         <button 
                             onClick={handleSave}
@@ -199,7 +256,7 @@ export const ControleCarnes: React.FC = () => {
                             className="bg-heroBlack hover:bg-slate-800 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow transition-colors disabled:opacity-70 text-sm"
                         >
                             {saving ? <Loader2 className="animate-spin" size={18}/> : <Save size={18}/>}
-                            SALVAR DIA
+                            SALVAR
                         </button>
                     </div>
                 </div>
@@ -257,7 +314,7 @@ export const ControleCarnes: React.FC = () => {
                 <AlertCircle className="text-yellow-600 mt-1" size={20} />
                 <div className="text-sm text-yellow-800">
                     <strong>Nota sobre Cálculo:</strong> Estoque Inicial = (Total Comprado em Pedidos) - (Histórico de Consumo) + (Ajustes Manuais).
-                    <br/>Verifique se todos os pedidos de compra foram lançados corretamente antes de ajustar manualmente.
+                    <br/>O cálculo é específico para a loja <strong>{selectedStore}</strong>.
                 </div>
             </div>
 
@@ -267,7 +324,7 @@ export const ControleCarnes: React.FC = () => {
                     <div className="bg-white rounded-lg shadow-2xl w-full max-w-md animate-fadeIn">
                         <div className="flex justify-between items-center p-4 border-b">
                             <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                                <PenTool size={20}/> Ajuste Manual de Estoque
+                                <PenTool size={20}/> Ajuste Manual ({selectedStore})
                             </h3>
                             <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-red-600"><X size={20}/></button>
                         </div>

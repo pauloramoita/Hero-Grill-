@@ -151,6 +151,7 @@ CREATE TABLE IF NOT EXISTS daily_transactions (
 CREATE TABLE IF NOT EXISTS meat_inventory_logs (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   date date NOT NULL,
+  store text, -- Loja
   product text NOT NULL,
   quantity_consumed numeric DEFAULT 0,
   created_at timestamptz DEFAULT now()
@@ -160,6 +161,7 @@ CREATE TABLE IF NOT EXISTS meat_inventory_logs (
 CREATE TABLE IF NOT EXISTS meat_stock_adjustments (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   date date NOT NULL,
+  store text, -- Loja
   product text NOT NULL,
   quantity numeric NOT NULL, -- Pode ser negativo para perda/saída
   reason text,
@@ -170,6 +172,8 @@ CREATE TABLE IF NOT EXISTS meat_stock_adjustments (
 ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS destination_store text;
 ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS destination_account_id uuid REFERENCES financial_accounts(id);
 ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS classification text;
+ALTER TABLE meat_inventory_logs ADD COLUMN IF NOT EXISTS store text;
+ALTER TABLE meat_stock_adjustments ADD COLUMN IF NOT EXISTS store text;
 `;
 
 // ... existing diagnosis functions ...
@@ -444,6 +448,7 @@ export const getMeatConsumptionLogs = async (): Promise<MeatInventoryLog[]> => {
     return data.map((l: any) => ({
         id: l.id,
         date: l.date,
+        store: l.store,
         product: l.product,
         quantity_consumed: l.quantity_consumed,
         created_at: l.created_at
@@ -453,6 +458,7 @@ export const getMeatConsumptionLogs = async (): Promise<MeatInventoryLog[]> => {
 export const saveMeatConsumption = async (log: MeatInventoryLog) => {
     const { error } = await supabase.from('meat_inventory_logs').insert({
         date: log.date,
+        store: log.store,
         product: log.product,
         quantity_consumed: log.quantity_consumed
     });
@@ -472,6 +478,7 @@ export const getMeatAdjustments = async (): Promise<MeatStockAdjustment[]> => {
     return data.map((a: any) => ({
         id: a.id,
         date: a.date,
+        store: a.store,
         product: a.product,
         quantity: a.quantity,
         reason: a.reason,
@@ -482,6 +489,7 @@ export const getMeatAdjustments = async (): Promise<MeatStockAdjustment[]> => {
 export const saveMeatAdjustment = async (adj: MeatStockAdjustment) => {
     const { error } = await supabase.from('meat_stock_adjustments').insert({
         date: adj.date,
+        store: adj.store,
         product: adj.product,
         quantity: adj.quantity,
         reason: adj.reason

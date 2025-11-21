@@ -114,6 +114,7 @@ export interface DailyTransaction {
 export interface MeatInventoryLog {
     id: string;
     date: string; // Data do consumo
+    store: string; // Loja
     product: string; // Nome da carne
     quantity_consumed: number; // Quantidade retirada/consumida
     created_at?: string;
@@ -122,6 +123,7 @@ export interface MeatInventoryLog {
 export interface MeatStockAdjustment {
     id: string;
     date: string;
+    store: string; // Loja
     product: string;
     quantity: number; // Pode ser positivo (entrada) ou negativo (saída/perda)
     reason: string;
