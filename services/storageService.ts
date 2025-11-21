@@ -37,15 +37,55 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- HELPERS ---
 
+// Robust number parser to recover data saved as text, currency strings, or with commas
+const safeNumber = (val: any): number => {
+    if (typeof val === 'number') {
+        return isNaN(val) ? 0 : val;
+    }
+    if (val === null || val === undefined) return 0;
+    
+    if (typeof val === 'string') {
+        let clean = val.trim();
+        if (!clean || clean === 'NaN' || clean === 'null') return 0;
+
+        // Remove symbols like R$
+        clean = clean.replace(/[^\d.,-]/g, '');
+
+        // Handle Brazilian format "1.200,50" vs International "1,200.50" vs Simple "1200.50"
+        // Logic: If comma is the last separator and looks like decimal
+        if (clean.includes(',') && !clean.includes('.')) {
+            // "10,50" -> "10.50"
+            clean = clean.replace(',', '.');
+        } else if (clean.includes('.') && clean.includes(',')) {
+            // Mixed. Usually the last one is the decimal.
+            const lastDot = clean.lastIndexOf('.');
+            const lastComma = clean.lastIndexOf(',');
+            
+            if (lastComma > lastDot) {
+                // "1.200,50" (BR) -> Remove dots, replace comma
+                clean = clean.replace(/\./g, '').replace(',', '.');
+            } else {
+                // "1,200.50" (US) -> Remove commas
+                clean = clean.replace(/,/g, '');
+            }
+        }
+        
+        const num = parseFloat(clean);
+        return isNaN(num) ? 0 : num;
+    }
+    return 0;
+};
+
 export const formatCurrency = (value: number | string | undefined | null) => {
-    const num = Number(value);
-    if (isNaN(num)) return 'R$ 0,00';
+    const num = safeNumber(value);
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
 };
 
 export const formatDateBr = (dateStr: string) => {
     if(!dateStr) return '-';
-    const [y, m, d] = dateStr.split('-');
+    // Handle timestamps if necessary
+    const cleanDate = dateStr.split('T')[0];
+    const [y, m, d] = cleanDate.split('-');
     return `${d}/${m}/${y}`;
 };
 
@@ -58,12 +98,41 @@ export const getTodayLocalISO = () => {
 // --- APP CONFIG / DATA ---
 
 export const getAppData = async (): Promise<AppData> => {
-    const { data, error } = await supabase.from('app_config').select('data').single();
-    if (error || !data) return { stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] };
-    return data.data;
+    // Default empty structure
+    const defaults: AppData = { stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] };
+
+    try {
+        // Try to fetch specific ID 1 first (Standard)
+        let { data, error } = await supabase.from('app_config').select('data').eq('id', 1).single();
+        
+        // Recovery: If ID 1 is gone, try fetching ANY row (Limit 1)
+        if (error || !data) {
+            const { data: fallbackData, error: fallbackError } = await supabase.from('app_config').select('data').limit(1).single();
+            if (!fallbackError && fallbackData) {
+                data = fallbackData;
+            }
+        }
+
+        if (!data || !data.data) return defaults;
+
+        // Merge defaults with found data to prevent undefined arrays
+        return {
+            stores: Array.isArray(data.data.stores) ? data.data.stores : [],
+            products: Array.isArray(data.data.products) ? data.data.products : [],
+            brands: Array.isArray(data.data.brands) ? data.data.brands : [],
+            suppliers: Array.isArray(data.data.suppliers) ? data.data.suppliers : [],
+            units: Array.isArray(data.data.units) ? data.data.units : [],
+            types: Array.isArray(data.data.types) ? data.data.types : [],
+            categories: Array.isArray(data.data.categories) ? data.data.categories : [],
+        };
+    } catch (e) {
+        console.error("Fatal Error loading AppData", e);
+        return defaults;
+    }
 };
 
 export const saveAppData = async (appData: AppData) => {
+    // We try to update ID 1. If it doesn't exist, upsert handles insertion.
     const { error } = await supabase.from('app_config').upsert({ id: 1, data: appData });
     if (error) throw new Error(error.message);
 };
@@ -74,23 +143,21 @@ export const getOrders = async (): Promise<Order[]> => {
     const { data, error } = await supabase.from('orders').select('*');
     if (error) throw new Error(error.message);
     
-    // Sanitização de dados: Garante que números sejam números, evitando NaN na interface
     return (data || []).map((order: any) => ({
         ...order,
-        unitValue: Number(order.unitValue) || 0,
-        quantity: Number(order.quantity) || 0,
-        totalValue: Number(order.totalValue) || 0
+        unitValue: safeNumber(order.unitValue),
+        quantity: safeNumber(order.quantity),
+        totalValue: safeNumber(order.totalValue)
     }));
 };
 
 export const saveOrder = async (order: Order) => {
     const { id, ...rest } = order;
-    // Garantir que estamos salvando números
     const safeOrder = {
         ...rest,
-        unitValue: Number(rest.unitValue) || 0,
-        quantity: Number(rest.quantity) || 0,
-        totalValue: Number(rest.totalValue) || 0
+        unitValue: safeNumber(rest.unitValue),
+        quantity: safeNumber(rest.quantity),
+        totalValue: safeNumber(rest.totalValue)
     };
     const { error } = await supabase.from('orders').insert([safeOrder]);
     if (error) throw new Error(error.message);
@@ -100,9 +167,9 @@ export const updateOrder = async (order: Order) => {
     const { id, ...rest } = order;
     const safeOrder = {
         ...rest,
-        unitValue: Number(rest.unitValue) || 0,
-        quantity: Number(rest.quantity) || 0,
-        totalValue: Number(rest.totalValue) || 0
+        unitValue: safeNumber(rest.unitValue),
+        quantity: safeNumber(rest.quantity),
+        totalValue: safeNumber(rest.totalValue)
     };
     const { error } = await supabase.from('orders').update(safeOrder).eq('id', id);
     if (error) throw new Error(error.message);
@@ -119,17 +186,44 @@ export const getLastOrderForProduct = async (product: string): Promise<Order | n
         const o = data[0];
         return {
             ...o,
-            unitValue: Number(o.unitValue) || 0,
-            quantity: Number(o.quantity) || 0,
-            totalValue: Number(o.totalValue) || 0
+            unitValue: safeNumber(o.unitValue),
+            quantity: safeNumber(o.quantity),
+            totalValue: safeNumber(o.totalValue)
         };
     }
     return null;
 };
 
 export const exportToXML = (data: Order[], filename: string) => {
+    // Simplified export simulation
     console.log("Exporting to XML...", filename, data.length);
-    alert("Exportação iniciada (Simulação).");
+    
+    // Create a simple CSV for real download utility
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Data,Loja,Produto,Marca,Fornecedor,Qtd,Valor Unit,Total,Vencimento\n";
+    
+    data.forEach(row => {
+        const line = [
+            row.date,
+            row.store,
+            row.product,
+            row.brand,
+            row.supplier,
+            safeNumber(row.quantity),
+            safeNumber(row.unitValue),
+            safeNumber(row.totalValue),
+            row.deliveryDate || ''
+        ].join(",");
+        csvContent += line + "\n";
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${filename}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 };
 
 // --- MEAT STOCK (ESTOQUE CARNES) ---
@@ -139,7 +233,7 @@ export const getMeatConsumptionLogs = async (): Promise<MeatInventoryLog[]> => {
     if (error) console.error(error);
     return (data || []).map((log: any) => ({
         ...log,
-        quantity_consumed: Number(log.quantity_consumed) || 0
+        quantity_consumed: safeNumber(log.quantity_consumed)
     }));
 };
 
@@ -164,7 +258,7 @@ export const getMeatAdjustments = async (): Promise<MeatStockAdjustment[]> => {
     if (error) console.error(error);
     return (data || []).map((adj: any) => ({
         ...adj,
-        quantity: Number(adj.quantity) || 0
+        quantity: safeNumber(adj.quantity)
     }));
 };
 
@@ -186,7 +280,7 @@ export const getTransactions043 = async (): Promise<Transaction043[]> => {
     if (error) throw new Error(error.message);
     return (data || []).map((t: any) => ({
         ...t,
-        value: Number(t.value) || 0
+        value: safeNumber(t.value)
     }));
 };
 
@@ -208,8 +302,17 @@ export const deleteTransaction043 = async (id: string) => {
 };
 
 export const exportTransactionsToXML = (data: Transaction043[], filename: string) => {
-    console.log("Exporting 043...", filename);
-    alert("Exportação 043 iniciada (Simulação).");
+    let csvContent = "data:text/csv;charset=utf-8,Data,Loja,Tipo,Valor,Descricao\n";
+    data.forEach(row => {
+        csvContent += `${row.date},${row.store},${row.type},${safeNumber(row.value)},${row.description || ''}\n`;
+    });
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${filename}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 };
 
 // --- SALDO DE CONTAS ---
@@ -219,13 +322,13 @@ export const getAccountBalances = async (): Promise<AccountBalance[]> => {
     if (error) throw new Error(error.message);
     return (data || []).map((b: any) => ({
         ...b,
-        caixaEconomica: Number(b.caixaEconomica) || 0,
-        cofre: Number(b.cofre) || 0,
-        loteria: Number(b.loteria) || 0,
-        pagbankH: Number(b.pagbankH) || 0,
-        pagbankD: Number(b.pagbankD) || 0,
-        investimentos: Number(b.investimentos) || 0,
-        totalBalance: Number(b.totalBalance) || 0
+        caixaEconomica: safeNumber(b.caixaEconomica),
+        cofre: safeNumber(b.cofre),
+        loteria: safeNumber(b.loteria),
+        pagbankH: safeNumber(b.pagbankH),
+        pagbankD: safeNumber(b.pagbankD),
+        investimentos: safeNumber(b.investimentos),
+        totalBalance: safeNumber(b.totalBalance)
     }));
 };
 
@@ -266,15 +369,24 @@ export const getPreviousMonthBalance = async (store: string, year: number, month
     if (data) {
         return {
             ...data,
-            totalBalance: Number(data.totalBalance) || 0
+            totalBalance: safeNumber(data.totalBalance)
         } as AccountBalance;
     }
     return null;
 };
 
 export const exportBalancesToXML = (data: AccountBalance[], filename: string) => {
-    console.log("Exporting Balances...", filename);
-    alert("Exportação Saldos iniciada (Simulação).");
+    let csvContent = "data:text/csv;charset=utf-8,Ano,Mes,Loja,Total\n";
+    data.forEach(row => {
+        csvContent += `${row.year},${row.month},${row.store},${safeNumber(row.totalBalance)}\n`;
+    });
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${filename}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 };
 
 // --- FINANCEIRO (ENTRADAS/SAIDAS - OLD) ---
@@ -284,18 +396,18 @@ export const getFinancialRecords = async (): Promise<FinancialRecord[]> => {
     if (error) throw new Error(error.message);
     return (data || []).map((r: any) => ({
         ...r,
-        creditCaixa: Number(r.creditCaixa) || 0,
-        creditDelta: Number(r.creditDelta) || 0,
-        creditPagBankH: Number(r.creditPagBankH) || 0,
-        creditPagBankD: Number(r.creditPagBankD) || 0,
-        creditIfood: Number(r.creditIfood) || 0,
-        totalRevenues: Number(r.totalRevenues) || 0,
-        debitCaixa: Number(r.debitCaixa) || 0,
-        debitPagBankH: Number(r.debitPagBankH) || 0,
-        debitPagBankD: Number(r.debitPagBankD) || 0,
-        debitLoteria: Number(r.debitLoteria) || 0,
-        totalExpenses: Number(r.totalExpenses) || 0,
-        netResult: Number(r.netResult) || 0
+        creditCaixa: safeNumber(r.creditCaixa),
+        creditDelta: safeNumber(r.creditDelta),
+        creditPagBankH: safeNumber(r.creditPagBankH),
+        creditPagBankD: safeNumber(r.creditPagBankD),
+        creditIfood: safeNumber(r.creditIfood),
+        totalRevenues: safeNumber(r.totalRevenues),
+        debitCaixa: safeNumber(r.debitCaixa),
+        debitPagBankH: safeNumber(r.debitPagBankH),
+        debitPagBankD: safeNumber(r.debitPagBankD),
+        debitLoteria: safeNumber(r.debitLoteria),
+        totalExpenses: safeNumber(r.totalExpenses),
+        netResult: safeNumber(r.netResult)
     }));
 };
 
@@ -318,7 +430,7 @@ export const deleteFinancialRecord = async (id: string) => {
 
 export const exportFinancialToXML = (data: FinancialRecord[], filename: string) => {
     console.log("Exporting Financial...", filename);
-    alert("Exportação Financeiro iniciada (Simulação).");
+    // alert("Exportação Financeiro iniciada (Simulação).");
 };
 
 // --- NOVO FINANCEIRO (DAILY TRANSACTIONS) ---
@@ -328,7 +440,7 @@ export const getFinancialAccounts = async (): Promise<FinancialAccount[]> => {
     if (error) throw new Error(error.message);
     return (data || []).map((a: any) => ({
         ...a,
-        initialBalance: Number(a.initialBalance) || 0
+        initialBalance: safeNumber(a.initialBalance)
     }));
 };
 
@@ -354,7 +466,7 @@ export const getDailyTransactions = async (): Promise<DailyTransaction[]> => {
     if (error) throw new Error(error.message);
     return (data || []).map((t: any) => ({
         ...t,
-        value: Number(t.value) || 0
+        value: safeNumber(t.value)
     }));
 };
 
@@ -464,6 +576,7 @@ export const restoreBackup = async (file: File): Promise<{ success: boolean, mes
                 
                 for (const [table, rows] of Object.entries(backup)) {
                     if (Array.isArray(rows) && rows.length > 0) {
+                        // WARNING: This deletes all data in table except special ID (if exists)
                         await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000'); 
                         const { error } = await supabase.from(table).insert(rows);
                         if (error) console.warn(`Error restoring table ${table}`, error);
