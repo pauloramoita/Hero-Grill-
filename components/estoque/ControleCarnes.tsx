@@ -75,9 +75,8 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
             ]);
             
             setAppData(d);
-            setRawLogs(logs); // Guardamos todos os logs crus para o relatório
+            setRawLogs(logs); 
             
-            // Default store selection
             if (d.stores.length > 0 && !selectedStore) {
                 setSelectedStore(d.stores[0]);
             }
@@ -92,7 +91,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
         }
     };
 
-    // Reload when store changes
     useEffect(() => {
         if (selectedStore) {
            setLoading(true);
@@ -215,7 +213,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
             }
 
             alert("Dados atualizados com sucesso!");
-            // Full reload
             loadData();
         } catch (e: any) {
             alert("Erro ao salvar: " + e.message);
@@ -303,7 +300,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
     if (loading && appData.stores.length === 0) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" size={40}/></div>;
 
-    // Totais para o Summary Card Mobile e Footer Desktop
     const totalInitial = inventoryData.reduce((acc, i) => acc + i.initialStock, 0);
     const totalConsumption = inventoryData.reduce((acc, i) => acc + i.todayConsumptionVal, 0);
     const totalFinal = inventoryData.reduce((acc, i) => acc + i.finalStock, 0);
@@ -343,7 +339,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                         </div>
                     </div>
 
-                    {/* Store Selector - Full Width on Mobile */}
                     <div className="w-full">
                          <select 
                             value={selectedStore} 
@@ -411,7 +406,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                 <div className="md:hidden bg-slate-100 p-4 space-y-4">
                     {inventoryData.map((item, idx) => (
                         <div key={item.name} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            {/* Card Header */}
                             <div className="bg-slate-50 p-3 border-b border-slate-100 flex justify-between items-center">
                                 <span className="font-black text-slate-800 text-lg uppercase">{item.name}</span>
                                 <div className="text-right">
@@ -419,8 +413,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                                     <span className="font-mono font-bold text-slate-600">{formatWeight(item.initialStock)}</span>
                                 </div>
                             </div>
-                            
-                            {/* Card Body - Input Area */}
                             <div className="p-4 flex flex-col gap-3">
                                 <div>
                                     <label className="block text-xs font-bold text-yellow-600 uppercase mb-1 text-center">Consumo Hoje (Kg)</label>
@@ -435,7 +427,7 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                                         />
                                         {item.todayConsumptionVal > 0 && (
                                             <button 
-                                                onClick={() => handleConsumptionChange(idx, '')} // Reset
+                                                onClick={() => handleConsumptionChange(idx, '')} 
                                                 className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-300 p-2"
                                             >
                                                 <X size={16} />
@@ -443,8 +435,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                                         )}
                                     </div>
                                 </div>
-
-                                {/* Footer - Resultado */}
                                 <div className="flex justify-between items-center pt-2 border-t border-slate-100">
                                     <span className="text-xs font-bold text-slate-400 uppercase">Estoque Final:</span>
                                     <span className={`font-mono font-black text-xl ${item.finalStock < 0 ? 'text-red-600' : 'text-green-600'}`}>
@@ -455,7 +445,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                         </div>
                     ))}
 
-                    {/* Mobile Totals Card */}
                     <div className="bg-slate-800 text-white rounded-xl shadow-lg p-4 mt-6 mb-8">
                         <h3 className="text-center font-bold text-gray-400 text-xs uppercase tracking-widest mb-4">RESUMO DO DIA</h3>
                         <div className="grid grid-cols-3 gap-2 text-center divide-x divide-gray-600">
@@ -476,7 +465,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                 </div>
             </div>
             
-            {/* Information Box */}
             <div className="mt-6 mx-4 md:mx-0 bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-4 items-center shadow-sm">
                 <div className="bg-blue-100 p-2 rounded-full text-blue-600 hidden md:block">
                     <AlertCircle size={24} />
@@ -490,7 +478,7 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                 </div>
             </div>
 
-            {/* RELATÓRIO ADMINISTRATIVO (Novo) */}
+            {/* RELATÓRIO ADMINISTRATIVO (NOVO) */}
             {isAdmin && (
                 <div className="mt-8 mx-4 md:mx-0 bg-white rounded-lg shadow border border-gray-200 animate-fadeIn">
                     <div className="bg-gray-800 text-white p-4 rounded-t-lg flex justify-between items-center">
@@ -574,7 +562,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                 </div>
             )}
 
-            {/* Modal de Ajuste */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-md animate-fadeIn overflow-hidden border border-slate-200">
