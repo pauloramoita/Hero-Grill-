@@ -107,35 +107,99 @@ export const getTodayLocalISO = () => {
 export const getAppData = async (): Promise<AppData> => {
     // Default empty structure
     const defaults: AppData = { stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] };
+    let loadedData: any = null;
 
     try {
-        // Try to fetch specific ID 1 first (Standard)
-        let { data, error } = await supabase.from('app_config').select('data').eq('id', 1).single();
+        // 1. Try to fetch configuration from app_config
+        // We select everything to inspect structure if needed
+        let { data, error } = await supabase.from('app_config').select('*').limit(1);
         
-        // Recovery: If ID 1 is gone, try fetching ANY row (Limit 1)
-        if (error || !data) {
-            const { data: fallbackData, error: fallbackError } = await supabase.from('app_config').select('data').limit(1).single();
-            if (!fallbackError && fallbackData) {
-                data = fallbackData;
+        if (data && data.length > 0) {
+            const row = data[0];
+            // Robustly find the data column regardless of casing (data, Data, DATA)
+            const rowKeys = Object.keys(row);
+            const dataKey = rowKeys.find(k => k.toLowerCase() === 'data');
+            if (dataKey) {
+                loadedData = row[dataKey];
             }
         }
-
-        if (!data || !data.data) return defaults;
-
-        // Merge defaults with found data to prevent undefined arrays
-        return {
-            stores: Array.isArray(data.data.stores) ? data.data.stores : [],
-            products: Array.isArray(data.data.products) ? data.data.products : [],
-            brands: Array.isArray(data.data.brands) ? data.data.brands : [],
-            suppliers: Array.isArray(data.data.suppliers) ? data.data.suppliers : [],
-            units: Array.isArray(data.data.units) ? data.data.units : [],
-            types: Array.isArray(data.data.types) ? data.data.types : [],
-            categories: Array.isArray(data.data.categories) ? data.data.categories : [],
-        };
     } catch (e) {
-        console.error("Fatal Error loading AppData", e);
-        return defaults;
+        console.error("Error fetching AppData", e);
     }
+
+    // Prepare config object
+    const config = { ...defaults };
+
+    // 2. Parse loaded JSON with Case-Insensitivity inside the JSON object
+    if (loadedData) {
+        const keys = Object.keys(loadedData);
+        const findKey = (target: string) => keys.find(k => k.toLowerCase() === target.toLowerCase());
+
+        config.stores = loadedData[findKey('stores') || 'stores'] || [];
+        config.products = loadedData[findKey('products') || 'products'] || [];
+        config.brands = loadedData[findKey('brands') || 'brands'] || [];
+        config.suppliers = loadedData[findKey('suppliers') || 'suppliers'] || [];
+        config.units = loadedData[findKey('units') || 'units'] || [];
+        config.types = loadedData[findKey('types') || 'types'] || [];
+        config.categories = loadedData[findKey('categories') || 'categories'] || [];
+    }
+
+    // 3. AUTO-RECONSTRUCTION (Self-Healing)
+    // If crucial data like stores or products are missing, assume data loss/read error
+    // and reconstruct from the Orders history.
+    if (config.stores.length === 0 || config.products.length === 0) {
+        console.warn("Configuration appears empty. Initiating Auto-Reconstruction from Orders history...");
+        try {
+            const { data: orders } = await supabase.from('orders').select('*');
+            
+            if (orders && orders.length > 0) {
+                const uniqueStores = new Set<string>(config.stores);
+                const uniqueProducts = new Set<string>(config.products);
+                const uniqueBrands = new Set<string>(config.brands);
+                const uniqueSuppliers = new Set<string>(config.suppliers);
+                const uniqueTypes = new Set<string>(config.types);
+                const uniqueCategories = new Set<string>(config.categories);
+
+                orders.forEach((o: any) => {
+                    const s = safeString(o.store || o.Store);
+                    const p = safeString(o.product || o.Product);
+                    const b = safeString(o.brand || o.Brand);
+                    const sup = safeString(o.supplier || o.Supplier);
+                    const t = safeString(o.type || o.Type);
+                    const c = safeString(o.category || o.Category);
+
+                    if (s) uniqueStores.add(s);
+                    if (p) uniqueProducts.add(p);
+                    if (b) uniqueBrands.add(b);
+                    if (sup) uniqueSuppliers.add(sup);
+                    if (t && t !== 'undefined') uniqueTypes.add(t);
+                    if (c && c !== 'undefined') uniqueCategories.add(c);
+                });
+
+                config.stores = Array.from(uniqueStores).sort();
+                config.products = Array.from(uniqueProducts).sort();
+                config.brands = Array.from(uniqueBrands).sort();
+                config.suppliers = Array.from(uniqueSuppliers).sort();
+                config.types = Array.from(uniqueTypes).sort();
+                config.categories = Array.from(uniqueCategories).sort();
+                
+                if (config.units.length === 0) config.units = ['Kg', 'Un', 'Lt', 'Cx', 'Pç'];
+            }
+        } catch (recError) {
+            console.error("Reconstruction failed:", recError);
+        }
+    }
+
+    // Ensure we return arrays to prevent crashes
+    return {
+        stores: Array.isArray(config.stores) ? config.stores : [],
+        products: Array.isArray(config.products) ? config.products : [],
+        brands: Array.isArray(config.brands) ? config.brands : [],
+        suppliers: Array.isArray(config.suppliers) ? config.suppliers : [],
+        units: Array.isArray(config.units) ? config.units : [],
+        types: Array.isArray(config.types) ? config.types : [],
+        categories: Array.isArray(config.categories) ? config.categories : [],
+    };
 };
 
 export const saveAppData = async (appData: AppData) => {
@@ -458,7 +522,6 @@ export const deleteFinancialRecord = async (id: string) => {
 
 export const exportFinancialToXML = (data: FinancialRecord[], filename: string) => {
     console.log("Exporting Financial...", filename);
-    // alert("Exportação Financeiro iniciada (Simulação).");
 };
 
 // --- NOVO FINANCEIRO (DAILY TRANSACTIONS) ---
