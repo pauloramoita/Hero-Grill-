@@ -306,10 +306,11 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
     return (
         <div className="max-w-6xl mx-auto animate-fadeIn pb-32">
-             <div className="bg-white rounded-lg shadow-card border border-slate-200 overflow-hidden mb-8">
+             {/* Parent Container with NO overflow-hidden to allow sticky header to work properly on mobile */}
+             <div className="bg-white rounded-lg shadow-card border border-slate-200 mb-8">
                 
                 {/* Header da Ferramenta */}
-                <div className="p-4 md:p-6 border-b border-slate-100 bg-slate-50 flex flex-col gap-4 sticky top-16 z-30 shadow-sm">
+                <div className="p-4 md:p-6 border-b border-slate-100 bg-slate-50 flex flex-col gap-4 sticky top-16 z-30 shadow-sm rounded-t-lg">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
                             <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
@@ -403,14 +404,15 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                 </div>
 
                 {/* --- MOBILE VIEW (Cards) --- */}
-                <div className="md:hidden bg-slate-100 p-4 space-y-4">
+                <div className="md:hidden bg-slate-100 p-4 space-y-4 relative z-0">
                     {inventoryData.map((item, idx) => (
                         <div key={item.name} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="bg-slate-50 p-3 border-b border-slate-100 flex justify-between items-center">
-                                <span className="font-black text-slate-800 text-lg uppercase">{item.name}</span>
+                            {/* Header of the Card: Explicitly styled for visibility */}
+                            <div className="bg-gray-100 p-3 border-b border-gray-200 flex justify-between items-center">
+                                <span className="font-black text-slate-900 text-lg uppercase">{item.name}</span>
                                 <div className="text-right">
-                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Início</span>
-                                    <span className="font-mono font-bold text-slate-600">{formatWeight(item.initialStock)}</span>
+                                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Início</span>
+                                    <span className="font-mono font-bold text-slate-700">{formatWeight(item.initialStock)}</span>
                                 </div>
                             </div>
                             <div className="p-4 flex flex-col gap-3">
