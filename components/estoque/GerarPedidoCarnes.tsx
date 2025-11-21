@@ -199,15 +199,16 @@ export const GerarPedidoCarnes: React.FC = () => {
                         </div>
                         <h2 className="text-lg font-black uppercase tracking-widest border-y-2 border-black py-1 mb-2">PEDIDO DE COMPRA</h2>
                         
-                        <div className="flex justify-between items-end text-sm font-bold mt-2">
-                            <div className="text-left">
-                                <span className="block text-[10px] uppercase text-gray-500">Unidade Solicitante:</span>
-                                <span className="text-base">{selectedStore}</span>
+                        <div className="my-4">
+                            <div className="border-[3px] border-black p-3">
+                                <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-600 mb-1">UNIDADE SOLICITANTE</span>
+                                <span className="block text-2xl font-black uppercase leading-none">{selectedStore}</span>
                             </div>
-                            <div className="text-right">
-                                <span className="block text-[10px] uppercase text-gray-500">Data do Pedido:</span>
-                                <span>{new Date().toLocaleDateString('pt-BR')}</span>
-                            </div>
+                        </div>
+
+                        <div className="text-right mb-1">
+                            <span className="text-[10px] font-bold uppercase text-gray-500 mr-2">Data do Pedido:</span>
+                            <span className="text-sm font-bold">{new Date().toLocaleDateString('pt-BR')}</span>
                         </div>
                     </div>
 
