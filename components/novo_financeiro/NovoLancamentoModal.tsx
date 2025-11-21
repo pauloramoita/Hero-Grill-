@@ -23,7 +23,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
 
-    // Form States
+    // Form States (Mirrors LancamentosFinanceiro)
     const [date, setDate] = useState(getTodayLocalISO()); 
     const [paymentDate, setPaymentDate] = useState(getTodayLocalISO()); 
     const [store, setStore] = useState('');
@@ -55,7 +55,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
         load();
     }, []);
 
-    // Determine available stores
+    // Determine available stores based on user permissions
     const availableStores = useMemo(() => {
         if (!user) return appData.stores;
         if (user.isMaster) return appData.stores;
@@ -151,8 +151,8 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
             onSave();
         } catch (err: any) {
             let msg = err.message;
-            if (msg.includes('column') || msg.includes('schema cache')) {
-                alert(`ERRO DE BANCO DE DADOS:\n\n${msg}\n\nSOLUÇÃO: Vá ao módulo 'Backup', clique em 'Ver SQL de Instalação' e copie/execute o código no Supabase para criar as colunas faltantes.`);
+            if (msg.includes('column') || msg.includes('schema cache') || msg.includes('does not exist')) {
+                alert(`ERRO DE BANCO DE DADOS:\n\n${msg}\n\nSOLUÇÃO: Vá ao módulo 'Backup', clique em 'Ver SQL de Instalação' e execute o comando no Supabase para criar as colunas ou tabelas faltantes.`);
             } else {
                 alert('Erro ao salvar: ' + msg);
             }
@@ -163,11 +163,15 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
 
     const isSingleStore = availableStores.length === 1;
 
+    // Filter accounts based on selected store
+    const filteredAccounts = accounts.filter(a => !store || a.store === store);
+    const filteredDestAccounts = accounts.filter(a => !destinationStore || a.store === destinationStore);
+
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-fadeIn">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 border-b border-slate-100 gap-4 bg-slate-50">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 border-b border-slate-100 gap-4 bg-slate-50 sticky top-0 z-10">
                     <div>
                         <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
                             <DollarSign className="text-heroRed" />
@@ -245,7 +249,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Conta Origem</label>
                                     <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
                                         <option value="">Selecione...</option>
-                                        {accounts.filter(a => !store || a.store === store).map(a => (
+                                        {filteredAccounts.map(a => (
                                             <option key={a.id} value={a.id}>{a.name}</option>
                                         ))}
                                     </select>
@@ -266,7 +270,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Conta Destino</label>
                                     <select value={destinationAccountId} onChange={e => setDestinationAccountId(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
                                         <option value="">Selecione...</option>
-                                        {accounts.filter(a => !destinationStore || a.store === destinationStore).map(a => (
+                                        {filteredDestAccounts.map(a => (
                                             <option key={a.id} value={a.id}>{a.name}</option>
                                         ))}
                                     </select>
@@ -274,59 +278,56 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
                             </div>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Loja</label>
-                                    <select 
-                                        value={store} 
-                                        onChange={e => setStore(e.target.value)} 
-                                        className={`w-full p-3 border border-slate-300 rounded-lg ${isSingleStore ? 'bg-slate-100 cursor-not-allowed' : 'bg-white'}`}
-                                        disabled={isSingleStore}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Conta <span className="text-red-500">*</span></label>
-                                    <select value={accountId} onChange={e => setAccountId(e.target.value)} className={`w-full p-3 border rounded-lg bg-white ${!accountId ? 'border-red-300 bg-red-50' : 'border-slate-300'}`}>
-                                        <option value="">Selecione a Conta...</option>
-                                        {accounts.filter(a => !store || a.store === store).map(a => (
-                                            <option key={a.id} value={a.id}>{a.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Categoria</label>
-                                    <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg bg-white">
-                                        <option value="">Selecione...</option>
-                                        {appData.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Loja</label>
+                                <select 
+                                    value={store} 
+                                    onChange={e => setStore(e.target.value)} 
+                                    className={`w-full p-3 border border-slate-300 rounded-lg ${isSingleStore ? 'bg-slate-100 cursor-not-allowed' : 'bg-white'}`}
+                                    disabled={isSingleStore}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
                             </div>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Fornecedor (Opcional)</label>
-                                    <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg bg-white">
-                                        <option value="">Selecione...</option>
-                                        {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Produto (Opcional)</label>
-                                    <select value={product} onChange={e => setProduct(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg bg-white">
-                                        <option value="">Selecione...</option>
-                                        {appData.products.map(p => <option key={p} value={p}>{p}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Classificação</label>
-                                    <select value={classification} onChange={e => setClassification(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg bg-white">
-                                        <option value="">Selecione...</option>
-                                        {appData.types.map(t => <option key={t} value={t}>{t}</option>)}
-                                    </select>
-                                </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Conta <span className="text-red-500">*</span></label>
+                                <select value={accountId} onChange={e => setAccountId(e.target.value)} className={`w-full p-3 border rounded-lg bg-white ${!accountId ? 'border-red-300 bg-red-50' : 'border-slate-300'}`}>
+                                    <option value="">Selecione a Conta...</option>
+                                    {filteredAccounts.map(a => (
+                                        <option key={a.id} value={a.id}>{a.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Categoria</label>
+                                <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg bg-white">
+                                    <option value="">Selecione...</option>
+                                    {appData.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Fornecedor (Opcional)</label>
+                                <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg bg-white">
+                                    <option value="">Selecione...</option>
+                                    {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Produto (Opcional)</label>
+                                <select value={product} onChange={e => setProduct(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg bg-white">
+                                    <option value="">Selecione...</option>
+                                    {appData.products.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Classificação</label>
+                                <select value={classification} onChange={e => setClassification(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg bg-white">
+                                    <option value="">Selecione...</option>
+                                    {appData.types.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
                             </div>
                         </div>
                     )}
@@ -340,7 +341,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Data Pagamento</label>
                             <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white"/>
                         </div>
-                        <div>
+                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Status</label>
                             <div className="flex gap-2">
                                 <button 
