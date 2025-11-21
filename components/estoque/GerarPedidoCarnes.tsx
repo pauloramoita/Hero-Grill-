@@ -1,14 +1,18 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getOrders, getMeatConsumptionLogs, getMeatAdjustments, getAppData } from '../../services/storageService';
 import { AppData } from '../../types';
-import { Printer, Loader2, ShoppingBag, Eye, EyeOff } from 'lucide-react';
+import { Printer, Loader2, Share2, Eye, EyeOff } from 'lucide-react';
+import html2canvas from 'html2canvas';
 
 export const GerarPedidoCarnes: React.FC = () => {
     const [loading, setLoading] = useState(true);
+    const [generatingImage, setGeneratingImage] = useState(false);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [selectedStore, setSelectedStore] = useState('');
-    const [showStock, setShowStock] = useState(true);
+    const [showStock, setShowStock] = useState(false); // Default oculto para mobile ficar mais limpo
+
+    const printRef = useRef<HTMLDivElement>(null);
 
     const [orderData, setOrderData] = useState<{
         name: string;
@@ -106,8 +110,55 @@ export const GerarPedidoCarnes: React.FC = () => {
         setOrderData(newData);
     };
 
-    const handlePrint = () => {
-        window.print();
+    const handleShareImage = async () => {
+        if (!printRef.current) return;
+        setGeneratingImage(true);
+
+        try {
+            // Aguarda renderização
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            const canvas = await html2canvas(printRef.current, {
+                scale: 2, // Melhora qualidade
+                backgroundColor: '#ffffff',
+                logging: false
+            });
+
+            canvas.toBlob(async (blob) => {
+                if (!blob) {
+                    alert('Erro ao gerar imagem.');
+                    setGeneratingImage(false);
+                    return;
+                }
+
+                const file = new File([blob], `pedido_${selectedStore.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.png`, { type: "image/png" });
+
+                // Verifica suporte a compartilhamento nativo (Mobile)
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: 'Pedido Hero Grill',
+                            text: `Pedido de Compra - ${selectedStore}`
+                        });
+                    } catch (shareError) {
+                        console.log('Compartilhamento cancelado ou falhou', shareError);
+                    }
+                } else {
+                    // Fallback para Desktop (Download)
+                    const link = document.createElement('a');
+                    link.href = canvas.toDataURL("image/png");
+                    link.download = file.name;
+                    link.click();
+                }
+                setGeneratingImage(false);
+            }, 'image/png');
+
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao gerar imagem do pedido.');
+            setGeneratingImage(false);
+        }
     };
 
     // Calculations for Footer
@@ -118,137 +169,99 @@ export const GerarPedidoCarnes: React.FC = () => {
     if (loading && appData.stores.length === 0) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" size={40}/></div>;
 
     return (
-        <div className="max-w-4xl mx-auto animate-fadeIn">
+        <div className="w-full max-w-md mx-auto animate-fadeIn pb-24">
             
-            {/* Screen-Only Controls */}
-            <div className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4 no-print bg-white p-6 rounded-xl shadow-card border border-slate-200">
-                 <div className="w-full md:w-auto flex flex-col gap-2">
-                    <div className="flex flex-col">
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Selecionar Loja do Pedido</label>
-                        <select 
-                            value={selectedStore} 
-                            onChange={(e) => setSelectedStore(e.target.value)}
-                            className="w-full md:w-72 p-3 border border-slate-300 rounded-lg font-bold text-slate-800 bg-slate-50 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none"
-                        >
-                            {appData.stores.length === 0 && <option value="">Sem lojas</option>}
-                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-                    
-                    {/* Toggle Estoque */}
+            {/* Controls Header */}
+            <div className="mb-4 no-print bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
+                 <div className="flex flex-col gap-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase">Loja Solicitante</label>
+                    <select 
+                        value={selectedStore} 
+                        onChange={(e) => setSelectedStore(e.target.value)}
+                        className="w-full p-2.5 border border-slate-300 rounded-lg font-bold text-slate-800 bg-slate-50 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none"
+                    >
+                        {appData.stores.length === 0 && <option value="">Sem lojas</option>}
+                        {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                 </div>
+                 
+                 <div className="flex justify-between items-center gap-2">
                     <button 
                         onClick={() => setShowStock(!showStock)}
-                        className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 w-full md:w-fit ${showStock ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
+                        className={`flex-1 py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${showStock ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
                     >
-                        {showStock ? <Eye size={16}/> : <EyeOff size={16}/>}
-                        {showStock ? 'Ocultar Coluna Estoque' : 'Exibir Coluna Estoque'}
+                        {showStock ? <Eye size={14}/> : <EyeOff size={14}/>}
+                        {showStock ? 'Ocultar Estoque' : 'Ver Estoque'}
                     </button>
                  </div>
-
-                <button 
-                    onClick={handlePrint}
-                    className="w-full md:w-auto bg-heroBlack text-white px-8 py-3 rounded-lg font-bold flex items-center justify-center gap-3 hover:bg-slate-900 transition-colors shadow-lg"
-                >
-                    <Printer size={22}/> IMPRIMIR COMO IMAGEM
-                </button>
             </div>
 
-            {/* PRINT AREA - Fixed Width 480px Logic */}
-            <div className="flex justify-center">
+            {/* PRINT AREA */}
+            <div className="flex justify-center w-full">
                 <div 
                     id="print-area" 
-                    className="bg-white shadow-2xl border-2 border-gray-800 overflow-hidden relative print-container"
-                    style={{ width: '480px', minWidth: '480px', maxWidth: '480px' }}
+                    ref={printRef}
+                    className="bg-white shadow-2xl border border-gray-300 w-full overflow-hidden relative"
+                    style={{ fontFamily: "'Courier New', Courier, monospace" }}
                 >
-                    <style>
-                        {`
-                        @media print {
-                            @page { margin: 0; size: auto; }
-                            body { visibility: hidden; background: white; }
-                            body * { visibility: hidden; }
-                            #print-area, #print-area * {
-                                visibility: visible;
-                            }
-                            #print-area {
-                                position: absolute;
-                                left: 0;
-                                top: 0;
-                                width: 480px !important;
-                                margin: 0 !important;
-                                padding: 0 !important;
-                                border: none !important;
-                                box-shadow: none !important;
-                            }
-                            .no-print { display: none !important; }
-                            /* Force black text for thermal printers */
-                            * { color: black !important; }
-                            /* Remove input/select borders for print */
-                            input, select { border: none !important; background: transparent !important; appearance: none !important; }
-                        }
-                        .print-container {
-                            font-family: 'Courier New', Courier, monospace; /* Receipt style font fallback */
-                        }
-                        `}
-                    </style>
-
                     {/* RECEIPT HEADER */}
-                    <div className="p-5 pb-2 text-center border-b-2 border-black bg-white">
+                    <div className="p-4 pb-2 text-center border-b-2 border-black bg-white">
                         <div className="flex justify-center items-baseline gap-1 mb-1">
-                            <span className="font-black text-3xl italic tracking-tighter text-black" style={{ fontFamily: 'Arial Black, sans-serif' }}>HERO</span>
-                            <span className="font-black text-3xl italic tracking-tighter text-black" style={{ fontFamily: 'Arial Black, sans-serif' }}>GRILL</span>
+                            <span className="font-black text-2xl italic tracking-tighter text-black" style={{ fontFamily: 'Arial Black, sans-serif' }}>HERO</span>
+                            <span className="font-black text-2xl italic tracking-tighter text-black" style={{ fontFamily: 'Arial Black, sans-serif' }}>GRILL</span>
                         </div>
-                        <h2 className="text-lg font-black uppercase tracking-widest border-y-2 border-black py-1 mb-2">PEDIDO DE COMPRA</h2>
+                        <h2 className="text-base font-black uppercase tracking-widest border-y-2 border-black py-1 mb-3">PEDIDO DE COMPRA</h2>
                         
-                        <div className="my-4">
-                            <div className="border-[3px] border-black p-3">
-                                <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-600 mb-1">UNIDADE SOLICITANTE</span>
-                                <span className="block text-2xl font-black uppercase leading-none">{selectedStore}</span>
+                        <div className="mb-3">
+                            <div className="border-[3px] border-black p-2 inline-block w-full max-w-[300px]">
+                                <span className="block text-[9px] font-bold uppercase tracking-[0.2em] text-gray-600 mb-1">UNIDADE SOLICITANTE</span>
+                                <span className="block text-xl font-black uppercase leading-none truncate">{selectedStore}</span>
                             </div>
                         </div>
 
-                        <div className="text-right mb-1">
-                            <span className="text-[10px] font-bold uppercase text-gray-500 mr-2">Data do Pedido:</span>
+                        <div className="flex justify-between items-end px-1">
+                            <span className="text-[10px] font-bold uppercase text-gray-500">Data:</span>
                             <span className="text-sm font-bold">{new Date().toLocaleDateString('pt-BR')}</span>
                         </div>
                     </div>
 
                     {/* RECEIPT BODY */}
-                    <div className="p-2 bg-white">
+                    <div className="p-1 bg-white">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b-2 border-black">
-                                    <th className={`py-2 text-left font-black uppercase ${showStock ? 'w-5/12' : 'w-6/12'}`}>Produto</th>
-                                    {showStock && <th className="py-2 text-center font-bold uppercase text-[10px] text-gray-600 w-2/12">Estoque</th>}
-                                    <th className={`py-2 text-center font-black uppercase bg-gray-200 ${showStock ? 'w-3/12' : 'w-4/12'}`}>PEDIDO</th>
-                                    <th className="py-2 text-right font-bold uppercase text-[10px] w-2/12">Unid.</th>
+                                    <th className={`py-2 pl-1 text-left font-black uppercase text-xs ${showStock ? 'w-4/12' : 'w-6/12'}`}>Produto</th>
+                                    {showStock && <th className="py-2 text-center font-bold uppercase text-[9px] text-gray-600 w-2/12">Estoque</th>}
+                                    <th className={`py-2 text-center font-black uppercase bg-gray-100 text-xs ${showStock ? 'w-4/12' : 'w-4/12'}`}>PEDIDO</th>
+                                    <th className="py-2 pr-1 text-right font-bold uppercase text-[9px] w-2/12">Unid.</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-dashed divide-gray-400">
+                            <tbody className="divide-y divide-dashed divide-gray-300">
                                 {orderData.map((item, idx) => {
                                     const hasOrder = item.orderQtyNum > 0;
                                     return (
                                         <tr key={item.name} className={hasOrder ? 'bg-gray-50 font-bold' : ''}>
-                                            <td className="py-3 pl-1 text-sm uppercase">
+                                            <td className="py-2 pl-1 text-xs uppercase align-middle leading-tight">
                                                 {item.name}
                                             </td>
                                             {showStock && (
-                                                <td className="py-3 text-center font-mono text-xs text-gray-500">
+                                                <td className="py-2 text-center font-mono text-[10px] text-gray-500 align-middle">
                                                     {formatWeight(item.currentStock)}
                                                 </td>
                                             )}
-                                            <td className="py-1 text-center bg-gray-100 border-x border-gray-200">
+                                            <td className="py-1 text-center bg-gray-100 border-x border-gray-200 align-middle">
                                                 <input 
                                                     type="text" 
                                                     value={item.orderQtyStr}
                                                     onChange={(e) => handleQtyChange(idx, e.target.value)}
-                                                    className={`w-full text-center bg-transparent font-black text-lg outline-none p-0 m-0 ${hasOrder ? 'text-black' : 'text-gray-300'}`}
+                                                    className={`w-full text-center bg-transparent font-black text-base outline-none p-0 m-0 ${hasOrder ? 'text-black' : 'text-gray-300'}`}
                                                 />
                                             </td>
-                                            <td className="py-3 pr-1 text-right">
+                                            <td className="py-2 pr-1 text-right align-middle">
                                                 <select 
                                                     value={item.unit}
                                                     onChange={(e) => handleUnitChange(idx, e.target.value)}
-                                                    className="bg-transparent font-bold outline-none text-right w-full appearance-none cursor-pointer text-xs uppercase"
+                                                    className="bg-transparent font-bold outline-none text-right w-full appearance-none cursor-pointer text-[10px] uppercase p-0 m-0 border-none"
                                                     style={{ textAlignLast: 'right' }}
                                                 >
                                                     <option value="KG">KG</option>
@@ -263,29 +276,44 @@ export const GerarPedidoCarnes: React.FC = () => {
                     </div>
 
                     {/* RECEIPT FOOTER */}
-                    <div className="bg-black text-white p-4 mt-2">
+                    <div className="bg-black text-white p-3 mt-2">
                         <div className="flex justify-between items-center mb-1">
-                            <span className="text-xs font-bold uppercase opacity-80">Total de Itens:</span>
-                            <span className="font-mono font-bold">{totalItems}</span>
+                            <span className="text-[10px] font-bold uppercase opacity-80">Total de Itens:</span>
+                            <span className="font-mono font-bold text-sm">{totalItems}</span>
                         </div>
                         <div className="flex justify-between items-center border-t border-gray-600 pt-2">
-                            <span className="text-sm font-black uppercase">TOTAL ESPERADO:</span>
-                            <div className="text-right">
-                                <span className="text-2xl font-black block leading-none">{formatWeight(totalWeight)} Kg</span>
+                            <span className="text-xs font-black uppercase">TOTAL ESPERADO:</span>
+                            <div className="text-right leading-tight">
+                                <span className="text-xl font-black block">{formatWeight(totalWeight)} Kg</span>
                                 {totalPieces > 0 && (
-                                    <span className="text-sm font-bold text-gray-400 block mt-1">+ {formatWeight(totalPieces)} Pçs</span>
+                                    <span className="text-[10px] font-bold text-gray-400 block">+ {formatWeight(totalPieces)} Pçs</span>
                                 )}
                             </div>
                         </div>
                     </div>
 
                     {/* SIGNATURE AREA */}
-                    <div className="p-6 pb-8 bg-white border-t border-dashed border-gray-400 text-center">
-                        <div className="h-12 border-b border-black w-2/3 mx-auto mb-2"></div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Assinatura do Responsável</p>
-                        <p className="text-[8px] text-gray-400 mt-4 uppercase">Sistema Hero Grill Self-service</p>
+                    <div className="p-4 pb-6 bg-white border-t border-dashed border-gray-400 text-center">
+                        <div className="h-8 border-b border-black w-3/4 mx-auto mb-1"></div>
+                        <p className="text-[8px] font-bold uppercase tracking-widest text-gray-500">Assinatura do Responsável</p>
                     </div>
                 </div>
+            </div>
+
+            {/* Sticky Floating Action Button */}
+            <div className="fixed bottom-6 left-0 w-full px-4 flex justify-center z-50 no-print">
+                <button 
+                    onClick={handleShareImage}
+                    disabled={generatingImage}
+                    className="bg-heroBlack text-white w-full max-w-md py-4 rounded-full font-bold shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all border-2 border-white/20"
+                >
+                    {generatingImage ? (
+                        <Loader2 size={20} className="animate-spin"/> 
+                    ) : (
+                        <Share2 size={20}/> 
+                    )}
+                    {generatingImage ? 'Gerando Imagem...' : 'COMPARTILHAR IMAGEM'}
+                </button>
             </div>
         </div>
     );
