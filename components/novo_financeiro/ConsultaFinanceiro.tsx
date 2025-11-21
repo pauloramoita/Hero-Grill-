@@ -22,10 +22,12 @@ import {
     Calculator,
     Loader2,
     ArrowRight,
-    Calendar
+    Calendar,
+    Plus
 } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 import { ConfirmPaymentModal } from './ConfirmPaymentModal';
+import { NovoLancamentoModal } from './NovoLancamentoModal';
 
 interface ConsultaFinanceiroProps {
     user?: User;
@@ -38,6 +40,7 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
     const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
     const [loading, setLoading] = useState(true);
     
+    const [showNewModal, setShowNewModal] = useState(false);
     const [editingItem, setEditingItem] = useState<DailyTransaction | null>(null);
     const [confirmingItem, setConfirmingItem] = useState<DailyTransaction | null>(null);
 
@@ -254,6 +257,11 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         loadData(); 
     };
 
+    const handleNewTransactionSave = () => {
+        setShowNewModal(false);
+        loadData();
+    }
+
     const handleExport = () => {
         let xmlContent = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Financeiro"><Table>';
         
@@ -400,13 +408,25 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                     </div>
                 </div>
 
-                <div className="flex justify-end gap-2 border-t pt-4 mt-4">
-                     <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">
-                        <Download size={18}/> Exportar Excel
-                    </button>
-                    <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow-sm">
-                        <Printer size={18}/> Imprimir
-                    </button>
+                <div className="flex justify-between items-center border-t pt-4 mt-4">
+                    {/* BOTÃO DE NOVO LANÇAMENTO ADICIONADO AQUI */}
+                    <div>
+                        <button 
+                            onClick={() => setShowNewModal(true)}
+                            className="bg-heroBlack text-white px-6 py-2 rounded font-bold hover:bg-slate-800 flex items-center gap-2 shadow-lg transition-all active:scale-95"
+                        >
+                            <Plus size={20}/> Novo Lançamento
+                        </button>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">
+                            <Download size={18}/> Exportar Excel
+                        </button>
+                        <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow-sm">
+                            <Printer size={18}/> Imprimir
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -534,6 +554,14 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                     </tbody>
                 </table>
             </div>
+
+            {showNewModal && (
+                <NovoLancamentoModal 
+                    user={user}
+                    onClose={() => setShowNewModal(false)} 
+                    onSave={handleNewTransactionSave} 
+                />
+            )}
 
             {confirmingItem && (
                 <ConfirmPaymentModal

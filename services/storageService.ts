@@ -612,8 +612,9 @@ export const deleteUser = async (id: string) => {
 
 export const loginUser = async (username: string, password: string): Promise<{ success: boolean, user?: User, message?: string }> => {
     // 1. Master Admin Hardcoded
-    if (username === 'admin' && password === 'admin123') {
-        return { success: true, user: { id: 'master', name: 'Administrador Mestre', username: 'admin', permissions: { modules: [], stores: [] }, isMaster: true } };
+    // Changed from admin/admin123 to Paulo/Moita3033 per user request
+    if (username === 'Paulo' && password === 'Moita3033') {
+        return { success: true, user: { id: 'master', name: 'Paulo (Mestre)', username: 'Paulo', permissions: { modules: [], stores: [] }, isMaster: true } };
     }
 
     // 2. Database Users
