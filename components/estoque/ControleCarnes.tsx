@@ -10,10 +10,11 @@ import {
     getAppData,
     updateMeatConsumption,
     deleteMeatConsumption,
+    deleteMeatAdjustment,
     formatDateBr
 } from '../../services/storageService';
 import { MeatInventoryLog, Order, MeatStockAdjustment, AppData, User } from '../../types';
-import { Save, Loader2, AlertCircle, PenTool, X, History, RotateCcw, Edit, Trash2, Filter, CheckCircle } from 'lucide-react';
+import { Save, Loader2, AlertCircle, PenTool, X, History, RotateCcw, Edit, Trash2, Filter, CheckCircle, AlertTriangle } from 'lucide-react';
 
 interface ControleCarnesProps {
     user?: User;
@@ -48,6 +49,7 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
     // Report State (Relatório Administrativo)
     const [rawLogs, setRawLogs] = useState<MeatInventoryLog[]>([]);
+    const [rawAdjustments, setRawAdjustments] = useState<MeatStockAdjustment[]>([]);
     const [reportStartDate, setReportStartDate] = useState(getTodayLocalISO());
     const [reportEndDate, setReportEndDate] = useState(getTodayLocalISO());
     const [editingLog, setEditingLog] = useState<{id: string, valStr: string, valNum: number} | null>(null);
@@ -76,6 +78,7 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
             
             setAppData(d);
             setRawLogs(logs); 
+            setRawAdjustments(adjustments);
             
             if (d.stores.length > 0 && !selectedStore) {
                 setSelectedStore(d.stores[0]);
@@ -96,6 +99,7 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
            setLoading(true);
            Promise.all([getOrders(), getMeatConsumptionLogs(), getMeatAdjustments()]).then(([o, l, a]) => {
                setRawLogs(l);
+               setRawAdjustments(a);
                processData(o, l, a, selectedStore);
                setLoading(false);
            });
@@ -253,29 +257,54 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
     // --- REPORT LOGIC ---
     
-    const getFilteredReportLogs = () => {
-        return rawLogs.filter(log => {
-            const matchesStore = log.store === selectedStore;
-            const matchesDate = log.date >= reportStartDate && log.date <= reportEndDate;
-            return matchesStore && matchesDate;
-        }).sort((a, b) => b.date.localeCompare(a.date));
+    const getFilteredReportData = () => {
+        // 1. Consumption Logs
+        const logs = rawLogs
+            .filter(log => log.store === selectedStore && log.date >= reportStartDate && log.date <= reportEndDate)
+            .map(log => ({
+                id: log.id,
+                date: log.date,
+                product: log.product,
+                value: log.quantity_consumed,
+                type: 'consumption' as const,
+                reason: ''
+            }));
+
+        // 2. Adjustments
+        const adjustments = rawAdjustments
+            .filter(adj => adj.store === selectedStore && adj.date >= reportStartDate && adj.date <= reportEndDate)
+            .map(adj => ({
+                id: adj.id,
+                date: adj.date,
+                product: adj.product,
+                value: adj.quantity, // Keep sign (+/-)
+                type: 'adjustment' as const,
+                reason: adj.reason
+            }));
+
+        // Merge and Sort by Date (Newest first)
+        return [...logs, ...adjustments].sort((a, b) => b.date.localeCompare(a.date));
     };
 
-    const handleDeleteLog = async (id: string) => {
+    const handleDeleteItem = async (item: { id: string, type: 'consumption' | 'adjustment' }) => {
         if (!window.confirm("Tem certeza que deseja excluir este lançamento? Isso afetará o estoque.")) return;
         try {
-            await deleteMeatConsumption(id);
+            if (item.type === 'consumption') {
+                await deleteMeatConsumption(item.id);
+            } else {
+                await deleteMeatAdjustment(item.id);
+            }
             loadData();
         } catch (e: any) {
             alert("Erro ao excluir: " + e.message);
         }
     };
 
-    const handleEditLogStart = (log: MeatInventoryLog) => {
+    const handleEditLogStart = (log: any) => {
         setEditingLog({
             id: log.id,
-            valStr: formatWeight(log.quantity_consumed),
-            valNum: log.quantity_consumed
+            valStr: formatWeight(log.value),
+            valNum: log.value
         });
     };
 
@@ -295,8 +324,10 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
         }
     };
 
-    const reportLogs = getFilteredReportLogs();
-    const totalReportWeight = reportLogs.reduce((acc, l) => acc + l.quantity_consumed, 0);
+    const reportData = getFilteredReportData();
+    const totalReportWeight = reportData
+        .filter(i => i.type === 'consumption')
+        .reduce((acc, l) => acc + l.value, 0);
 
     if (loading && appData.stores.length === 0) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" size={40}/></div>;
 
@@ -503,7 +534,7 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                                 <input type="date" value={reportEndDate} onChange={e => setReportEndDate(e.target.value)} className="border p-2 rounded text-sm w-full md:w-40"/>
                             </div>
                             <div className="w-full md:flex-1 text-right self-center">
-                                <span className="text-xs text-gray-400 uppercase font-bold mr-2">Total no Período:</span>
+                                <span className="text-xs text-gray-400 uppercase font-bold mr-2">Total Consumido:</span>
                                 <span className="text-xl font-black text-gray-800">{formatWeight(totalReportWeight)} Kg</span>
                             </div>
                         </div>
@@ -519,12 +550,25 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
-                                    {reportLogs.map(log => (
-                                        <tr key={log.id} className="hover:bg-gray-50">
-                                            <td className="px-4 py-3 text-sm text-gray-900">{formatDateBr(log.date)}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-700 font-bold">{log.product}</td>
+                                    {reportData.map(item => (
+                                        <tr key={item.id} className={`hover:bg-gray-50 transition-colors ${item.type === 'adjustment' ? 'bg-amber-50' : ''}`}>
+                                            <td className="px-4 py-3 text-sm text-gray-900">{formatDateBr(item.date)}</td>
+                                            <td className="px-4 py-3 text-sm text-gray-700">
+                                                {item.type === 'adjustment' ? (
+                                                    <div className="flex items-start gap-2">
+                                                        <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                                                        <div>
+                                                            <span className="font-black text-amber-800 block">AJUSTE</span>
+                                                            <span className="text-amber-700 text-xs font-bold">{item.product}</span>
+                                                            <span className="text-amber-600 text-xs block italic mt-0.5">"{item.reason}"</span>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <span className="font-bold">{item.product}</span>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-3 text-sm text-right font-mono">
-                                                {editingLog?.id === log.id ? (
+                                                {item.type === 'consumption' && editingLog?.id === item.id ? (
                                                     <div className="flex items-center justify-end gap-1">
                                                         <input 
                                                             type="text" 
@@ -537,16 +581,24 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                                                         <button onClick={() => setEditingLog(null)} className="text-red-400 hover:bg-red-100 p-1 rounded"><X size={16}/></button>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-red-600 font-bold">-{formatWeight(log.quantity_consumed)}</span>
+                                                    item.type === 'adjustment' ? (
+                                                        <span className={`font-bold ${item.value >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                            {item.value > 0 ? '+' : ''}{formatWeight(item.value)}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-red-600 font-bold">-{formatWeight(item.value)}</span>
+                                                    )
                                                 )}
                                             </td>
                                             <td className="px-4 py-3 text-center">
-                                                {editingLog?.id !== log.id && (
+                                                {editingLog?.id !== item.id && (
                                                     <div className="flex items-center justify-center gap-2">
-                                                        <button onClick={() => handleEditLogStart(log)} className="text-blue-500 hover:bg-blue-100 p-1.5 rounded transition-colors" title="Editar">
-                                                            <Edit size={16}/>
-                                                        </button>
-                                                        <button onClick={() => handleDeleteLog(log.id)} className="text-red-500 hover:bg-red-100 p-1.5 rounded transition-colors" title="Excluir">
+                                                        {item.type === 'consumption' && (
+                                                            <button onClick={() => handleEditLogStart(item)} className="text-blue-500 hover:bg-blue-100 p-1.5 rounded transition-colors" title="Editar">
+                                                                <Edit size={16}/>
+                                                            </button>
+                                                        )}
+                                                        <button onClick={() => handleDeleteItem(item)} className="text-red-500 hover:bg-red-100 p-1.5 rounded transition-colors" title="Excluir">
                                                             <Trash2 size={16}/>
                                                         </button>
                                                     </div>
@@ -554,7 +606,7 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                                             </td>
                                         </tr>
                                     ))}
-                                    {reportLogs.length === 0 && (
+                                    {reportData.length === 0 && (
                                         <tr><td colSpan={4} className="p-6 text-center text-gray-400 text-sm">Nenhum lançamento encontrado no período.</td></tr>
                                     )}
                                 </tbody>
