@@ -206,19 +206,11 @@ export const getOrders = async (): Promise<Order[]> => {
 
 export const saveOrder = async (order: Order) => {
     const { id, ...rest } = order;
+    const timestamp = rest.createdAt || new Date().toISOString();
+
+    // PREPARE PAYLOADS FOR DIFFERENT DB SCHEMAS
     
-    // Strategy: Try 3 Payloads (Camel, Snake, Lower)
-    // Reason: Database schema might vary depending on when/how it was created.
-
-    // 1. CamelCase (Default JS)
-    const payloadCamel = {
-        ...rest,
-        unitValue: safeNumber(rest.unitValue),
-        quantity: safeNumber(rest.quantity),
-        totalValue: safeNumber(rest.totalValue)
-    };
-
-    // 2. SnakeCase (Postgres Standard) - Likely needed for 'unit_measure' error
+    // 1. Snake Case (Standard Postgres) - Prefer this
     const payloadSnake = {
         date: rest.date,
         store: rest.store,
@@ -226,58 +218,76 @@ export const saveOrder = async (order: Order) => {
         brand: rest.brand,
         supplier: rest.supplier,
         unit_value: safeNumber(rest.unitValue),
-        unit_measure: rest.unitMeasure,
+        unit_measure: rest.unitMeasure, // Fix unit measure mapping
         quantity: safeNumber(rest.quantity),
         total_value: safeNumber(rest.totalValue),
         delivery_date: rest.deliveryDate,
         type: rest.type,
         category: rest.category,
-        created_at: rest.createdAt
+        created_at: timestamp
     };
 
-    // 3. Lowercase (Fallback)
-    const payloadLower: any = {};
-    Object.keys(payloadCamel).forEach(k => {
-        payloadLower[k.toLowerCase()] = (payloadCamel as any)[k];
-    });
+    // 2. Snake Auto (Without explicit timestamp - lets DB handle default)
+    const payloadSnakeAuto = { ...payloadSnake };
+    delete (payloadSnakeAuto as any).created_at;
 
-    // --- ATTEMPT 1: CamelCase ---
-    let { error } = await supabase.from('orders').insert([payloadCamel]);
+    // 3. Camel Case (Legacy JS)
+    const payloadCamel = {
+        ...rest,
+        unitValue: safeNumber(rest.unitValue),
+        quantity: safeNumber(rest.quantity),
+        totalValue: safeNumber(rest.totalValue),
+        createdAt: timestamp
+    };
 
-    if (!error) return; // Success!
+    // 4. Camel Auto (Without explicit timestamp)
+    const payloadCamelAuto = { ...payloadCamel };
+    delete (payloadCamelAuto as any).createdAt;
 
-    // --- ATTEMPT 2: SnakeCase (If Column Error) ---
-    const msg = error.message.toLowerCase();
-    if (msg.includes('column') || msg.includes('find') || msg.includes('schema') || msg.includes('violates')) {
-        console.warn("CamelCase save failed, trying SnakeCase...", error.message);
-        const { error: errSnake } = await supabase.from('orders').insert([payloadSnake]);
-        
-        if (!errSnake) return; // Success!
+    // HELPER TO EXECUTE INSERT
+    const tryInsert = async (payload: any, name: string) => {
+        const { error } = await supabase.from('orders').insert([payload]);
+        if (error) {
+            console.warn(`Save Strategy '${name}' failed:`, error.message);
+            return { success: false, msg: error.message };
+        }
+        return { success: true };
+    };
 
-        // --- ATTEMPT 3: Lowercase ---
-        console.warn("SnakeCase save failed, trying Lowercase...", errSnake.message);
-        const { error: errLower } = await supabase.from('orders').insert([payloadLower]);
-        
-        if (!errLower) return; // Success!
+    // EXECUTE STRATEGIES IN ORDER OF LIKELIHOOD
+    
+    // Strategy 1: Standard Snake Case (Best Practice)
+    let res = await tryInsert(payloadSnake, "SnakeFull");
+    if (res.success) return;
 
-        // If all failed, throw the SnakeCase error (most likely specific) or Lowercase
-        throw new Error(`Erro ao salvar: ${errSnake.message} / ${errLower.message}`);
-    } else {
-        throw new Error(error.message);
+    // Strategy 2: Snake Case Auto (If created_at is failing due to NULL)
+    if (res.msg?.includes('created_at') || res.msg?.includes('null')) {
+        res = await tryInsert(payloadSnakeAuto, "SnakeAuto");
+        if (res.success) return;
     }
+
+    // Strategy 3: Camel Case (Legacy Schema)
+    res = await tryInsert(payloadCamel, "CamelFull");
+    if (res.success) return;
+
+    // Strategy 4: Camel Case Auto
+    res = await tryInsert(payloadCamelAuto, "CamelAuto");
+    if (res.success) return;
+
+    // Strategy 5: Lowercase Fallback (Desperation)
+    const payloadLower: any = {};
+    Object.keys(payloadCamel).forEach(k => payloadLower[k.toLowerCase()] = (payloadCamel as any)[k]);
+    res = await tryInsert(payloadLower, "LowerFull");
+    if (res.success) return;
+
+    // If all fail, throw the last meaningful error
+    throw new Error(`Erro ao salvar no Banco de Dados. Verifique a estrutura da tabela.\nDetalhe: ${res.msg}`);
 };
 
 export const updateOrder = async (order: Order) => {
     const { id, ...rest } = order;
     
-    // Payloads
-    const payloadCamel = {
-        ...rest,
-        unitValue: safeNumber(rest.unitValue),
-        quantity: safeNumber(rest.quantity),
-        totalValue: safeNumber(rest.totalValue)
-    };
-
+    // Same strategy as saveOrder but with update
     const payloadSnake = {
         date: rest.date,
         store: rest.store,
@@ -290,30 +300,24 @@ export const updateOrder = async (order: Order) => {
         total_value: safeNumber(rest.totalValue),
         delivery_date: rest.deliveryDate,
         type: rest.type,
-        category: rest.category,
-        created_at: rest.createdAt
+        category: rest.category
     };
 
-    const payloadLower: any = {};
-    Object.keys(payloadCamel).forEach(k => {
-        payloadLower[k.toLowerCase()] = (payloadCamel as any)[k];
-    });
+    const payloadCamel = {
+        ...rest,
+        unitValue: safeNumber(rest.unitValue),
+        quantity: safeNumber(rest.quantity),
+        totalValue: safeNumber(rest.totalValue)
+    };
 
-    // Try 1
-    let { error } = await supabase.from('orders').update(payloadCamel).eq('id', id);
-    if(!error) return;
+    // Try Snake First
+    let { error } = await supabase.from('orders').update(payloadSnake).eq('id', id);
+    if (!error) return;
 
-    // Try 2 & 3
-    const msg = error.message.toLowerCase();
-    if (msg.includes('column') || msg.includes('violates')) {
-         let { error: errSnake } = await supabase.from('orders').update(payloadSnake).eq('id', id);
-         if(!errSnake) return;
+    // Try Camel
+    const { error: errCamel } = await supabase.from('orders').update(payloadCamel).eq('id', id);
+    if (!errCamel) return;
 
-         let { error: errLower } = await supabase.from('orders').update(payloadLower).eq('id', id);
-         if(!errLower) return;
-         
-         throw new Error(errLower.message);
-    }
     throw new Error(error.message);
 };
 
@@ -329,6 +333,7 @@ export const getLastOrderForProduct = async (product: string): Promise<Order | n
         return {
             ...o,
             unitValue: safeNumber(o.unitValue ?? o.unitvalue ?? o.unit_value),
+            unitMeasure: safeString(o.unitMeasure ?? o.unitmeasure ?? o.unit_measure),
             quantity: safeNumber(o.quantity),
             totalValue: safeNumber(o.totalValue ?? o.totalvalue ?? o.total_value)
         };
@@ -928,4 +933,8 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS "unitValue" NUMERIC;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS "unit_value" NUMERIC;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS "unitMeasure" TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS "unit_measure" TEXT;
+
+-- GARANTIR DEFAULTS PARA DATAS (PREVINE ERRO NOT NULL)
+ALTER TABLE orders ALTER COLUMN "created_at" SET DEFAULT NOW();
+ALTER TABLE orders ALTER COLUMN "createdAt" SET DEFAULT NOW();
 `;
