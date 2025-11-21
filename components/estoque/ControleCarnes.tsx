@@ -1,34 +1,56 @@
 
 import React, { useState, useEffect } from 'react';
-import { getOrders, getMeatConsumptionLogs, getMeatAdjustments, saveMeatConsumption, saveMeatAdjustment, getTodayLocalISO, getAppData } from '../../services/storageService';
-import { MeatInventoryLog, Order, MeatStockAdjustment, AppData } from '../../types';
-import { Save, Loader2, AlertCircle, PenTool, X, History, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { 
+    getOrders, 
+    getMeatConsumptionLogs, 
+    getMeatAdjustments, 
+    saveMeatConsumption, 
+    saveMeatAdjustment, 
+    getTodayLocalISO, 
+    getAppData,
+    updateMeatConsumption,
+    deleteMeatConsumption,
+    formatDateBr
+} from '../../services/storageService';
+import { MeatInventoryLog, Order, MeatStockAdjustment, AppData, User } from '../../types';
+import { Save, Loader2, AlertCircle, PenTool, X, History, RotateCcw, Edit, Trash2, Filter, CheckCircle } from 'lucide-react';
 
-export const ControleCarnes: React.FC = () => {
+interface ControleCarnesProps {
+    user?: User;
+}
+
+export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [selectedStore, setSelectedStore] = useState('');
 
+    // Dados de Estoque (Cálculo)
     const [inventoryData, setInventoryData] = useState<{
         name: string;
         totalBought: number;
         totalConsumedPrev: number;
         totalAdjustments: number;
         initialStock: number;
-        todayConsumptionStr: string; // String formatada para input (e.g. "1,234")
-        todayConsumptionVal: number; // Valor numérico real
+        todayConsumptionStr: string; 
+        todayConsumptionVal: number;
         finalStock: number;
     }[]>([]);
 
-    // Modal State
+    // Modal State (Ajustes)
     const [showModal, setShowModal] = useState(false);
     const [adjProduct, setAdjProduct] = useState('');
     const [adjType, setAdjType] = useState<'entrada' | 'saida'>('entrada');
-    const [adjValueStr, setAdjValueStr] = useState('0,000'); // Masked
-    const [adjValueNum, setAdjValueNum] = useState(0); // Numeric
+    const [adjValueStr, setAdjValueStr] = useState('0,000');
+    const [adjValueNum, setAdjValueNum] = useState(0);
     const [adjReason, setAdjReason] = useState('');
+
+    // Report State (Relatório Administrativo)
+    const [rawLogs, setRawLogs] = useState<MeatInventoryLog[]>([]);
+    const [reportStartDate, setReportStartDate] = useState(getTodayLocalISO());
+    const [reportEndDate, setReportEndDate] = useState(getTodayLocalISO());
+    const [editingLog, setEditingLog] = useState<{id: string, valStr: string, valNum: number} | null>(null);
 
     const MEAT_LIST = [
         'Alcatra', 'Capa do filé', 'Coxao mole', 'Contra filé', 'Coração', 
@@ -36,6 +58,7 @@ export const ControleCarnes: React.FC = () => {
     ];
 
     const today = getTodayLocalISO();
+    const isAdmin = user?.isMaster || user?.permissions?.modules?.includes('admin');
 
     useEffect(() => {
         loadData();
@@ -52,6 +75,7 @@ export const ControleCarnes: React.FC = () => {
             ]);
             
             setAppData(d);
+            setRawLogs(logs); // Guardamos todos os logs crus para o relatório
             
             // Default store selection
             if (d.stores.length > 0 && !selectedStore) {
@@ -73,6 +97,7 @@ export const ControleCarnes: React.FC = () => {
         if (selectedStore) {
            setLoading(true);
            Promise.all([getOrders(), getMeatConsumptionLogs(), getMeatAdjustments()]).then(([o, l, a]) => {
+               setRawLogs(l);
                processData(o, l, a, selectedStore);
                setLoading(false);
            });
@@ -85,27 +110,27 @@ export const ControleCarnes: React.FC = () => {
         if (!store) return;
 
         const data = MEAT_LIST.map(meat => {
-            // 1. Total Comprado (Histórico) - Filtered by Store
+            // 1. Total Comprado
             const totalBought = orders
                 .filter(o => o.store === store && o.product.toLowerCase() === meat.toLowerCase())
                 .reduce((acc, o) => acc + (Number(o.quantity) || 0), 0);
 
-            // 2. Total Consumido (Histórico ANTES de hoje) - Filtered by Store
+            // 2. Total Consumido (Histórico ANTES de hoje)
             const totalConsumedPrev = logs
                 .filter(l => l.store === store && l.product.toLowerCase() === meat.toLowerCase() && l.date < today)
                 .reduce((acc, l) => acc + (Number(l.quantity_consumed) || 0), 0);
             
-            // 3. Total Ajustes (Correções manuais) - Filtered by Store
+            // 3. Total Ajustes
             const totalAdjustments = adjustments
                 .filter(a => a.store === store && a.product.toLowerCase() === meat.toLowerCase())
                 .reduce((acc, a) => acc + (Number(a.quantity) || 0), 0);
 
-            // 4. Consumo de Hoje (Soma de todos os logs de hoje para evitar duplicidade visual na carga)
+            // 4. Consumo de Hoje (Somatório do banco)
             const todayConsumptionVal = logs
                 .filter(l => l.store === store && l.product.toLowerCase() === meat.toLowerCase() && l.date === today)
                 .reduce((acc, l) => acc + Number(l.quantity_consumed), 0);
 
-            // 5. Estoque Inicial do Dia (Calculado baseando-se no fechamento de ontem)
+            // 5. Estoque Inicial do Dia
             const initialStock = totalBought - totalConsumedPrev + totalAdjustments;
 
             return {
@@ -123,17 +148,10 @@ export const ControleCarnes: React.FC = () => {
         setInventoryData(data);
     };
 
-    // Right-to-left input handler for 3 decimals
     const handleWeightInput = (value: string): { str: string, num: number } => {
-        // Remove tudo que não for dígito
         const raw = value.replace(/\D/g, '');
-        
-        // Se vazio, retorna zero
         if (!raw) return { str: '0,000', num: 0 };
-
-        // Converte para número dividindo por 1000 para ter 3 casas
         const num = parseInt(raw, 10) / 1000;
-        
         return { str: formatWeight(num), num };
     };
 
@@ -164,33 +182,25 @@ export const ControleCarnes: React.FC = () => {
 
         setSaving(true);
         try {
-            // Para evitar duplicidade no "Insert only" logic:
-            // Recarregar dados frescos para comparar
             const freshLogs = await getMeatConsumptionLogs();
-            
             const logsToSave: MeatInventoryLog[] = [];
 
             for (const item of inventoryData) {
-                // Quanto já está salvo no banco HOJE
                 const savedToday = freshLogs
                     .filter(l => l.store === selectedStore && l.product === item.name && l.date === today)
                     .reduce((acc, l) => acc + Number(l.quantity_consumed), 0);
                 
                 const currentInput = item.todayConsumptionVal;
                 
-                // Se o valor digitado for diferente do salvo
-                if (currentInput !== savedToday) {
+                if (Math.abs(currentInput - savedToday) > 0.0001) {
                     const diff = currentInput - savedToday;
-                    
-                    if (Math.abs(diff) > 0.0001) { // float tolerance
-                         logsToSave.push({
-                            id: '',
-                            date: today,
-                            store: selectedStore,
-                            product: item.name,
-                            quantity_consumed: diff // Pode ser negativo se reduziu o consumo
-                        });
-                    }
+                     logsToSave.push({
+                        id: '',
+                        date: today,
+                        store: selectedStore,
+                        product: item.name,
+                        quantity_consumed: diff
+                    });
                 }
             }
 
@@ -205,9 +215,8 @@ export const ControleCarnes: React.FC = () => {
             }
 
             alert("Dados atualizados com sucesso!");
-            // Force reload
-            const [o, l, a] = await Promise.all([getOrders(), getMeatConsumptionLogs(), getMeatAdjustments()]);
-            processData(o, l, a, selectedStore);
+            // Full reload
+            loadData();
         } catch (e: any) {
             alert("Erro ao salvar: " + e.message);
         } finally {
@@ -239,13 +248,58 @@ export const ControleCarnes: React.FC = () => {
             setAdjValueStr('0,000');
             setAdjValueNum(0);
             setAdjReason('');
-            // Reload
-            const [o, l, a] = await Promise.all([getOrders(), getMeatConsumptionLogs(), getMeatAdjustments()]);
-            processData(o, l, a, selectedStore);
+            loadData();
         } catch (e: any) {
             alert("Erro ao salvar ajuste: " + e.message);
         }
     };
+
+    // --- REPORT LOGIC ---
+    
+    const getFilteredReportLogs = () => {
+        return rawLogs.filter(log => {
+            const matchesStore = log.store === selectedStore;
+            const matchesDate = log.date >= reportStartDate && log.date <= reportEndDate;
+            return matchesStore && matchesDate;
+        }).sort((a, b) => b.date.localeCompare(a.date));
+    };
+
+    const handleDeleteLog = async (id: string) => {
+        if (!window.confirm("Tem certeza que deseja excluir este lançamento? Isso afetará o estoque.")) return;
+        try {
+            await deleteMeatConsumption(id);
+            loadData();
+        } catch (e: any) {
+            alert("Erro ao excluir: " + e.message);
+        }
+    };
+
+    const handleEditLogStart = (log: MeatInventoryLog) => {
+        setEditingLog({
+            id: log.id,
+            valStr: formatWeight(log.quantity_consumed),
+            valNum: log.quantity_consumed
+        });
+    };
+
+    const handleEditLogChange = (val: string) => {
+        const { str, num } = handleWeightInput(val);
+        setEditingLog(prev => prev ? { ...prev, valStr: str, valNum: num } : null);
+    };
+
+    const handleEditLogSave = async () => {
+        if (!editingLog) return;
+        try {
+            await updateMeatConsumption(editingLog.id, editingLog.valNum);
+            setEditingLog(null);
+            loadData();
+        } catch (e: any) {
+            alert("Erro ao atualizar: " + e.message);
+        }
+    };
+
+    const reportLogs = getFilteredReportLogs();
+    const totalReportWeight = reportLogs.reduce((acc, l) => acc + l.quantity_consumed, 0);
 
     if (loading && appData.stores.length === 0) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" size={40}/></div>;
 
@@ -256,7 +310,7 @@ export const ControleCarnes: React.FC = () => {
 
     return (
         <div className="max-w-6xl mx-auto animate-fadeIn pb-32">
-             <div className="bg-white rounded-lg shadow-card border border-slate-200 overflow-hidden">
+             <div className="bg-white rounded-lg shadow-card border border-slate-200 overflow-hidden mb-8">
                 
                 {/* Header da Ferramenta */}
                 <div className="p-4 md:p-6 border-b border-slate-100 bg-slate-50 flex flex-col gap-4 sticky top-16 z-30 shadow-sm">
@@ -435,6 +489,90 @@ export const ControleCarnes: React.FC = () => {
                     </p>
                 </div>
             </div>
+
+            {/* RELATÓRIO ADMINISTRATIVO (Novo) */}
+            {isAdmin && (
+                <div className="mt-8 mx-4 md:mx-0 bg-white rounded-lg shadow border border-gray-200 animate-fadeIn">
+                    <div className="bg-gray-800 text-white p-4 rounded-t-lg flex justify-between items-center">
+                        <h3 className="font-bold uppercase flex items-center gap-2 text-sm">
+                            <Filter size={16}/> Relatório de Retiradas (Consumo)
+                        </h3>
+                        <span className="text-[10px] bg-gray-700 px-2 py-1 rounded font-bold text-yellow-400 border border-gray-600">
+                            ÁREA ADMINISTRATIVA
+                        </span>
+                    </div>
+                    
+                    <div className="p-6">
+                        <div className="flex flex-wrap gap-4 mb-6 items-end">
+                            <div className="w-full md:w-auto">
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Início</label>
+                                <input type="date" value={reportStartDate} onChange={e => setReportStartDate(e.target.value)} className="border p-2 rounded text-sm w-full md:w-40"/>
+                            </div>
+                            <div className="w-full md:w-auto">
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Fim</label>
+                                <input type="date" value={reportEndDate} onChange={e => setReportEndDate(e.target.value)} className="border p-2 rounded text-sm w-full md:w-40"/>
+                            </div>
+                            <div className="w-full md:flex-1 text-right self-center">
+                                <span className="text-xs text-gray-400 uppercase font-bold mr-2">Total no Período:</span>
+                                <span className="text-xl font-black text-gray-800">{formatWeight(totalReportWeight)} Kg</span>
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Data</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Carne / Produto</th>
+                                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">Qtd (Kg)</th>
+                                        <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {reportLogs.map(log => (
+                                        <tr key={log.id} className="hover:bg-gray-50">
+                                            <td className="px-4 py-3 text-sm text-gray-900">{formatDateBr(log.date)}</td>
+                                            <td className="px-4 py-3 text-sm text-gray-700 font-bold">{log.product}</td>
+                                            <td className="px-4 py-3 text-sm text-right font-mono">
+                                                {editingLog?.id === log.id ? (
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <input 
+                                                            type="text" 
+                                                            value={editingLog.valStr} 
+                                                            onChange={e => handleEditLogChange(e.target.value)}
+                                                            className="w-20 p-1 text-right border border-blue-300 rounded text-sm font-bold outline-none focus:ring-1 focus:ring-blue-500"
+                                                            autoFocus
+                                                        />
+                                                        <button onClick={handleEditLogSave} className="text-green-600 hover:bg-green-100 p-1 rounded"><CheckCircle size={16}/></button>
+                                                        <button onClick={() => setEditingLog(null)} className="text-red-400 hover:bg-red-100 p-1 rounded"><X size={16}/></button>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-red-600 font-bold">-{formatWeight(log.quantity_consumed)}</span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                                {editingLog?.id !== log.id && (
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <button onClick={() => handleEditLogStart(log)} className="text-blue-500 hover:bg-blue-100 p-1.5 rounded transition-colors" title="Editar">
+                                                            <Edit size={16}/>
+                                                        </button>
+                                                        <button onClick={() => handleDeleteLog(log.id)} className="text-red-500 hover:bg-red-100 p-1.5 rounded transition-colors" title="Excluir">
+                                                            <Trash2 size={16}/>
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {reportLogs.length === 0 && (
+                                        <tr><td colSpan={4} className="p-6 text-center text-gray-400 text-sm">Nenhum lançamento encontrado no período.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal de Ajuste */}
             {showModal && (

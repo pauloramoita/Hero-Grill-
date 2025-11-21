@@ -1,5 +1,4 @@
 
-
 // ... existing imports ...
 import { createClient } from '@supabase/supabase-js';
 import { AppData, Order, Transaction043, AccountBalance, FinancialRecord, User, FinancialAccount, DailyTransaction, MeatInventoryLog, MeatStockAdjustment } from '../types';
@@ -241,76 +240,297 @@ export const saveAppData = async (data: AppData) => {
     }
 };
 
-// ... User functions ...
-const MASTER_USER: User = {
-    id: 'master-001',
-    name: 'Administrador Mestre',
-    username: 'Administrador',
-    permissions: { modules: ['pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro', 'estoque'], stores: [] },
-    isMaster: true
-};
-
-export const loginUser = async (username: string, password: string): Promise<{success: boolean, user?: User, message?: string}> => {
-    if (username === 'Administrador' && password === 'Moita3033') return { success: true, user: MASTER_USER };
-    try {
-        const { data, error } = await supabase.from('system_users').select('*').eq('username', username).eq('password', password).single();
-        if (error || !data) return { success: false, message: 'Usuário ou senha incorretos.' };
-        return { success: true, user: { id: data.id, name: data.name, username: data.username, permissions: data.permissions } };
-    } catch (e) {
-        return { success: false, message: 'Erro ao conectar com banco de dados.' };
-    }
-};
-
-export const getUsers = async (): Promise<User[]> => {
-    const { data, error } = await supabase.from('system_users').select('*');
+// --- ORDERS ---
+export const getOrders = async (): Promise<Order[]> => {
+    const { data, error } = await supabase.from('orders').select('*');
     if (error) return [];
-    return data.map((u: any) => ({ id: u.id, name: u.name, username: u.username, password: u.password, permissions: u.permissions }));
+    return data.map((item: any) => ({
+        id: item.id,
+        date: item.date,
+        store: item.store,
+        product: item.product,
+        brand: item.brand,
+        supplier: item.supplier,
+        unitMeasure: item.unit_measure,
+        unitValue: item.unit_value,
+        quantity: item.quantity,
+        totalValue: item.total_value,
+        deliveryDate: item.delivery_date,
+        type: item.type,
+        category: item.category,
+        createdAt: item.created_at
+    }));
 };
 
-export const saveUser = async (user: User) => {
-    if (user.username === 'Administrador') throw new Error("Nome de usuário reservado.");
-    const dbUser = { name: user.name, username: user.username, password: user.password, permissions: user.permissions };
-    if (user.id) {
-        const { error } = await supabase.from('system_users').update(dbUser).eq('id', user.id);
+export const saveOrder = async (order: Order) => {
+    const payload: any = {
+        date: order.date,
+        store: order.store,
+        product: order.product,
+        brand: order.brand,
+        supplier: order.supplier,
+        unit_measure: order.unitMeasure,
+        unit_value: order.unitValue,
+        quantity: order.quantity,
+        total_value: order.totalValue,
+        delivery_date: order.deliveryDate,
+        type: order.type,
+        category: order.category
+    };
+    
+    if (order.id) {
+        const { error } = await supabase.from('orders').update(payload).eq('id', order.id);
         if (error) throw new Error(error.message);
     } else {
-        const { data: existing } = await supabase.from('system_users').select('id').eq('username', user.username);
-        if (existing && existing.length > 0) throw new Error("Usuário já existe.");
-        const { error } = await supabase.from('system_users').insert(dbUser);
+        const { error } = await supabase.from('orders').insert([payload]);
         if (error) throw new Error(error.message);
     }
 };
 
-export const deleteUser = async (id: string) => {
-    const { error } = await supabase.from('system_users').delete().eq('id', id);
+export const deleteOrder = async (id: string) => {
+    const { error } = await supabase.from('orders').delete().eq('id', id);
     if (error) throw new Error(error.message);
 };
 
-export const changeUserPassword = async (userId: string, currentPass: string, newPass: string) => {
-    if (userId === 'master-001') throw new Error("Admin Mestre não pode alterar senha.");
-    const { data } = await supabase.from('system_users').select('id').eq('id', userId).eq('password', currentPass).single();
-    if (!data) throw new Error("Senha atual incorreta.");
-    const { error } = await supabase.from('system_users').update({ password: newPass }).eq('id', userId);
+export const updateOrder = async (order: Order) => {
+    return saveOrder(order);
+};
+
+export const getLastOrderForProduct = async (productName: string): Promise<Order | null> => {
+    const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('product', productName)
+        .order('date', { ascending: false })
+        .limit(1);
+    
+    if (error || !data || data.length === 0) return null;
+    const item = data[0];
+    return {
+        id: item.id,
+        date: item.date,
+        store: item.store,
+        product: item.product,
+        brand: item.brand,
+        supplier: item.supplier,
+        unitMeasure: item.unit_measure,
+        unitValue: item.unit_value,
+        quantity: item.quantity,
+        totalValue: item.total_value,
+        deliveryDate: item.delivery_date,
+        type: item.type,
+        category: item.category
+    };
+};
+
+// --- TRANSACTIONS 043 ---
+export const getTransactions043 = async (): Promise<Transaction043[]> => {
+    const { data, error } = await supabase.from('transactions_043').select('*');
+    if (error) return [];
+    return data.map((item: any) => ({
+        id: item.id,
+        date: item.date,
+        store: item.store,
+        type: item.type,
+        value: item.value,
+        description: item.description
+    }));
+};
+
+export const saveTransaction043 = async (transaction: Transaction043) => {
+    const payload = {
+        date: transaction.date,
+        store: transaction.store,
+        type: transaction.type,
+        value: transaction.value,
+        description: transaction.description
+    };
+    if (transaction.id) {
+        const { error } = await supabase.from('transactions_043').update(payload).eq('id', transaction.id);
+        if (error) throw new Error(error.message);
+    } else {
+        const { error } = await supabase.from('transactions_043').insert([payload]);
+        if (error) throw new Error(error.message);
+    }
+};
+
+export const deleteTransaction043 = async (id: string) => {
+    const { error } = await supabase.from('transactions_043').delete().eq('id', id);
     if (error) throw new Error(error.message);
 };
 
-// ... Financial Account functions ...
+export const updateTransaction043 = async (transaction: Transaction043) => {
+    return saveTransaction043(transaction);
+};
+
+// --- ACCOUNT BALANCES (Financeiro Antigo / Saldo) ---
+export const getAccountBalances = async (): Promise<AccountBalance[]> => {
+    const { data, error } = await supabase.from('account_balances').select('*');
+    if (error) return [];
+    return data.map((item: any) => ({
+        id: item.id,
+        store: item.store,
+        year: item.year,
+        month: item.month,
+        caixaEconomica: item.caixa_economica,
+        cofre: item.cofre,
+        loteria: item.loteria,
+        pagbankH: item.pagbank_h,
+        pagbankD: item.pagbank_d,
+        investimentos: item.investimentos,
+        totalBalance: item.total_balance
+    }));
+};
+
+export const saveAccountBalance = async (balance: AccountBalance) => {
+    const payload = {
+        store: balance.store,
+        year: balance.year,
+        month: balance.month,
+        caixa_economica: balance.caixaEconomica,
+        cofre: balance.cofre,
+        loteria: balance.loteria,
+        pagbank_h: balance.pagbankH,
+        pagbank_d: balance.pagbankD,
+        investimentos: balance.investimentos,
+        total_balance: balance.totalBalance
+    };
+    if (balance.id) {
+        const { error } = await supabase.from('account_balances').update(payload).eq('id', balance.id);
+        if (error) throw new Error(error.message);
+    } else {
+        const { error } = await supabase.from('account_balances').insert([payload]);
+        if (error) throw new Error(error.message);
+    }
+};
+
+export const updateAccountBalance = async (balance: AccountBalance) => saveAccountBalance(balance);
+
+export const deleteAccountBalance = async (id: string) => {
+    const { error } = await supabase.from('account_balances').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+};
+
+export const getPreviousMonthBalance = async (store: string, year: number, month: string): Promise<AccountBalance | null> => {
+    let prevYear = year;
+    let prevMonthInt = parseInt(month, 10) - 1;
+    if (prevMonthInt === 0) {
+        prevMonthInt = 12;
+        prevYear -= 1;
+    }
+    const prevMonthStr = String(prevMonthInt).padStart(2, '0');
+
+    const { data, error } = await supabase
+        .from('account_balances')
+        .select('*')
+        .eq('store', store)
+        .eq('year', prevYear)
+        .eq('month', prevMonthStr)
+        .limit(1);
+
+    if (error || !data || data.length === 0) return null;
+    const item = data[0];
+    return {
+        id: item.id,
+        store: item.store,
+        year: item.year,
+        month: item.month,
+        caixaEconomica: item.caixa_economica,
+        cofre: item.cofre,
+        loteria: item.loteria,
+        pagbankH: item.pagbank_h,
+        pagbankD: item.pagbank_d,
+        investimentos: item.investimentos,
+        totalBalance: item.total_balance
+    };
+};
+
+// --- FINANCIAL RECORDS (Entradas e Saídas - Antigo) ---
+export const getFinancialRecords = async (): Promise<FinancialRecord[]> => {
+    const { data, error } = await supabase.from('financial_records').select('*');
+    if (error) return [];
+    return data.map((item: any) => ({
+        id: item.id,
+        store: item.store,
+        year: item.year,
+        month: item.month,
+        creditCaixa: item.credit_caixa,
+        creditDelta: item.credit_delta,
+        creditPagBankH: item.credit_pagbank_h,
+        creditPagBankD: item.credit_pagbank_d,
+        creditIfood: item.credit_ifood,
+        totalRevenues: item.total_revenues,
+        debitCaixa: item.debit_caixa,
+        debitPagBankH: item.debit_pagbank_h,
+        debitPagBankD: item.debit_pagbank_d,
+        debitLoteria: item.debit_loteria,
+        totalExpenses: item.total_expenses,
+        netResult: item.net_result
+    }));
+};
+
+export const saveFinancialRecord = async (record: FinancialRecord) => {
+    const payload = {
+        store: record.store,
+        year: record.year,
+        month: record.month,
+        credit_caixa: record.creditCaixa,
+        credit_delta: record.creditDelta,
+        credit_pagbank_h: record.creditPagBankH,
+        credit_pagbank_d: record.creditPagBankD,
+        credit_ifood: record.creditIfood,
+        total_revenues: record.totalRevenues,
+        debit_caixa: record.debitCaixa,
+        debit_pagbank_h: record.debitPagBankH,
+        debit_pagbank_d: record.debitPagBankD,
+        debit_loteria: record.debitLoteria,
+        total_expenses: record.totalExpenses,
+        net_result: record.netResult
+    };
+    if (record.id) {
+        const { error } = await supabase.from('financial_records').update(payload).eq('id', record.id);
+        if (error) throw new Error(error.message);
+    } else {
+        const { error } = await supabase.from('financial_records').insert([payload]);
+        if (error) throw new Error(error.message);
+    }
+};
+
+export const updateFinancialRecord = async (record: FinancialRecord) => saveFinancialRecord(record);
+
+export const deleteFinancialRecord = async (id: string) => {
+    const { error } = await supabase.from('financial_records').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+};
+
+// --- NOVO FINANCEIRO (CONTAS E LANÇAMENTOS) ---
 
 export const getFinancialAccounts = async (): Promise<FinancialAccount[]> => {
     const { data, error } = await supabase.from('financial_accounts').select('*');
     if (error) return [];
-    return data.map((a: any) => ({ id: a.id, name: a.name, store: a.store, initialBalance: a.initial_balance }));
+    return data.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        store: item.store,
+        initialBalance: item.initial_balance
+    }));
 };
 
 export const saveFinancialAccount = async (account: FinancialAccount) => {
-    const dbAccount = { name: account.name, store: account.store, initial_balance: account.initialBalance };
-    const { error } = await supabase.from('financial_accounts').insert(dbAccount);
+    const { error } = await supabase.from('financial_accounts').insert([{
+        name: account.name,
+        store: account.store,
+        initial_balance: account.initialBalance
+    }]);
     if (error) throw new Error(error.message);
 };
 
 export const updateFinancialAccount = async (account: FinancialAccount) => {
-    const dbAccount = { name: account.name, store: account.store, initial_balance: account.initialBalance };
-    const { error } = await supabase.from('financial_accounts').update(dbAccount).eq('id', account.id);
+    const { error } = await supabase.from('financial_accounts').update({
+        name: account.name,
+        store: account.store,
+        initial_balance: account.initialBalance
+    }).eq('id', account.id);
     if (error) throw new Error(error.message);
 };
 
@@ -319,42 +539,40 @@ export const deleteFinancialAccount = async (id: string) => {
     if (error) throw new Error(error.message);
 };
 
-// ... Daily Transaction functions ...
-
 export const getDailyTransactions = async (): Promise<DailyTransaction[]> => {
     const { data, error } = await supabase.from('daily_transactions').select('*');
     if (error) return [];
-    return data.map((t: any) => ({
-        id: t.id,
-        date: t.date,
-        paymentDate: t.payment_date,
-        store: t.store,
-        type: t.type,
-        accountId: t.account_id,
-        destinationStore: t.destination_store,
-        destinationAccountId: t.destination_account_id,
-        paymentMethod: t.payment_method,
-        product: t.product,
-        category: t.category,
-        supplier: t.supplier,
-        value: t.value,
-        status: t.status,
-        description: t.description,
-        classification: t.classification,
-        origin: t.origin,
-        createdAt: t.created_at
+    return data.map((item: any) => ({
+        id: item.id,
+        date: item.date,
+        paymentDate: item.payment_date,
+        store: item.store,
+        type: item.type,
+        accountId: item.account_id,
+        destinationStore: item.destination_store,
+        destinationAccountId: item.destination_account_id,
+        paymentMethod: item.payment_method,
+        product: item.product,
+        category: item.category,
+        supplier: item.supplier,
+        value: item.value,
+        status: item.status,
+        description: item.description,
+        classification: item.classification,
+        origin: item.origin,
+        createdAt: item.created_at
     }));
 };
 
 export const saveDailyTransaction = async (t: DailyTransaction) => {
-    const dbT = {
+    const payload: any = {
         date: t.date,
         payment_date: t.paymentDate,
         store: t.store,
         type: t.type,
-        account_id: t.accountId || null,
-        destination_store: t.destinationStore || null,
-        destination_account_id: t.destinationAccountId || null,
+        account_id: t.accountId,
+        destination_store: t.destinationStore,
+        destination_account_id: t.destinationAccountId,
         payment_method: t.paymentMethod,
         product: t.product,
         category: t.category,
@@ -365,13 +583,12 @@ export const saveDailyTransaction = async (t: DailyTransaction) => {
         classification: t.classification,
         origin: t.origin
     };
-
-    // Use Upsert to handle both Updates (existing ID) and "Order -> Transaction" Conversions (ID exists but row doesn't)
+    
     if (t.id) {
-        const { error } = await supabase.from('daily_transactions').upsert({ id: t.id, ...dbT });
+        const { error } = await supabase.from('daily_transactions').update(payload).eq('id', t.id);
         if (error) throw new Error(error.message);
     } else {
-        const { error } = await supabase.from('daily_transactions').insert(dbT);
+        const { error } = await supabase.from('daily_transactions').insert([payload]);
         if (error) throw new Error(error.message);
     }
 };
@@ -381,332 +598,504 @@ export const deleteDailyTransaction = async (id: string) => {
     if (error) throw new Error(error.message);
 };
 
-// ... Order functions ...
-
-export const getOrders = async (): Promise<Order[]> => {
-    const { data, error } = await supabase.from('orders').select('*');
-    if (error) return [];
-    return data.map((o: any) => ({
-        id: o.id,
-        date: o.date,
-        store: o.store,
-        product: o.product,
-        brand: o.brand,
-        supplier: o.supplier,
-        unitMeasure: o.unit_measure,
-        unitValue: o.unit_value,
-        quantity: o.quantity,
-        totalValue: o.total_value,
-        deliveryDate: o.delivery_date,
-        type: o.type || 'Variável',
-        category: o.category,
-        createdAt: o.created_at
-    }));
-};
-
-export const getLastOrderForProduct = async (productName: string): Promise<Order | undefined> => {
-    const { data } = await supabase.from('orders').select('*').eq('product', productName).order('date', { ascending: false }).limit(1);
-    if (!data || data.length === 0) return undefined;
-    const o = data[0];
-    return {
-        id: o.id, date: o.date, store: o.store, product: o.product, brand: o.brand, supplier: o.supplier,
-        unitMeasure: o.unit_measure, unitValue: o.unit_value, quantity: o.quantity, totalValue: o.total_value,
-        deliveryDate: o.delivery_date, type: o.type, category: o.category, createdAt: o.created_at
-    };
-};
-
-export const saveOrder = async (order: Order) => {
-    const dbOrder = {
-        date: order.date, store: order.store, product: order.product, brand: order.brand, supplier: order.supplier,
-        unit_measure: order.unitMeasure, unit_value: order.unitValue, quantity: order.quantity, total_value: order.totalValue,
-        delivery_date: order.deliveryDate, type: order.type, category: order.category
-    };
-    const { error } = await supabase.from('orders').insert(dbOrder);
-    if (error) throw new Error(error.message);
-};
-
-export const updateOrder = async (order: Order) => {
-    const dbOrder = {
-        date: order.date, store: order.store, product: order.product, brand: order.brand, supplier: order.supplier,
-        unit_measure: order.unitMeasure, unit_value: order.unitValue, quantity: order.quantity, total_value: order.totalValue,
-        delivery_date: order.deliveryDate, type: order.type, category: order.category
-    };
-    const { error } = await supabase.from('orders').update(dbOrder).eq('id', order.id);
-    if (error) throw new Error(error.message);
-};
-
-export const deleteOrder = async (id: string) => {
-    const { error } = await supabase.from('orders').delete().eq('id', id);
-    if (error) throw new Error(error.message);
-};
-
-// ... Estoque Carnes functions ...
+// --- ESTOQUE DE CARNES ---
 
 export const getMeatConsumptionLogs = async (): Promise<MeatInventoryLog[]> => {
     const { data, error } = await supabase.from('meat_inventory_logs').select('*');
     if (error) return [];
-    return data.map((l: any) => ({
-        id: l.id,
-        date: l.date,
-        store: l.store,
-        product: l.product,
-        quantity_consumed: l.quantity_consumed,
-        created_at: l.created_at
+    return data.map((item: any) => ({
+        id: item.id,
+        date: item.date,
+        store: item.store,
+        product: item.product,
+        quantity_consumed: item.quantity_consumed,
+        created_at: item.created_at
     }));
-}
+};
 
 export const saveMeatConsumption = async (log: MeatInventoryLog) => {
-    const { error } = await supabase.from('meat_inventory_logs').insert({
+    const { error } = await supabase.from('meat_inventory_logs').insert([{
         date: log.date,
         store: log.store,
         product: log.product,
         quantity_consumed: log.quantity_consumed
-    });
+    }]);
     if (error) throw new Error(error.message);
-}
+};
+
+export const updateMeatConsumption = async (id: string, quantity: number) => {
+    const { error } = await supabase
+        .from('meat_inventory_logs')
+        .update({ quantity_consumed: quantity })
+        .eq('id', id);
+    if (error) throw new Error(error.message);
+};
 
 export const deleteMeatConsumption = async (id: string) => {
-    const { error } = await supabase.from('meat_inventory_logs').delete().eq('id', id);
+    const { error } = await supabase
+        .from('meat_inventory_logs')
+        .delete()
+        .eq('id', id);
     if (error) throw new Error(error.message);
-}
-
-// ... Ajustes de Estoque ...
+};
 
 export const getMeatAdjustments = async (): Promise<MeatStockAdjustment[]> => {
     const { data, error } = await supabase.from('meat_stock_adjustments').select('*');
     if (error) return [];
-    return data.map((a: any) => ({
-        id: a.id,
-        date: a.date,
-        store: a.store,
-        product: a.product,
-        quantity: a.quantity,
-        reason: a.reason,
-        created_at: a.created_at
+    return data.map((item: any) => ({
+        id: item.id,
+        date: item.date,
+        store: item.store,
+        product: item.product,
+        quantity: item.quantity,
+        reason: item.reason,
+        created_at: item.created_at
     }));
-}
+};
 
 export const saveMeatAdjustment = async (adj: MeatStockAdjustment) => {
-    const { error } = await supabase.from('meat_stock_adjustments').insert({
+    const { error } = await supabase.from('meat_stock_adjustments').insert([{
         date: adj.date,
         store: adj.store,
         product: adj.product,
         quantity: adj.quantity,
         reason: adj.reason
-    });
+    }]);
     if (error) throw new Error(error.message);
-}
+};
 
-// ... Other functions (043, Saldo, Helpers, Export, Backup) remain mostly same ...
+// --- USERS & AUTH (SIMPLIFIED) ---
 
-export const getTransactions043 = async (): Promise<Transaction043[]> => {
-    const { data, error } = await supabase.from('transactions_043').select('*');
+export const getUsers = async (): Promise<User[]> => {
+    const { data, error } = await supabase.from('system_users').select('*');
     if (error) return [];
-    return data.map((t: any) => ({ id: t.id, date: t.date, store: t.store, type: t.type, value: t.value, description: t.description }));
+    return data.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        username: u.username,
+        password: u.password, // Needed for edit/auth check (usually hidden)
+        permissions: u.permissions || { modules: [], stores: [] }
+    }));
 };
 
-export const saveTransaction043 = async (transaction: Transaction043) => {
-    const { error } = await supabase.from('transactions_043').insert({ date: transaction.date, store: transaction.store, type: transaction.type, value: transaction.value, description: transaction.description });
-    if (error) throw new Error(error.message);
-};
-
-export const updateTransaction043 = async (transaction: Transaction043) => {
-    const { error } = await supabase.from('transactions_043').update({ date: transaction.date, store: transaction.store, type: transaction.type, value: transaction.value, description: transaction.description }).eq('id', transaction.id);
-    if (error) throw new Error(error.message);
-};
-
-export const deleteTransaction043 = async (id: string) => {
-    const { error } = await supabase.from('transactions_043').delete().eq('id', id);
-    if (error) throw new Error(error.message);
-};
-
-export const getAccountBalances = async (): Promise<AccountBalance[]> => {
-    const { data, error } = await supabase.from('account_balances').select('*');
-    if (error) return [];
-    return data.map((b: any) => ({ id: b.id, store: b.store, year: b.year, month: b.month, caixaEconomica: b.caixa_economica, cofre: b.cofre, loteria: b.loteria, pagbankH: b.pagbank_h, pagbankD: b.pagbank_d, investimentos: b.investimentos, totalBalance: b.total_balance }));
-};
-
-export const saveAccountBalance = async (balance: AccountBalance) => {
-    const { data: existing } = await supabase.from('account_balances').select('id').eq('store', balance.store).eq('year', balance.year).eq('month', balance.month);
-    if (existing && existing.length > 0) throw new Error("Já existe um lançamento para esta Loja neste Mês/Ano.");
-    const { error } = await supabase.from('account_balances').insert({ store: balance.store, year: balance.year, month: balance.month, caixa_economica: balance.caixaEconomica, cofre: balance.cofre, loteria: balance.loteria, pagbank_h: balance.pagbankH, pagbank_d: balance.pagbankD, investimentos: balance.investimentos, total_balance: balance.totalBalance });
-    if (error) throw new Error(error.message);
-};
-
-export const updateAccountBalance = async (balance: AccountBalance) => {
-    const { error } = await supabase.from('account_balances').update({ store: balance.store, year: balance.year, month: balance.month, caixa_economica: balance.caixaEconomica, cofre: balance.cofre, loteria: balance.loteria, pagbank_h: balance.pagbankH, pagbank_d: balance.pagbankD, investimentos: balance.investimentos, total_balance: balance.totalBalance }).eq('id', balance.id);
-    if (error) throw new Error(error.message);
-};
-
-export const deleteAccountBalance = async (id: string) => {
-    const { error } = await supabase.from('account_balances').delete().eq('id', id);
-    if (error) throw new Error(error.message);
-};
-
-export const getPreviousMonthBalance = async (store: string, currentYear: number, currentMonth: string): Promise<AccountBalance | undefined> => {
-    let prevYear = currentYear, prevMonthInt = parseInt(currentMonth, 10) - 1;
-    if (prevMonthInt === 0) { prevMonthInt = 12; prevYear = currentYear - 1; }
-    const prevMonthStr = prevMonthInt.toString().padStart(2, '0');
-    const { data } = await supabase.from('account_balances').select('*').eq('store', store).eq('year', prevYear).eq('month', prevMonthStr).single();
-    if (!data) return undefined;
-    return { id: data.id, store: data.store, year: data.year, month: data.month, caixaEconomica: data.caixa_economica, cofre: data.cofre, loteria: data.loteria, pagbankH: data.pagbank_h, pagbankD: data.pagbank_d, investimentos: data.investimentos, totalBalance: data.total_balance };
-};
-
-export const getFinancialRecords = async (): Promise<FinancialRecord[]> => {
-    const { data, error } = await supabase.from('financial_records').select('*');
-    if (error) return [];
-    return data.map((r: any) => ({ id: r.id, store: r.store, year: r.year, month: r.month, creditCaixa: r.credit_caixa, creditDelta: r.credit_delta, creditPagBankH: r.credit_pagbank_h, creditPagBankD: r.credit_pagbank_d, creditIfood: r.credit_ifood, totalRevenues: r.total_revenues, debitCaixa: r.debit_caixa, debitPagBankH: r.debit_pagbank_h, debitPagBankD: r.debit_pagbank_d, debitLoteria: r.debit_loteria, totalExpenses: r.total_expenses, netResult: r.net_result }));
-};
-
-export const saveFinancialRecord = async (record: FinancialRecord) => {
-    const { data: existing } = await supabase.from('financial_records').select('id').eq('store', record.store).eq('year', record.year).eq('month', record.month);
-    if (existing && existing.length > 0) throw new Error("Já existe um registro financeiro para esta Loja neste Mês/Ano.");
-    const { error } = await supabase.from('financial_records').insert({ store: record.store, year: record.year, month: record.month, credit_caixa: record.creditCaixa, credit_delta: record.creditDelta, credit_pagbank_h: record.creditPagBankH, credit_pagbank_d: record.creditPagBankD, credit_ifood: record.creditIfood, total_revenues: record.totalRevenues, debit_caixa: record.debitCaixa, debit_pagbank_h: record.debitPagBankH, debit_pagbank_d: record.debitPagBankD, debit_loteria: record.debitLoteria, total_expenses: record.totalExpenses, net_result: record.netResult });
-    if (error) throw new Error(error.message);
-};
-
-export const updateFinancialRecord = async (record: FinancialRecord) => {
-    const { error } = await supabase.from('financial_records').update({ store: record.store, year: record.year, month: record.month, credit_caixa: record.creditCaixa, credit_delta: record.creditDelta, credit_pagbank_h: record.creditPagBankH, credit_pagbank_d: record.creditPagBankD, credit_ifood: record.creditIfood, total_revenues: record.totalRevenues, debit_caixa: record.debitCaixa, debit_pagbank_h: record.debitPagBankH, debit_pagbank_d: record.debitPagBankD, debit_loteria: record.debitLoteria, total_expenses: record.totalExpenses, net_result: record.netResult }).eq('id', record.id);
-    if (error) throw new Error(error.message);
-};
-
-export const deleteFinancialRecord = async (id: string) => {
-    const { error } = await supabase.from('financial_records').delete().eq('id', id);
-    if (error) throw new Error(error.message);
-};
-
-// ... Helpers ...
-export const formatCurrency = (value: number): string => {
-    const safeValue = typeof value === 'number' && !isNaN(value) ? value : 0;
-    return safeValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-};
-
-export const getTodayLocalISO = (): string => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
-
-export const getMonthLocalISO = (): string => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    return `${year}-${month}`;
-};
-
-export const formatDateBr = (isoDate: string | null | undefined): string => {
-    if (!isoDate) return '';
-    const parts = isoDate.split('-');
-    if (parts.length !== 3) return isoDate;
-    if (parts[0].length === 4) { return `${parts[2]}/${parts[1]}/${parts[0]}`; }
-    return isoDate;
-};
-
-// ... Export XML functions ...
-// (Kept simplified for brevity but assuming implementation exists as before)
-const getExcelHeader = () => '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:html="http://www.w3.org/TR/REC-html40"><Styles><Style ss:ID="HeaderStyle"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="12" ss:Color="#FFFFFF" ss:Bold="1"/><Interior ss:Color="#D32F2F" ss:Pattern="Solid"/></Style><Style ss:ID="CurrencyStyle"><NumberFormat ss:Format="Currency"/></Style><Style ss:ID="CenterStyle"><Alignment ss:Horizontal="Center"/></Style></Styles>';
-
-const downloadXml = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'application/vnd.ms-excel' });
-    const link = document.createElement('a');
-    if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `${filename}.xls`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+export const saveUser = async (user: User) => {
+    const payload = {
+        name: user.name,
+        username: user.username,
+        password: user.password,
+        permissions: user.permissions
+    };
+    if (user.id) {
+        const { error } = await supabase.from('system_users').update(payload).eq('id', user.id);
+        if (error) throw new Error(error.message);
+    } else {
+        const { error } = await supabase.from('system_users').insert([payload]);
+        if (error) throw new Error(error.message);
     }
 };
 
-export const exportToXML = (orders: Order[], filename: string) => {
-    let xmlContent = getExcelHeader();
-    xmlContent += ' <Worksheet ss:Name="Relatorio Cadastro">\n<Table x:FullColumns="1" x:FullRows="1">\n<Row>';
-    ['Data', 'Loja', 'Tipo', 'Categoria', 'Produto', 'Marca', 'Fornecedor', 'Valor Unit.', 'Un.', 'Qtd', 'Total', 'Vencimento'].forEach(h => { xmlContent += `<Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${h}</Data></Cell>`; });
-    xmlContent += '</Row>\n';
-    orders.forEach(o => {
-        xmlContent += `<Row><Cell ss:StyleID="CenterStyle"><Data ss:Type="String">${formatDateBr(o.date)}</Data></Cell><Cell><Data ss:Type="String">${o.store}</Data></Cell><Cell><Data ss:Type="String">${o.type || 'Variável'}</Data></Cell><Cell><Data ss:Type="String">${o.category || ''}</Data></Cell><Cell><Data ss:Type="String">${o.product}</Data></Cell><Cell><Data ss:Type="String">${o.brand}</Data></Cell><Cell><Data ss:Type="String">${o.supplier}</Data></Cell><Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${o.unitValue}</Data></Cell><Cell ss:StyleID="CenterStyle"><Data ss:Type="String">${o.unitMeasure}</Data></Cell><Cell ss:StyleID="CenterStyle"><Data ss:Type="Number">${o.quantity}</Data></Cell><Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${o.totalValue}</Data></Cell><Cell ss:StyleID="CenterStyle"><Data ss:Type="String">${o.deliveryDate ? formatDateBr(o.deliveryDate) : 'Pendente'}</Data></Cell></Row>`;
-    });
-    xmlContent += '</Table></Worksheet></Workbook>';
-    downloadXml(xmlContent, filename);
+export const deleteUser = async (id: string) => {
+    const { error } = await supabase.from('system_users').delete().eq('id', id);
+    if (error) throw new Error(error.message);
 };
 
-export const exportTransactionsToXML = (transactions: Transaction043[], filename: string) => {
-     let xmlContent = getExcelHeader();
-     xmlContent += ' <Worksheet ss:Name="Relatorio 043">\n<Table x:FullColumns="1" x:FullRows="1">\n';
-     transactions.forEach(t => {
-         xmlContent += `<Row><Cell><Data ss:Type="String">${formatDateBr(t.date)}</Data></Cell><Cell><Data ss:Type="String">${t.store}</Data></Cell><Cell><Data ss:Type="String">${t.type}</Data></Cell><Cell><Data ss:Type="String">${t.description}</Data></Cell><Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${t.value}</Data></Cell></Row>`;
-     });
-     xmlContent += '</Table></Worksheet></Workbook>';
-     downloadXml(xmlContent, filename);
-};
-
-export const exportBalancesToXML = (balances: any[], filename: string) => {
-    let xmlContent = getExcelHeader();
-    xmlContent += ' <Worksheet ss:Name="Saldos">\n<Table x:FullColumns="1" x:FullRows="1">\n';
-    balances.forEach(b => {
-         xmlContent += `<Row><Cell><Data ss:Type="String">${b.month}/${b.year}</Data></Cell><Cell><Data ss:Type="String">${b.store}</Data></Cell><Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${b.totalBalance}</Data></Cell></Row>`;
-    });
-    xmlContent += '</Table></Worksheet></Workbook>';
-    downloadXml(xmlContent, filename);
-}
-
-export const exportFinancialToXML = (records: any[], filename: string) => {
-    let xmlContent = getExcelHeader();
-    xmlContent += ' <Worksheet ss:Name="Financeiro">\n<Table x:FullColumns="1" x:FullRows="1">\n';
-    records.forEach(r => {
-         xmlContent += `<Row><Cell><Data ss:Type="String">${r.month}/${r.year}</Data></Cell><Cell><Data ss:Type="String">${r.store}</Data></Cell><Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${r.netResult}</Data></Cell></Row>`;
-    });
-    xmlContent += '</Table></Worksheet></Workbook>';
-    downloadXml(xmlContent, filename);
-}
-
-// ... Backup ... (Keeping original logic)
-export const createBackup = async () => {
-    try {
-        const [appData, orders, transactions043, saldoContas, financeiro, users, financialAccounts, dailyTransactions, meatLogs, meatAdjustments] = await Promise.all([
-            getAppData(), getOrders(), getTransactions043(), getAccountBalances(), getFinancialRecords(), getUsers(), getFinancialAccounts(), getDailyTransactions(), getMeatConsumptionLogs(), getMeatAdjustments()
-        ]);
-        
-        const backupObj = { 
-            version: 12, 
-            timestamp: new Date().toISOString(), 
-            source: 'supabase_cloud', 
-            appData, orders, transactions043, saldoContas, financeiro, users, financialAccounts, dailyTransactions,
-            meatLogs, meatAdjustments // New tables
+export const loginUser = async (username: string, password: string): Promise<{ success: boolean, user?: User, message?: string }> => {
+    // Master Admin Hardcoded
+    if (username === 'admin' && password === 'admin123') {
+        return { 
+            success: true, 
+            user: { 
+                id: 'master-admin', 
+                name: 'Administrador Master', 
+                username: 'admin', 
+                permissions: { modules: [], stores: [] }, 
+                isMaster: true 
+            } 
         };
-        
-        const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a'); link.href = url; link.download = `HERO_GRILL_BACKUP_${getTodayLocalISO().replace(/-/g, '')}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
-    } catch (e: any) { throw new Error("Falha ao gerar backup: " + e.message); }
+    }
+
+    const users = await getUsers();
+    const found = users.find(u => u.username === username && u.password === password);
+    
+    if (found) {
+        return { success: true, user: found };
+    }
+    
+    return { success: false, message: 'Usuário ou senha incorretos.' };
 };
 
-export const restoreBackup = async (file: File): Promise<{success: boolean, message: string}> => {
+export const changeUserPassword = async (userId: string, oldPass: string, newPass: string) => {
+    if (userId === 'master-admin') throw new Error('Não é possível alterar senha do Admin Master aqui.');
+    
+    const users = await getUsers();
+    const user = users.find(u => u.id === userId);
+    
+    if (!user) throw new Error('Usuário não encontrado.');
+    if (user.password !== oldPass) throw new Error('Senha atual incorreta.');
+    
+    await saveUser({ ...user, password: newPass });
+};
+
+// --- UTILS ---
+
+export const formatCurrency = (val: number | undefined | null) => {
+    if (val === undefined || val === null) return 'R$ 0,00';
+    return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+};
+
+export const formatDateBr = (dateStr: string) => {
+    if (!dateStr) return '-';
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+};
+
+export const getTodayLocalISO = () => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset();
+    const localDate = new Date(now.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().split('T')[0];
+};
+
+// --- BACKUP / EXPORT ---
+
+export const createBackup = async () => {
+    const [
+        config, 
+        orders, 
+        trans043, 
+        balances, 
+        finRecords, 
+        users, 
+        finAccounts, 
+        dailyTrans,
+        meatLogs,
+        meatAdj
+    ] = await Promise.all([
+        getAppData(),
+        getOrders(),
+        getTransactions043(),
+        getAccountBalances(),
+        getFinancialRecords(),
+        getUsers(),
+        getFinancialAccounts(),
+        getDailyTransactions(),
+        getMeatConsumptionLogs(),
+        getMeatAdjustments()
+    ]);
+
+    const backupData = {
+        version: '2.0',
+        timestamp: new Date().toISOString(),
+        data: {
+            app_configurations: config,
+            orders,
+            transactions_043: trans043,
+            account_balances: balances,
+            financial_records: finRecords,
+            system_users: users,
+            financial_accounts: finAccounts,
+            daily_transactions: dailyTrans,
+            meat_inventory_logs: meatLogs,
+            meat_stock_adjustments: meatAdj
+        }
+    };
+
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backup_herogrill_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+export const restoreBackup = async (file: File): Promise<{ success: boolean, message: string }> => {
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
                 const content = e.target?.result as string;
-                const parsed = JSON.parse(content);
-                if (parsed.appData) await saveAppData(parsed.appData);
-                // Restore logic here (Upserting data) ...
-                // (Simplified for this snippet, assuming same robust restore logic as original file)
+                const backup = JSON.parse(content);
                 
-                resolve({ success: true, message: "Backup restaurado com sucesso!" });
-            } catch (err: any) { resolve({ success: false, message: `Erro: ${err.message}` }); }
+                if (!backup.data) throw new Error('Formato de backup inválido');
+
+                // Restore Configs
+                await saveAppData(backup.data.app_configurations || defaultData);
+
+                // Restore Orders - Clear and Insert
+                const { error: err1 } = await supabase.from('orders').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                if (err1) throw err1;
+                if (backup.data.orders?.length) {
+                    // Convert camelCase to snake_case for DB
+                    const dbOrders = backup.data.orders.map((o: Order) => ({
+                        id: o.id,
+                        date: o.date,
+                        store: o.store,
+                        product: o.product,
+                        brand: o.brand,
+                        supplier: o.supplier,
+                        unit_measure: o.unitMeasure,
+                        unit_value: o.unitValue,
+                        quantity: o.quantity,
+                        total_value: o.totalValue,
+                        delivery_date: o.deliveryDate,
+                        type: o.type,
+                        category: o.category,
+                        created_at: o.createdAt
+                    }));
+                    const { error } = await supabase.from('orders').insert(dbOrders);
+                    if (error) throw error;
+                }
+
+                // Restore Transactions 043
+                const { error: err2 } = await supabase.from('transactions_043').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                if (err2) throw err2;
+                if (backup.data.transactions_043?.length) {
+                    const dbTrans = backup.data.transactions_043.map((t: Transaction043) => ({
+                        id: t.id,
+                        date: t.date,
+                        store: t.store,
+                        type: t.type,
+                        value: t.value,
+                        description: t.description
+                    }));
+                    const { error } = await supabase.from('transactions_043').insert(dbTrans);
+                    if (error) throw error;
+                }
+
+                // Restore Account Balances
+                const { error: err3 } = await supabase.from('account_balances').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                if (err3) throw err3;
+                if (backup.data.account_balances?.length) {
+                    const dbBal = backup.data.account_balances.map((b: AccountBalance) => ({
+                        id: b.id,
+                        store: b.store,
+                        year: b.year,
+                        month: b.month,
+                        caixa_economica: b.caixaEconomica,
+                        cofre: b.cofre,
+                        loteria: b.loteria,
+                        pagbank_h: b.pagbankH,
+                        pagbank_d: b.pagbankD,
+                        investimentos: b.investimentos,
+                        total_balance: b.totalBalance
+                    }));
+                    const { error } = await supabase.from('account_balances').insert(dbBal);
+                    if (error) throw error;
+                }
+
+                // Restore Financial Records
+                const { error: err4 } = await supabase.from('financial_records').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                if (err4) throw err4;
+                if (backup.data.financial_records?.length) {
+                    const dbFin = backup.data.financial_records.map((r: FinancialRecord) => ({
+                        id: r.id,
+                        store: r.store,
+                        year: r.year,
+                        month: r.month,
+                        credit_caixa: r.creditCaixa,
+                        credit_delta: r.creditDelta,
+                        credit_pagbank_h: r.creditPagBankH,
+                        credit_pagbank_d: r.creditPagBankD,
+                        credit_ifood: r.creditIfood,
+                        total_revenues: r.totalRevenues,
+                        debit_caixa: r.debitCaixa,
+                        debit_pagbank_h: r.debitPagBankH,
+                        debit_pagbank_d: r.debitPagBankD,
+                        debit_loteria: r.debitLoteria,
+                        total_expenses: r.totalExpenses,
+                        net_result: r.netResult
+                    }));
+                    const { error } = await supabase.from('financial_records').insert(dbFin);
+                    if (error) throw error;
+                }
+
+                // Restore Users (Optional, usually handled separately but included for full restore)
+                if (backup.data.system_users?.length) {
+                    // Avoid deleting master admin or current user session issues ideally, but for full restore:
+                    const { error: err5 } = await supabase.from('system_users').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (err5) throw err5;
+                    
+                    const dbUsers = backup.data.system_users.map((u: User) => ({
+                        id: u.id,
+                        name: u.name,
+                        username: u.username,
+                        password: u.password,
+                        permissions: u.permissions
+                    }));
+                    const { error } = await supabase.from('system_users').insert(dbUsers);
+                    if (error) throw error;
+                }
+
+                // Restore New Financeiro (Accounts & Daily Trans)
+                if (backup.data.financial_accounts?.length) {
+                    const { error: err6 } = await supabase.from('financial_accounts').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (err6) throw err6;
+                    
+                    const dbAcc = backup.data.financial_accounts.map((a: FinancialAccount) => ({
+                        id: a.id,
+                        name: a.name,
+                        store: a.store,
+                        initial_balance: a.initialBalance
+                    }));
+                    const { error } = await supabase.from('financial_accounts').insert(dbAcc);
+                    if (error) throw error;
+                }
+
+                if (backup.data.daily_transactions?.length) {
+                    const { error: err7 } = await supabase.from('daily_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (err7) throw err7;
+                    
+                    const dbDaily = backup.data.daily_transactions.map((t: DailyTransaction) => ({
+                        id: t.id,
+                        date: t.date,
+                        payment_date: t.paymentDate,
+                        store: t.store,
+                        type: t.type,
+                        account_id: t.accountId,
+                        destination_store: t.destinationStore,
+                        destination_account_id: t.destinationAccountId,
+                        payment_method: t.paymentMethod,
+                        product: t.product,
+                        category: t.category,
+                        supplier: t.supplier,
+                        value: t.value,
+                        status: t.status,
+                        description: t.description,
+                        classification: t.classification,
+                        origin: t.origin
+                    }));
+                    const { error } = await supabase.from('daily_transactions').insert(dbDaily);
+                    if (error) throw error;
+                }
+
+                // Restore Meat Stock Logs
+                if (backup.data.meat_inventory_logs?.length) {
+                    const { error: err8 } = await supabase.from('meat_inventory_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (!err8) {
+                        const dbLogs = backup.data.meat_inventory_logs.map((l: MeatInventoryLog) => ({
+                            id: l.id,
+                            date: l.date,
+                            store: l.store,
+                            product: l.product,
+                            quantity_consumed: l.quantity_consumed,
+                            created_at: l.created_at
+                        }));
+                        await supabase.from('meat_inventory_logs').insert(dbLogs);
+                    }
+                }
+
+                if (backup.data.meat_stock_adjustments?.length) {
+                    const { error: err9 } = await supabase.from('meat_stock_adjustments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (!err9) {
+                        const dbAdj = backup.data.meat_stock_adjustments.map((a: MeatStockAdjustment) => ({
+                            id: a.id,
+                            date: a.date,
+                            store: a.store,
+                            product: a.product,
+                            quantity: a.quantity,
+                            reason: a.reason,
+                            created_at: a.created_at
+                        }));
+                        await supabase.from('meat_stock_adjustments').insert(dbAdj);
+                    }
+                }
+
+                resolve({ success: true, message: 'Backup restaurado com sucesso!' });
+            } catch (err: any) {
+                console.error(err);
+                resolve({ success: false, message: `Erro na restauração: ${err.message}` });
+            }
         };
         reader.readAsText(file);
     });
 };
 
+export const exportToXML = (data: any[], filename: string) => {
+    if (!data || data.length === 0) return;
+
+    // Get headers from first object
+    const headers = Object.keys(data[0]);
+    
+    let xmlContent = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Sheet1"><Table>';
+    
+    // Headers
+    xmlContent += '<Row>';
+    headers.forEach(header => {
+        xmlContent += `<Cell><Data ss:Type="String">${header.toUpperCase()}</Data></Cell>`;
+    });
+    xmlContent += '</Row>';
+
+    // Data
+    data.forEach(row => {
+        xmlContent += '<Row>';
+        headers.forEach(header => {
+            const value = row[header];
+            const type = typeof value === 'number' ? 'Number' : 'String';
+            xmlContent += `<Cell><Data ss:Type="${type}">${value ?? ''}</Data></Cell>`;
+        });
+        xmlContent += '</Row>';
+    });
+
+    xmlContent += '</Table></Worksheet></Workbook>';
+    
+    const blob = new Blob([xmlContent], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+};
+
+export const exportTransactionsToXML = (data: Transaction043[], filename: string) => {
+    const formatted = data.map(t => ({
+        DATA: formatDateBr(t.date),
+        LOJA: t.store,
+        TIPO: t.type === 'DEBIT' ? 'DÉBITO' : 'CRÉDITO',
+        VALOR: t.value,
+        DESCRICAO: t.description
+    }));
+    exportToXML(formatted, filename);
+};
+
+export const exportBalancesToXML = (data: any[], filename: string) => {
+    const formatted = data.map(b => ({
+        PERIODO: `${b.month}/${b.year}`,
+        LOJA: b.store,
+        CX_ECONOMICA: b.caixaEconomica,
+        COFRE: b.cofre,
+        LOTERIA: b.loteria,
+        PAGBANK_H: b.pagbankH,
+        PAGBANK_D: b.pagbankD,
+        INVESTIMENTOS: b.investimentos,
+        TOTAL: b.totalBalance,
+        VARIACAO: b.variation
+    }));
+    exportToXML(formatted, filename);
+};
+
+export const exportFinancialToXML = (data: any[], filename: string) => {
+    const formatted = data.map(r => ({
+        PERIODO: `${r.month}/${r.year}`,
+        LOJA: r.store,
+        TOTAL_RECEITAS: r.totalRevenues,
+        TOTAL_DESPESAS: r.totalExpenses,
+        RESULTADO: r.netResult
+    }));
+    exportToXML(formatted, filename);
+};
+
 export const generateMockData = async () => {
-    if (!isConfigured) { alert("Erro: Supabase não configurado."); return; }
-    if(!window.confirm("Inserir dados de teste?")) return;
-    try {
-        await supabase.from('app_configurations').upsert({ category: 'stores', items: ['Loja Teste A', 'Loja Teste B'] }, { onConflict: 'category' });
-        alert("Dados de teste inseridos."); window.location.reload();
-    } catch (err: any) { alert("Erro: " + err.message); }
+    // Função auxiliar para desenvolvimento
+    const mockOrders: Order[] = [
+        { id: '', date: '2024-01-15', store: 'Hero Centro', product: 'Alcatra', brand: 'Friboi', supplier: 'JBS', unitMeasure: 'Kg', unitValue: 35.90, quantity: 50, totalValue: 1795, deliveryDate: '2024-01-15', type: 'Variável', category: 'Açougue' },
+        { id: '', date: '2024-01-20', store: 'Hero Shopping', product: 'Carvão', brand: 'Bom Fogo', supplier: 'Distribuidora X', unitMeasure: 'Un', unitValue: 15.00, quantity: 100, totalValue: 1500, deliveryDate: '2024-01-20', type: 'Variável', category: 'Insumos' },
+    ];
+    for (const o of mockOrders) await saveOrder(o);
+    alert('Dados de teste inseridos!');
+    window.location.reload();
 };
