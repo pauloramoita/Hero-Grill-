@@ -81,7 +81,7 @@ export const GerarPedidoCarnes: React.FC = () => {
                 currentStock: totalBought - totalConsumed + totalAdjusted,
                 orderQtyStr: '0,000',
                 orderQtyNum: 0,
-                unit: 'PÇ' // Padrão alterado para PÇ conforme solicitado
+                unit: 'PÇ' // Padrão PÇ
             };
         });
 
@@ -90,7 +90,6 @@ export const GerarPedidoCarnes: React.FC = () => {
 
     const formatWeight = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
-    // Função para atualizar quantidade usando o nome do produto como chave (seguro para filtros)
     const handleQtyChange = (productName: string, value: string) => {
         setOrderData(prevData => {
             return prevData.map(item => {
@@ -111,7 +110,6 @@ export const GerarPedidoCarnes: React.FC = () => {
         });
     };
 
-    // Função para atualizar unidade
     const handleUnitChange = (productName: string, val: string) => {
         setOrderData(prevData => {
             return prevData.map(item => {
@@ -182,7 +180,6 @@ export const GerarPedidoCarnes: React.FC = () => {
         document.body.removeChild(link);
     };
 
-    // Lógica de Filtragem
     const displayedData = hideZero 
         ? orderData.filter(item => item.orderQtyNum > 0) 
         : orderData;
