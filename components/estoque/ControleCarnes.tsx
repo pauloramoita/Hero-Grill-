@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getOrders, getMeatConsumptionLogs, getMeatAdjustments, saveMeatConsumption, saveMeatAdjustment, getTodayLocalISO, getAppData } from '../../services/storageService';
 import { MeatInventoryLog, Order, MeatStockAdjustment, AppData } from '../../types';
-import { Save, Loader2, AlertCircle, PenTool, X, History, RotateCcw } from 'lucide-react';
+import { Save, Loader2, AlertCircle, PenTool, X, History, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
 
 export const ControleCarnes: React.FC = () => {
     const [loading, setLoading] = useState(true);
@@ -165,15 +165,6 @@ export const ControleCarnes: React.FC = () => {
         setSaving(true);
         try {
             // Para evitar duplicidade no "Insert only" logic:
-            // O ideal seria deletar os logs de hoje para essa loja/produtos e reinserir o total.
-            // Mas como não temos a função deleteMany exposta aqui de forma simples, vamos salvar apenas o *delta* seria complexo.
-            // Vamos assumir que o usuário está lançando o consumo do dia. 
-            // Se já existe consumo, o processData somou.
-            // A diferença entre o novo valor inputado e o valor carregado do banco seria o delta a salvar.
-            // POR SIMPLIFICACAO DO PROMPT: Vamos salvar um novo log com o valor total digitado se for > 0,
-            // POREM, isso duplicaria se o usuário salvar 2x.
-            // CORREÇÃO: Vamos calcular a diferença do que foi carregado inicialmente vs o que está agora.
-            
             // Recarregar dados frescos para comparar
             const freshLogs = await getMeatConsumptionLogs();
             
@@ -189,9 +180,6 @@ export const ControleCarnes: React.FC = () => {
                 
                 // Se o valor digitado for diferente do salvo
                 if (currentInput !== savedToday) {
-                    // Precisamos ajustar.
-                    // Se currentInput > savedToday, lançamos a diferença positiva (consumo extra)
-                    // Se currentInput < savedToday, lançamos a diferença negativa (estorno de consumo)
                     const diff = currentInput - savedToday;
                     
                     if (Math.abs(diff) > 0.0001) { // float tolerance
@@ -261,52 +249,61 @@ export const ControleCarnes: React.FC = () => {
 
     if (loading && appData.stores.length === 0) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" size={40}/></div>;
 
+    // Totais para o Summary Card Mobile e Footer Desktop
+    const totalInitial = inventoryData.reduce((acc, i) => acc + i.initialStock, 0);
+    const totalConsumption = inventoryData.reduce((acc, i) => acc + i.todayConsumptionVal, 0);
+    const totalFinal = inventoryData.reduce((acc, i) => acc + i.finalStock, 0);
+
     return (
-        <div className="max-w-6xl mx-auto animate-fadeIn pb-20">
+        <div className="max-w-6xl mx-auto animate-fadeIn pb-32">
              <div className="bg-white rounded-lg shadow-card border border-slate-200 overflow-hidden">
-                <div className="p-6 border-b border-slate-100 bg-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                            <History size={24} className="text-heroRed"/>
-                            CONTROLE DIÁRIO DE CARNES
-                        </h2>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">
-                            Data: {new Date().toLocaleDateString('pt-BR')}
-                        </p>
+                
+                {/* Header da Ferramenta */}
+                <div className="p-4 md:p-6 border-b border-slate-100 bg-slate-50 flex flex-col gap-4 sticky top-16 z-30 shadow-sm">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                                <History size={24} className="text-heroRed"/>
+                                CONTROLE DE CARNES
+                            </h2>
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">
+                                {new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            </p>
+                        </div>
+                        
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <button 
+                                onClick={() => setShowModal(true)}
+                                className="flex-1 md:flex-none bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 shadow-sm transition-colors text-xs uppercase"
+                            >
+                                <PenTool size={16} className="text-blue-600"/> Ajuste
+                            </button>
+                            <button 
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="flex-1 md:flex-none bg-heroBlack hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all disabled:opacity-70 text-xs uppercase"
+                            >
+                                {saving ? <Loader2 className="animate-spin" size={18}/> : <Save size={18}/>}
+                                Salvar
+                            </button>
+                        </div>
                     </div>
-                    
-                    {/* Store Selector */}
-                    <div className="w-full md:w-auto flex flex-col gap-1">
-                         <label className="text-[10px] font-bold text-slate-400 uppercase">Selecionar Loja</label>
+
+                    {/* Store Selector - Full Width on Mobile */}
+                    <div className="w-full">
                          <select 
                             value={selectedStore} 
                             onChange={(e) => setSelectedStore(e.target.value)}
-                            className="w-full md:w-64 p-2.5 border border-slate-300 rounded-lg font-bold text-slate-700 bg-white focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed"
+                            className="w-full p-3 border border-slate-300 rounded-lg font-black text-slate-800 bg-white focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed text-lg"
                         >
                             {appData.stores.length === 0 && <option value="">Sem lojas</option>}
                             {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
-
-                    <div className="flex gap-3 w-full md:w-auto justify-end items-end">
-                        <button 
-                            onClick={() => setShowModal(true)}
-                            className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-colors text-sm"
-                        >
-                            <PenTool size={16} className="text-blue-600"/> AJUSTE MANUAL
-                        </button>
-                        <button 
-                            onClick={handleSave}
-                            disabled={saving}
-                            className="bg-heroBlack hover:bg-slate-800 text-white px-6 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-md hover:shadow-lg transition-all disabled:opacity-70 text-sm"
-                        >
-                            {saving ? <Loader2 className="animate-spin" size={18}/> : <Save size={18}/>}
-                            SALVAR LANÇAMENTO
-                        </button>
-                    </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                {/* --- DESKTOP VIEW (Tabela) --- */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="min-w-full divide-y divide-slate-200">
                         <thead className="bg-slate-800 text-white">
                             <tr>
@@ -332,6 +329,7 @@ export const ControleCarnes: React.FC = () => {
                                             onChange={(e) => handleConsumptionChange(idx, e.target.value)}
                                             className="w-full h-full text-center p-2 bg-transparent font-black text-slate-800 focus:bg-white focus:ring-2 focus:ring-heroRed/50 outline-none font-mono text-lg"
                                             placeholder="0,000"
+                                            inputMode="decimal"
                                         />
                                     </td>
                                     <td className={`px-6 py-3 text-center text-sm font-black font-mono bg-slate-50/50 ${item.finalStock < 0 ? 'text-red-600' : 'text-green-700'}`}>
@@ -342,29 +340,98 @@ export const ControleCarnes: React.FC = () => {
                             <tr className="bg-slate-900 text-white font-bold border-t-4 border-slate-800">
                                 <td className="px-6 py-4 text-right uppercase text-xs tracking-widest">TOTAIS GERAIS</td>
                                 <td className="px-6 py-4 text-center font-mono text-sm text-slate-300">
-                                    {formatWeight(inventoryData.reduce((acc, i) => acc + i.initialStock, 0))}
+                                    {formatWeight(totalInitial)}
                                 </td>
                                 <td className="px-6 py-4 text-center font-mono text-lg text-yellow-400 bg-slate-800 border-x border-slate-700">
-                                    {formatWeight(inventoryData.reduce((acc, i) => acc + i.todayConsumptionVal, 0))}
+                                    {formatWeight(totalConsumption)}
                                 </td>
                                 <td className="px-6 py-4 text-center font-mono text-sm text-green-400">
-                                    {formatWeight(inventoryData.reduce((acc, i) => acc + i.finalStock, 0))}
+                                    {formatWeight(totalFinal)}
                                 </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
+
+                {/* --- MOBILE VIEW (Cards) --- */}
+                <div className="md:hidden bg-slate-100 p-4 space-y-4">
+                    {inventoryData.map((item, idx) => (
+                        <div key={item.name} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            {/* Card Header */}
+                            <div className="bg-slate-50 p-3 border-b border-slate-100 flex justify-between items-center">
+                                <span className="font-black text-slate-800 text-lg uppercase">{item.name}</span>
+                                <div className="text-right">
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Início</span>
+                                    <span className="font-mono font-bold text-slate-600">{formatWeight(item.initialStock)}</span>
+                                </div>
+                            </div>
+                            
+                            {/* Card Body - Input Area */}
+                            <div className="p-4 flex flex-col gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-yellow-600 uppercase mb-1 text-center">Consumo Hoje (Kg)</label>
+                                    <div className="relative">
+                                        <input 
+                                            type="text" 
+                                            value={item.todayConsumptionStr}
+                                            onChange={(e) => handleConsumptionChange(idx, e.target.value)}
+                                            className="w-full text-center p-4 bg-yellow-50 border-2 border-yellow-100 rounded-xl font-black text-slate-900 focus:bg-white focus:ring-4 focus:ring-yellow-200 focus:border-yellow-400 outline-none font-mono text-3xl shadow-inner"
+                                            placeholder="0,000"
+                                            inputMode="decimal"
+                                        />
+                                        {item.todayConsumptionVal > 0 && (
+                                            <button 
+                                                onClick={() => handleConsumptionChange(idx, '')} // Reset
+                                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-300 p-2"
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Footer - Resultado */}
+                                <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                                    <span className="text-xs font-bold text-slate-400 uppercase">Estoque Final:</span>
+                                    <span className={`font-mono font-black text-xl ${item.finalStock < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                        {formatWeight(item.finalStock)} <span className="text-xs text-gray-400 font-normal">Kg</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+
+                    {/* Mobile Totals Card */}
+                    <div className="bg-slate-800 text-white rounded-xl shadow-lg p-4 mt-6 mb-8">
+                        <h3 className="text-center font-bold text-gray-400 text-xs uppercase tracking-widest mb-4">RESUMO DO DIA</h3>
+                        <div className="grid grid-cols-3 gap-2 text-center divide-x divide-gray-600">
+                            <div>
+                                <span className="block text-[10px] text-gray-400 uppercase">Inicial</span>
+                                <span className="font-mono font-bold text-sm">{formatWeight(totalInitial)}</span>
+                            </div>
+                            <div>
+                                <span className="block text-[10px] text-yellow-400 uppercase font-bold">Consumo</span>
+                                <span className="font-mono font-black text-lg text-yellow-400">{formatWeight(totalConsumption)}</span>
+                            </div>
+                            <div>
+                                <span className="block text-[10px] text-gray-400 uppercase">Final</span>
+                                <span className="font-mono font-bold text-sm text-green-400">{formatWeight(totalFinal)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
-            <div className="mt-6 bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-4 items-center shadow-sm">
-                <div className="bg-blue-100 p-2 rounded-full text-blue-600">
+            {/* Information Box */}
+            <div className="mt-6 mx-4 md:mx-0 bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-4 items-center shadow-sm">
+                <div className="bg-blue-100 p-2 rounded-full text-blue-600 hidden md:block">
                     <AlertCircle size={24} />
                 </div>
                 <div className="text-sm text-blue-800 flex-1">
                     <strong>Como funciona o cálculo?</strong>
-                    <p className="mt-1 text-blue-700 opacity-90">
+                    <p className="mt-1 text-blue-700 opacity-90 text-xs md:text-sm">
                         Estoque Inicial = (Total Comprado) - (Consumo Histórico) + (Ajustes Manuais).
-                        <br/>O valor digitado na coluna "Consumo Dia" é subtraído do Estoque Inicial para gerar o Final.
+                        <br/>O valor digitado em "Consumo Hoje" é subtraído do Estoque Inicial.
                     </p>
                 </div>
             </div>
@@ -420,6 +487,7 @@ export const ControleCarnes: React.FC = () => {
                                         value={adjValueStr} 
                                         onChange={handleAdjValueChange}
                                         className="w-full p-3 border border-slate-300 rounded-lg text-right font-mono text-2xl font-black text-slate-800 focus:ring-2 focus:ring-heroRed/20 outline-none"
+                                        inputMode="decimal"
                                     />
                                     <span className="absolute left-3 top-4 text-xs font-bold text-slate-400">KG</span>
                                 </div>
