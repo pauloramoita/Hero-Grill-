@@ -23,6 +23,7 @@ export const UserManagement: React.FC = () => {
     const modulesList = [
         { id: 'dashboard', label: '📊 Dashboard (Visão Geral)' },
         { id: 'pedidos', label: 'Pedidos (Cadastro)' },
+        { id: 'estoque', label: '🥩 Estoque de Carnes' },
         { id: 'config_campos', label: '⚙️ Config. Produtos (Campos!)' },
         { id: 'controle043', label: 'Controle 043' },
         { id: 'saldo', label: 'Saldo Contas' },
@@ -87,7 +88,7 @@ export const UserManagement: React.FC = () => {
         if (type === 'gerente') {
             setSelectedModules([
                 'dashboard',
-                'pedidos', 'config_campos',
+                'pedidos', 'config_campos', 'estoque',
                 'controle043', 
                 'saldo', 
                 'financeiro', 
@@ -97,6 +98,7 @@ export const UserManagement: React.FC = () => {
         } else if (type === 'operador') {
             setSelectedModules([
                 'pedidos', 
+                'estoque',
                 'novo_financeiro'
             ]);
             setSelectedStores([]); 
@@ -153,7 +155,7 @@ export const UserManagement: React.FC = () => {
                     <strong>Gestão de Perfis:</strong> Utilize os botões de "Perfil Rápido" para configurar permissões padrão.
                     <ul className="list-disc ml-4 mt-1">
                         <li><strong>Gerente:</strong> Acesso total operacional.</li>
-                        <li><strong>Operador:</strong> Apenas lançamentos básicos.</li>
+                        <li><strong>Operador:</strong> Apenas lançamentos básicos (Pedidos, Estoque, Financeiro).</li>
                         <li><strong>Observador (Investidor):</strong> Acesso exclusivo ao Dashboard (Todas as Lojas).</li>
                     </ul>
                  </div>
