@@ -147,7 +147,11 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
             setErrors({});
             alert('Pedido registrado com sucesso!');
         } catch (err: any) {
-            setSubmitError(err.message);
+            if (err.message.includes('column') || err.message.includes('schema cache')) {
+                setSubmitError(`ERRO DE BANCO DE DADOS: Coluna não encontrada (${err.message}).\nSOLUÇÃO: Vá ao menu "Backup", clique em "Ver SQL de Instalação" e execute o comando no Supabase para atualizar a tabela.`);
+            } else {
+                setSubmitError(err.message);
+            }
         } finally {
             setSaving(false);
         }
@@ -280,8 +284,9 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
                     </div>
 
                     {submitError && (
-                        <div className="text-red-600 text-sm font-medium flex items-center gap-2 bg-red-50 px-4 py-3 rounded-lg border border-red-100 animate-shake">
-                            <AlertCircle size={18} className="flex-shrink-0"/> {submitError}
+                        <div className="text-red-600 text-sm font-medium flex items-start gap-2 bg-red-50 px-4 py-3 rounded-lg border border-red-100 animate-shake">
+                            <AlertCircle size={18} className="flex-shrink-0 mt-0.5"/> 
+                            <span className="whitespace-pre-line">{submitError}</span>
                         </div>
                     )}
 
