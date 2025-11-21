@@ -1,10 +1,15 @@
+
 import React, { useState } from 'react';
-import { FinanceiroSubView } from '../../types';
+import { FinanceiroSubView, User } from '../../types';
 import { CadastroFinanceiro } from './CadastroFinanceiro';
 import { ConsultaFinanceiro } from './ConsultaFinanceiro';
 import { RelatorioFinanceiro } from './RelatorioFinanceiro';
 
-export const FinanceiroModule: React.FC = () => {
+interface FinanceiroModuleProps {
+    user: User;
+}
+
+export const FinanceiroModule: React.FC<FinanceiroModuleProps> = ({ user }) => {
     const [activeTab, setActiveTab] = useState<FinanceiroSubView>('lancamentos');
 
     const tabs: { id: FinanceiroSubView, label: string }[] = [
@@ -38,9 +43,9 @@ export const FinanceiroModule: React.FC = () => {
 
             {/* Content */}
             <div className="animate-fadeIn">
-                {activeTab === 'lancamentos' && <CadastroFinanceiro />}
-                {activeTab === 'consulta' && <ConsultaFinanceiro />}
-                {activeTab === 'relatorios' && <RelatorioFinanceiro />}
+                {activeTab === 'lancamentos' && <CadastroFinanceiro user={user} />}
+                {activeTab === 'consulta' && <ConsultaFinanceiro user={user} />}
+                {activeTab === 'relatorios' && <RelatorioFinanceiro user={user} />}
             </div>
         </div>
     );

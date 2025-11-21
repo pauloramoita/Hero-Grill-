@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
     getOrders, 
     getMeatConsumptionLogs, 
@@ -80,13 +80,7 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
             setRawLogs(logs); 
             setRawAdjustments(adjustments);
             
-            if (d.stores.length > 0 && !selectedStore) {
-                setSelectedStore(d.stores[0]);
-            }
-
-            if (selectedStore || d.stores.length > 0) {
-                processData(orders, logs, adjustments, selectedStore || d.stores[0]);
-            }
+            // Initial process will happen in useEffect dependant on selectedStore
         } catch (e) {
             console.error("Erro ao carregar dados de estoque", e);
         } finally {
@@ -94,6 +88,26 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
         }
     };
 
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (!user) return appData.stores;
+        if (user.isMaster) return appData.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return appData.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return appData.stores;
+    }, [appData.stores, user]);
+
+    // Auto-select store logic
+    useEffect(() => {
+        if (availableStores.length > 0 && !selectedStore) {
+            setSelectedStore(availableStores[0]);
+        } else if (availableStores.length === 1) {
+            setSelectedStore(availableStores[0]);
+        }
+    }, [availableStores, selectedStore]);
+
+    // Fetch/Process data when store changes
     useEffect(() => {
         if (selectedStore) {
            setLoading(true);
@@ -375,10 +389,11 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                          <select 
                             value={selectedStore} 
                             onChange={(e) => setSelectedStore(e.target.value)}
-                            className="w-full p-3 border border-slate-300 rounded-lg font-black text-slate-800 bg-white focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed text-lg"
+                            className={`w-full p-3 border border-slate-300 rounded-lg font-black text-slate-800 bg-white focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed text-lg ${availableStores.length === 1 ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                            disabled={availableStores.length === 1}
                         >
-                            {appData.stores.length === 0 && <option value="">Sem lojas</option>}
-                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                            {availableStores.length !== 1 && <option value="">Selecione a Loja...</option>}
+                            {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                 </div>

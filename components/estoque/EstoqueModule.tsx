@@ -44,7 +44,7 @@ export const EstoqueModule: React.FC<EstoqueModuleProps> = ({ user }) => {
             {/* Content */}
             <div className="animate-fadeIn">
                 {activeTab === 'controle_diario' && <ControleCarnes user={user} />}
-                {activeTab === 'gerar_pedido' && <GerarPedidoCarnes />}
+                {activeTab === 'gerar_pedido' && <GerarPedidoCarnes user={user} />}
             </div>
         </div>
     );

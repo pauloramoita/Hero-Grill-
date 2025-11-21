@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getFinancialRecords, getAppData, formatCurrency, exportFinancialToXML } from '../../services/storageService';
-import { AppData, FinancialRecord } from '../../types';
+import { AppData, FinancialRecord, User } from '../../types';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { FileText, FileSpreadsheet, Printer, AlertTriangle, Loader2 } from 'lucide-react';
 
@@ -9,7 +9,11 @@ interface FinancialChartData extends FinancialRecord {
     monthLabel: string;
 }
 
-export const RelatorioFinanceiro: React.FC = () => {
+interface RelatorioFinanceiroProps {
+    user: User;
+}
+
+export const RelatorioFinanceiro: React.FC<RelatorioFinanceiroProps> = ({ user }) => {
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [filteredData, setFilteredData] = useState<FinancialChartData[]>([]);
     const [loading, setLoading] = useState(true);
@@ -49,10 +53,24 @@ export const RelatorioFinanceiro: React.FC = () => {
         load();
     }, []);
 
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (user.isMaster) return appData.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return appData.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return appData.stores;
+    }, [appData.stores, user]);
+
     const generateReport = async () => {
         setLoading(true);
-        const rawRecords = await getFinancialRecords();
+        let rawRecords = await getFinancialRecords();
         let processed: FinancialChartData[] = [];
+
+        // Filter raw records by permissions first
+        if (!user.isMaster && availableStores.length > 0) {
+            rawRecords = rawRecords.filter(r => availableStores.includes(r.store));
+        }
 
         if (storeFilter === '') {
             const grouped: Record<string, FinancialChartData> = {};
@@ -144,7 +162,7 @@ export const RelatorioFinanceiro: React.FC = () => {
                         <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
                         <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)} className="w-full border p-2 rounded">
                             <option value="">Todas as Lojas (Consolidado)</option>
-                            {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                            {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                     <div>

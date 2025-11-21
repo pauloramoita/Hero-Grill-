@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { getFinancialRecords, getAppData, formatCurrency, deleteFinancialRecord, updateFinancialRecord, exportFinancialToXML } from '../../services/storageService';
-import { AppData, FinancialRecord } from '../../types';
+import { AppData, FinancialRecord, User } from '../../types';
 import { Search, Trash2, Edit, FileSpreadsheet, Printer, TrendingUp, TrendingDown, Layers, DollarSign, ArrowUpCircle, ArrowDownCircle, Loader2 } from 'lucide-react';
 import { EditFinanceiroModal } from './EditFinanceiroModal';
 
@@ -8,7 +9,11 @@ interface FinancialRecordWithAgg extends FinancialRecord {
     isAggregated?: boolean;
 }
 
-export const ConsultaFinanceiro: React.FC = () => {
+interface ConsultaFinanceiroProps {
+    user: User;
+}
+
+export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) => {
     const [rawRecords, setRawRecords] = useState<FinancialRecord[]>([]);
     const [displayRecords, setDisplayRecords] = useState<FinancialRecordWithAgg[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
@@ -47,18 +52,44 @@ export const ConsultaFinanceiro: React.FC = () => {
         setLoading(false);
     };
 
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (user.isMaster) return appData.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return appData.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return appData.stores;
+    }, [appData.stores, user]);
+
+    // Auto-select if only one store available
+    useEffect(() => {
+        if (availableStores.length === 1) {
+            setStoreFilter(availableStores[0]);
+        }
+    }, [availableStores]);
+
     useEffect(() => {
         processData();
-    }, [rawRecords, storeFilter, yearFilter, monthFilter]);
+    }, [rawRecords, storeFilter, yearFilter, monthFilter, user]);
 
     const processData = () => {
         let processed: FinancialRecordWithAgg[] = [];
 
-        if (storeFilter === '') {
-            // Aggregation Mode (All Stores)
+        // Force filter if user has store restriction
+        let effectiveStoreFilter = storeFilter;
+        if (availableStores.length === 1) {
+            effectiveStoreFilter = availableStores[0];
+        }
+
+        if (effectiveStoreFilter === '') {
+            // Aggregation Mode (All Stores) - BUT ONLY ALLOWED STORES
+            const allowedStores = user.isMaster ? null : user.permissions.stores;
             const grouped: Record<string, FinancialRecord> = {};
 
             rawRecords.forEach(r => {
+                // Permission check inside aggregation
+                if (allowedStores && allowedStores.length > 0 && !allowedStores.includes(r.store)) return;
+
                 const key = `${r.year}-${r.month}`;
                 if (!grouped[key]) {
                     grouped[key] = {
@@ -91,7 +122,7 @@ export const ConsultaFinanceiro: React.FC = () => {
 
         } else {
             // Filter by store
-            processed = rawRecords.filter(r => r.store === storeFilter);
+            processed = rawRecords.filter(r => r.store === effectiveStoreFilter);
         }
 
         // Sort by Date (Newest first)
@@ -154,9 +185,14 @@ export const ConsultaFinanceiro: React.FC = () => {
              <div className="bg-white p-6 rounded-lg shadow border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
                 <div>
                     <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
-                    <select value={storeFilter} onChange={e => setStoreFilter(e.target.value)} className="w-full border p-2 rounded">
-                        <option value="">Todas as Lojas (Consolidado)</option>
-                        {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                    <select 
+                        value={storeFilter} 
+                        onChange={e => setStoreFilter(e.target.value)} 
+                        className={`w-full border p-2 rounded ${availableStores.length === 1 ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                        disabled={availableStores.length === 1}
+                    >
+                        {availableStores.length !== 1 && <option value="">Todas as Lojas (Consolidado)</option>}
+                        {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
                 <div>

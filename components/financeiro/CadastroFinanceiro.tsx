@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { getAppData, saveFinancialRecord, formatCurrency } from '../../services/storageService';
-import { AppData } from '../../types';
+import { AppData, User } from '../../types';
 import { CheckCircle, Loader2 } from 'lucide-react';
 
-export const CadastroFinanceiro: React.FC = () => {
+interface CadastroFinanceiroProps {
+    user: User;
+}
+
+export const CadastroFinanceiro: React.FC<CadastroFinanceiroProps> = ({ user }) => {
     const [data, setData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -33,6 +38,22 @@ export const CadastroFinanceiro: React.FC = () => {
         };
         load();
     }, []);
+
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (user.isMaster) return data.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return data.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return data.stores;
+    }, [data.stores, user]);
+
+    // Auto-select if only one store available
+    useEffect(() => {
+        if (availableStores.length === 1) {
+            setStore(availableStores[0]);
+        }
+    }, [availableStores]);
 
     const handleCurrencyInput = (setter: any, e: any) => {
         let raw = e.target.value.replace(/\D/g, '');
@@ -77,9 +98,14 @@ export const CadastroFinanceiro: React.FC = () => {
              <div className="grid md:grid-cols-3 gap-4 mb-6 bg-gray-50 p-4 rounded border border-gray-200">
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Selecione a Loja</label>
-                    <select value={store} onChange={e => setStore(e.target.value)} className="w-full p-3 border rounded font-bold">
+                    <select 
+                        value={store} 
+                        onChange={e => setStore(e.target.value)} 
+                        className={`w-full p-3 border rounded font-bold ${availableStores.length === 1 ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
+                        disabled={availableStores.length === 1}
+                    >
                         <option value="">Selecione...</option>
-                        {data.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
                 <div>

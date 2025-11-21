@@ -1,11 +1,15 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getOrders, getMeatConsumptionLogs, getMeatAdjustments, getAppData } from '../../services/storageService';
-import { AppData } from '../../types';
+import { AppData, User } from '../../types';
 import { Loader2, Eye, EyeOff, Camera, Filter, XCircle } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
-export const GerarPedidoCarnes: React.FC = () => {
+interface GerarPedidoCarnesProps {
+    user?: User;
+}
+
+export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) => {
     const [loading, setLoading] = useState(true);
     const [generatingImage, setGeneratingImage] = useState(false);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
@@ -39,19 +43,31 @@ export const GerarPedidoCarnes: React.FC = () => {
         try {
             const [d] = await Promise.all([getAppData()]);
             setAppData(d);
-            if (d.stores.length > 0 && !selectedStore) {
-                const defaultStore = d.stores[0];
-                setSelectedStore(defaultStore);
-                await fetchDataForStore(defaultStore);
-            } else if (selectedStore) {
-                await fetchDataForStore(selectedStore);
-            }
+            setLoading(false);
         } catch (e) {
             console.error(e);
-        } finally {
             setLoading(false);
         }
     };
+
+    // Determine available stores based on user permissions
+    const availableStores = useMemo(() => {
+        if (!user) return appData.stores;
+        if (user.isMaster) return appData.stores;
+        if (user.permissions.stores && user.permissions.stores.length > 0) {
+            return appData.stores.filter(s => user.permissions.stores.includes(s));
+        }
+        return appData.stores;
+    }, [appData.stores, user]);
+
+    // Auto-select if only one store available or if none selected
+    useEffect(() => {
+        if (availableStores.length > 0 && !selectedStore) {
+            setSelectedStore(availableStores[0]);
+        } else if (availableStores.length === 1) {
+            setSelectedStore(availableStores[0]);
+        }
+    }, [availableStores, selectedStore]);
 
     useEffect(() => {
         if (selectedStore) {
@@ -200,10 +216,11 @@ export const GerarPedidoCarnes: React.FC = () => {
                     <select 
                         value={selectedStore} 
                         onChange={(e) => setSelectedStore(e.target.value)}
-                        className="w-full p-3 border border-slate-300 rounded-lg font-bold text-slate-800 bg-slate-50 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none"
+                        className={`w-full p-3 border border-slate-300 rounded-lg font-bold text-slate-800 bg-slate-50 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none ${availableStores.length === 1 ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                        disabled={availableStores.length === 1}
                     >
-                        {appData.stores.length === 0 && <option value="">Sem lojas</option>}
-                        {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
+                        {availableStores.length !== 1 && <option value="">Selecione...</option>}
+                        {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                  </div>
                  
@@ -246,7 +263,7 @@ export const GerarPedidoCarnes: React.FC = () => {
                         {/* CAIXA PRETA DA LOJA */}
                         <div className="bg-black text-white p-3 mb-4 mx-auto w-full">
                             <span className="block text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">UNIDADE SOLICITANTE</span>
-                            <span className="block text-2xl font-black uppercase leading-none break-words">{selectedStore}</span>
+                            <span className="block text-2xl font-black uppercase leading-none break-words">{selectedStore || 'SELECIONE LOJA'}</span>
                         </div>
 
                         <div className="flex justify-between items-end px-1 border-b border-dashed border-gray-400 pb-2">

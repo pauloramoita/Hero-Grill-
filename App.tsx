@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useMemo } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
@@ -147,7 +145,7 @@ const App: React.FC = () => {
                         {currentView === 'estoque' && <EstoqueModule user={user} />}
                         {currentView === 'controle043' && <Controle043Module user={user} />}
                         {currentView === 'saldo' && <SaldoModule user={user} />}
-                        {currentView === 'financeiro' && <FinanceiroModule />}
+                        {currentView === 'financeiro' && <FinanceiroModule user={user} />}
                         {currentView === 'novo_financeiro' && <NovoFinanceiroModule user={user} />}
                         {currentView === 'backup' && <BackupModule />}
                         {currentView === 'admin' && <AdminModule />}
