@@ -8,7 +8,7 @@ import {
     getTodayLocalISO 
 } from '../../services/storageService';
 import { AppData, FinancialAccount, DailyTransaction, User } from '../../types';
-import { X, Save, DollarSign, Repeat, CalendarClock, TrendingDown, TrendingUp, Loader2 } from 'lucide-react';
+import { X, Save, DollarSign, Repeat, CalendarClock, TrendingDown, TrendingUp, Loader2, AlertTriangle } from 'lucide-react';
 
 interface NovoLancamentoModalProps {
     user?: User;
@@ -150,7 +150,12 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({ user, 
             alert(loopCount > 1 ? `${loopCount} Lançamentos Gerados!` : 'Lançamento Salvo!');
             onSave();
         } catch (err: any) {
-            alert('Erro ao salvar: ' + err.message);
+            let msg = err.message;
+            if (msg.includes('column') || msg.includes('schema cache')) {
+                alert(`ERRO DE BANCO DE DADOS:\n\n${msg}\n\nSOLUÇÃO: Vá ao módulo 'Backup', clique em 'Ver SQL de Instalação' e copie/execute o código no Supabase para criar as colunas faltantes.`);
+            } else {
+                alert('Erro ao salvar: ' + msg);
+            }
         } finally {
             setSaving(false);
         }

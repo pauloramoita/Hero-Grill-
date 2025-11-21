@@ -569,12 +569,40 @@ export const getDailyTransactions = async (): Promise<DailyTransaction[]> => {
 
 export const saveDailyTransaction = async (t: DailyTransaction) => {
     const { id, ...rest } = t;
-    if (id) {
-        const { error } = await supabase.from('daily_transactions').update(rest).eq('id', id);
-        if (error) throw new Error(error.message);
-    } else {
-        const { error } = await supabase.from('daily_transactions').insert([rest]);
-        if (error) throw new Error(error.message);
+    
+    // Helper to allow recursive retry
+    const performSave = async (payload: any) => {
+        if (id) {
+            return await supabase.from('daily_transactions').update(payload).eq('id', id);
+        } else {
+            return await supabase.from('daily_transactions').insert([payload]);
+        }
+    };
+
+    let { error } = await performSave(rest);
+
+    if (error) {
+        // CASE INSENSITIVE FALLBACK
+        // If the database has columns in lowercase (accountid) but we sent CamelCase (accountId),
+        // PostgREST might throw an error if it doesn't find the exact column.
+        // We try to map everything to lowercase and save again.
+        if (error.message.includes('Could not find the') || error.message.includes('column')) {
+            console.warn("Column error detected, attempting fallback with lowercase keys...", error.message);
+            
+            const lowerCasePayload: any = {};
+            Object.keys(rest).forEach(key => {
+                lowerCasePayload[key.toLowerCase()] = (rest as any)[key];
+            });
+
+            const retry = await performSave(lowerCasePayload);
+            if (retry.error) {
+                console.error("Fallback failed:", retry.error);
+                throw new Error(`Erro de Banco de Dados: ${retry.error.message}. Tente executar o SQL de correção no menu Backup.`);
+            }
+            return; // Success on fallback
+        }
+        
+        throw new Error(error.message);
     }
 };
 
@@ -612,7 +640,7 @@ export const deleteUser = async (id: string) => {
 
 export const loginUser = async (username: string, password: string): Promise<{ success: boolean, user?: User, message?: string }> => {
     // 1. Master Admin Hardcoded
-    // Changed from admin/admin123 to Paulo/Moita3033 per user request
+    // Updated to Paulo/Moita3033
     if (username === 'Paulo' && password === 'Moita3033') {
         return { success: true, user: { id: 'master', name: 'Paulo (Mestre)', username: 'Paulo', permissions: { modules: [], stores: [] }, isMaster: true } };
     }
@@ -832,4 +860,11 @@ CREATE TABLE IF NOT EXISTS system_users (
     permissions JSONB,
     "isMaster" BOOLEAN DEFAULT FALSE
 );
+
+-- CORREÇÕES DE COLUNAS (ADICIONAR SE FALTAR)
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "accountId" TEXT;
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "destinationStore" TEXT;
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "destinationAccountId" TEXT;
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "classification" TEXT;
+ALTER TABLE daily_transactions ADD COLUMN IF NOT EXISTS "origin" TEXT;
 `;
