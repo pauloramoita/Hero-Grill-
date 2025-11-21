@@ -109,7 +109,8 @@ export const ConsultaPedidos: React.FC<ConsultaPedidosProps> = ({ user }) => {
 
     const handleExport = () => exportToXML(filteredOrders, 'relatorio_cadastro');
 
-    const totalValue = filteredOrders.reduce((acc, o) => acc + o.totalValue, 0);
+    // Proteção contra NaN na soma
+    const totalValue = filteredOrders.reduce((acc, o) => acc + (Number(o.totalValue) || 0), 0);
     
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-heroRed" size={40}/></div>;
 

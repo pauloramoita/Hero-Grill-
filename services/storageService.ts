@@ -12,6 +12,10 @@ const getEnv = (key: string) => {
         if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
             return (import.meta as any).env[key] || '';
         }
+        // Fallback for other environments
+        if (typeof process !== 'undefined' && process.env) {
+            return process.env[key] || '';
+        }
     } catch (e) {
         console.warn('Error accessing environment variables:', e);
     }
@@ -33,7 +37,11 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- HELPERS ---
 
-export const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+export const formatCurrency = (value: number | string | undefined | null) => {
+    const num = Number(value);
+    if (isNaN(num)) return 'R$ 0,00';
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+};
 
 export const formatDateBr = (dateStr: string) => {
     if(!dateStr) return '-';
@@ -65,18 +73,38 @@ export const saveAppData = async (appData: AppData) => {
 export const getOrders = async (): Promise<Order[]> => {
     const { data, error } = await supabase.from('orders').select('*');
     if (error) throw new Error(error.message);
-    return data || [];
+    
+    // Sanitização de dados: Garante que números sejam números, evitando NaN na interface
+    return (data || []).map((order: any) => ({
+        ...order,
+        unitValue: Number(order.unitValue) || 0,
+        quantity: Number(order.quantity) || 0,
+        totalValue: Number(order.totalValue) || 0
+    }));
 };
 
 export const saveOrder = async (order: Order) => {
     const { id, ...rest } = order;
-    const { error } = await supabase.from('orders').insert([rest]);
+    // Garantir que estamos salvando números
+    const safeOrder = {
+        ...rest,
+        unitValue: Number(rest.unitValue) || 0,
+        quantity: Number(rest.quantity) || 0,
+        totalValue: Number(rest.totalValue) || 0
+    };
+    const { error } = await supabase.from('orders').insert([safeOrder]);
     if (error) throw new Error(error.message);
 };
 
 export const updateOrder = async (order: Order) => {
     const { id, ...rest } = order;
-    const { error } = await supabase.from('orders').update(rest).eq('id', id);
+    const safeOrder = {
+        ...rest,
+        unitValue: Number(rest.unitValue) || 0,
+        quantity: Number(rest.quantity) || 0,
+        totalValue: Number(rest.totalValue) || 0
+    };
+    const { error } = await supabase.from('orders').update(safeOrder).eq('id', id);
     if (error) throw new Error(error.message);
 };
 
@@ -87,7 +115,16 @@ export const deleteOrder = async (id: string) => {
 
 export const getLastOrderForProduct = async (product: string): Promise<Order | null> => {
     const { data } = await supabase.from('orders').select('*').eq('product', product).order('date', { ascending: false }).limit(1);
-    return data && data.length > 0 ? data[0] : null;
+    if (data && data.length > 0) {
+        const o = data[0];
+        return {
+            ...o,
+            unitValue: Number(o.unitValue) || 0,
+            quantity: Number(o.quantity) || 0,
+            totalValue: Number(o.totalValue) || 0
+        };
+    }
+    return null;
 };
 
 export const exportToXML = (data: Order[], filename: string) => {
@@ -100,7 +137,10 @@ export const exportToXML = (data: Order[], filename: string) => {
 export const getMeatConsumptionLogs = async (): Promise<MeatInventoryLog[]> => {
     const { data, error } = await supabase.from('meat_inventory_logs').select('*');
     if (error) console.error(error);
-    return data || [];
+    return (data || []).map((log: any) => ({
+        ...log,
+        quantity_consumed: Number(log.quantity_consumed) || 0
+    }));
 };
 
 export const saveMeatConsumption = async (log: MeatInventoryLog) => {
@@ -122,7 +162,10 @@ export const deleteMeatConsumption = async (id: string) => {
 export const getMeatAdjustments = async (): Promise<MeatStockAdjustment[]> => {
     const { data, error } = await supabase.from('meat_stock_adjustments').select('*');
     if (error) console.error(error);
-    return data || [];
+    return (data || []).map((adj: any) => ({
+        ...adj,
+        quantity: Number(adj.quantity) || 0
+    }));
 };
 
 export const saveMeatAdjustment = async (adj: MeatStockAdjustment) => {
@@ -141,7 +184,10 @@ export const deleteMeatAdjustment = async (id: string) => {
 export const getTransactions043 = async (): Promise<Transaction043[]> => {
     const { data, error } = await supabase.from('transactions_043').select('*');
     if (error) throw new Error(error.message);
-    return data || [];
+    return (data || []).map((t: any) => ({
+        ...t,
+        value: Number(t.value) || 0
+    }));
 };
 
 export const saveTransaction043 = async (t: Transaction043) => {
@@ -171,7 +217,16 @@ export const exportTransactionsToXML = (data: Transaction043[], filename: string
 export const getAccountBalances = async (): Promise<AccountBalance[]> => {
     const { data, error } = await supabase.from('account_balances').select('*');
     if (error) throw new Error(error.message);
-    return data || [];
+    return (data || []).map((b: any) => ({
+        ...b,
+        caixaEconomica: Number(b.caixaEconomica) || 0,
+        cofre: Number(b.cofre) || 0,
+        loteria: Number(b.loteria) || 0,
+        pagbankH: Number(b.pagbankH) || 0,
+        pagbankD: Number(b.pagbankD) || 0,
+        investimentos: Number(b.investimentos) || 0,
+        totalBalance: Number(b.totalBalance) || 0
+    }));
 };
 
 export const saveAccountBalance = async (b: AccountBalance) => {
@@ -207,7 +262,14 @@ export const getPreviousMonthBalance = async (store: string, year: number, month
         .eq('year', prevYear)
         .eq('month', mStr)
         .single();
-    return data;
+        
+    if (data) {
+        return {
+            ...data,
+            totalBalance: Number(data.totalBalance) || 0
+        } as AccountBalance;
+    }
+    return null;
 };
 
 export const exportBalancesToXML = (data: AccountBalance[], filename: string) => {
@@ -220,7 +282,21 @@ export const exportBalancesToXML = (data: AccountBalance[], filename: string) =>
 export const getFinancialRecords = async (): Promise<FinancialRecord[]> => {
     const { data, error } = await supabase.from('financial_records').select('*');
     if (error) throw new Error(error.message);
-    return data || [];
+    return (data || []).map((r: any) => ({
+        ...r,
+        creditCaixa: Number(r.creditCaixa) || 0,
+        creditDelta: Number(r.creditDelta) || 0,
+        creditPagBankH: Number(r.creditPagBankH) || 0,
+        creditPagBankD: Number(r.creditPagBankD) || 0,
+        creditIfood: Number(r.creditIfood) || 0,
+        totalRevenues: Number(r.totalRevenues) || 0,
+        debitCaixa: Number(r.debitCaixa) || 0,
+        debitPagBankH: Number(r.debitPagBankH) || 0,
+        debitPagBankD: Number(r.debitPagBankD) || 0,
+        debitLoteria: Number(r.debitLoteria) || 0,
+        totalExpenses: Number(r.totalExpenses) || 0,
+        netResult: Number(r.netResult) || 0
+    }));
 };
 
 export const saveFinancialRecord = async (r: FinancialRecord) => {
@@ -250,7 +326,10 @@ export const exportFinancialToXML = (data: FinancialRecord[], filename: string) 
 export const getFinancialAccounts = async (): Promise<FinancialAccount[]> => {
     const { data, error } = await supabase.from('financial_accounts').select('*');
     if (error) throw new Error(error.message);
-    return data || [];
+    return (data || []).map((a: any) => ({
+        ...a,
+        initialBalance: Number(a.initialBalance) || 0
+    }));
 };
 
 export const saveFinancialAccount = async (acc: FinancialAccount) => {
@@ -273,7 +352,10 @@ export const deleteFinancialAccount = async (id: string) => {
 export const getDailyTransactions = async (): Promise<DailyTransaction[]> => {
     const { data, error } = await supabase.from('daily_transactions').select('*');
     if (error) throw new Error(error.message);
-    return data || [];
+    return (data || []).map((t: any) => ({
+        ...t,
+        value: Number(t.value) || 0
+    }));
 };
 
 export const saveDailyTransaction = async (t: DailyTransaction) => {
