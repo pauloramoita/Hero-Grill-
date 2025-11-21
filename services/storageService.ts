@@ -77,6 +77,12 @@ const safeNumber = (val: any): number => {
     return 0;
 };
 
+// Robust string parser to handle nulls and trimming
+const safeString = (val: any): string => {
+    if (val === null || val === undefined) return '';
+    return String(val).trim();
+};
+
 export const formatCurrency = (value: number | string | undefined | null) => {
     const num = safeNumber(value);
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
@@ -145,13 +151,22 @@ export const getOrders = async (): Promise<Order[]> => {
     if (error) throw new Error(error.message);
     
     return (data || []).map((order: any) => ({
-        ...order,
+        id: order.id,
+        date: order.date ?? order.Date,
         // DATA RECOVERY: Check multiple casing variations
+        store: safeString(order.store ?? order.Store),
+        product: safeString(order.product ?? order.Product),
+        brand: safeString(order.brand ?? order.Brand),
+        supplier: safeString(order.supplier ?? order.Supplier),
+        
         unitValue: safeNumber(order.unitValue ?? order.unitvalue ?? order.unit_value),
-        quantity: safeNumber(order.quantity),
+        unitMeasure: safeString(order.unitMeasure ?? order.unitmeasure ?? order.unit_measure),
+        quantity: safeNumber(order.quantity ?? order.Quantity),
         totalValue: safeNumber(order.totalValue ?? order.totalvalue ?? order.total_value),
-        unitMeasure: order.unitMeasure ?? order.unitmeasure ?? order.unit_measure,
+        
         deliveryDate: order.deliveryDate ?? order.deliverydate ?? order.delivery_date ?? null,
+        type: safeString(order.type ?? order.Type),
+        category: safeString(order.category ?? order.Category),
         createdAt: order.createdAt ?? order.createdat ?? order.created_at
     }));
 };
@@ -234,8 +249,12 @@ export const getMeatConsumptionLogs = async (): Promise<MeatInventoryLog[]> => {
     const { data, error } = await supabase.from('meat_inventory_logs').select('*');
     if (error) console.error(error);
     return (data || []).map((log: any) => ({
-        ...log,
-        quantity_consumed: safeNumber(log.quantity_consumed ?? log.quantityconsumed)
+        id: log.id,
+        date: log.date ?? log.Date,
+        store: safeString(log.store ?? log.Store),
+        product: safeString(log.product ?? log.Product),
+        quantity_consumed: safeNumber(log.quantity_consumed ?? log.quantityconsumed ?? log.quantity_Consumed ?? log.Quantity_Consumed ?? log.quantityConsumed),
+        created_at: log.created_at ?? log.createdAt
     }));
 };
 
@@ -259,8 +278,13 @@ export const getMeatAdjustments = async (): Promise<MeatStockAdjustment[]> => {
     const { data, error } = await supabase.from('meat_stock_adjustments').select('*');
     if (error) console.error(error);
     return (data || []).map((adj: any) => ({
-        ...adj,
-        quantity: safeNumber(adj.quantity)
+        id: adj.id,
+        date: adj.date ?? adj.Date,
+        store: safeString(adj.store ?? adj.Store),
+        product: safeString(adj.product ?? adj.Product),
+        quantity: safeNumber(adj.quantity ?? adj.Quantity),
+        reason: safeString(adj.reason ?? adj.Reason),
+        created_at: adj.created_at ?? adj.createdAt
     }));
 };
 
