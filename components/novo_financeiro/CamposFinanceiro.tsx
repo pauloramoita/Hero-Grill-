@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Loader2, Edit, Save, X } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Trash2, Loader2, Edit, Save, X, Building2 } from 'lucide-react';
 import { getFinancialAccounts, saveFinancialAccount, updateFinancialAccount, deleteFinancialAccount, getAppData, formatCurrency } from '../../services/storageService';
 import { FinancialAccount, AppData } from '../../types';
 
@@ -92,6 +92,23 @@ export const CamposFinanceiro: React.FC = () => {
         }
     };
 
+    // Agrupamento e Ordenação
+    const groupedAccounts = useMemo(() => {
+        const groups: Record<string, FinancialAccount[]> = {};
+        
+        // Ordena contas por nome
+        const sortedAccounts = [...accounts].sort((a, b) => a.name.localeCompare(b.name));
+
+        sortedAccounts.forEach(acc => {
+            const s = acc.store || 'Sem Loja';
+            if (!groups[s]) groups[s] = [];
+            groups[s].push(acc);
+        });
+
+        // Ordena lojas alfabeticamente e retorna array de [loja, contas[]]
+        return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+    }, [accounts]);
+
     return (
         <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn">
             <div className={`bg-white p-6 rounded-lg shadow-md border ${editingId ? 'border-yellow-400 ring-1 ring-yellow-200' : 'border-gray-200'}`}>
@@ -144,7 +161,6 @@ export const CamposFinanceiro: React.FC = () => {
                  <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Loja</th>
                             <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Conta</th>
                             <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Saldo Inicial</th>
                             <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Ações</th>
@@ -152,26 +168,40 @@ export const CamposFinanceiro: React.FC = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {loading ? (
-                            <tr><td colSpan={4} className="p-4 text-center"><Loader2 className="animate-spin mx-auto"/></td></tr>
+                            <tr><td colSpan={3} className="p-8 text-center"><Loader2 className="animate-spin mx-auto"/></td></tr>
                         ) : accounts.length === 0 ? (
-                            <tr><td colSpan={4} className="p-4 text-center text-gray-500">Nenhuma conta cadastrada.</td></tr>
+                            <tr><td colSpan={3} className="p-8 text-center text-gray-500">Nenhuma conta cadastrada.</td></tr>
                         ) : (
-                            accounts.map(acc => (
-                                <tr key={acc.id} className={`hover:bg-gray-50 ${editingId === acc.id ? 'bg-yellow-50' : ''}`}>
-                                    <td className="px-6 py-2 text-sm font-bold text-gray-800">{acc.store}</td>
-                                    <td className="px-6 py-2 text-sm text-gray-600">{acc.name}</td>
-                                    <td className={`px-6 py-2 text-sm text-right font-mono ${acc.initialBalance < 0 ? 'text-red-600' : ''}`}>{formatCurrency(acc.initialBalance)}</td>
-                                    <td className="px-6 py-2 text-center">
-                                        <div className="flex justify-center gap-2">
-                                            <button onClick={() => handleEdit(acc)} className="text-blue-600 hover:text-blue-800 p-1" title="Editar">
-                                                <Edit size={16}/>
-                                            </button>
-                                            <button onClick={() => handleDelete(acc.id)} className="text-red-500 hover:text-red-700 p-1" title="Excluir">
-                                                <Trash2 size={16}/>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
+                            groupedAccounts.map(([storeName, storeAccounts]) => (
+                                <React.Fragment key={storeName}>
+                                    {/* Header da Loja */}
+                                    <tr className="bg-gray-100">
+                                        <td colSpan={3} className="px-6 py-2 text-sm font-black text-gray-700 uppercase border-y border-gray-200 tracking-wide flex items-center gap-2">
+                                            <Building2 size={16} className="text-gray-400"/> {storeName}
+                                        </td>
+                                    </tr>
+                                    {storeAccounts.map(acc => (
+                                        <tr key={acc.id} className={`hover:bg-gray-50 ${editingId === acc.id ? 'bg-yellow-50' : ''}`}>
+                                            <td className="px-6 py-3 text-sm text-gray-700 font-medium pl-10 relative">
+                                                <span className="absolute left-6 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-300 rounded-full"></span>
+                                                {acc.name}
+                                            </td>
+                                            <td className={`px-6 py-3 text-sm text-right font-mono font-bold ${acc.initialBalance < 0 ? 'text-red-600' : 'text-gray-800'}`}>
+                                                {formatCurrency(acc.initialBalance)}
+                                            </td>
+                                            <td className="px-6 py-3 text-center">
+                                                <div className="flex justify-center gap-2">
+                                                    <button onClick={() => handleEdit(acc)} className="text-blue-600 hover:text-blue-800 p-1.5 rounded hover:bg-blue-50 transition-colors" title="Editar">
+                                                        <Edit size={16}/>
+                                                    </button>
+                                                    <button onClick={() => handleDelete(acc.id)} className="text-red-500 hover:text-red-700 p-1.5 rounded hover:bg-red-50 transition-colors" title="Excluir">
+                                                        <Trash2 size={16}/>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </React.Fragment>
                             ))
                         )}
                     </tbody>

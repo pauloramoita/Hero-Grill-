@@ -672,15 +672,44 @@ export const exportFinancialToXML = (data: FinancialRecord[], filename: string) 
 
 export const getFinancialAccounts = async (): Promise<FinancialAccount[]> => {
     const { data } = await supabase.from('financial_accounts').select('*');
-    return (data || []).map((a: any) => ({ ...a, initialBalance: safeNumber(a.initialBalance ?? a.initialbalance) }));
+    return (data || []).map((a: any) => ({ 
+        ...a, 
+        initialBalance: safeNumber(a.initialBalance ?? a.initialbalance ?? a.InitialBalance ?? a.initial_balance) 
+    }));
 };
 export const saveFinancialAccount = async (acc: FinancialAccount) => {
     const { id, ...rest } = acc;
-    await supabase.from('financial_accounts').insert([rest]);
+    // Try standard quote-preserved identifier first
+    const { error } = await supabase.from('financial_accounts').insert([{
+        name: rest.name,
+        store: rest.store,
+        "initialBalance": rest.initialBalance
+    }]);
+    
+    if (error) {
+        // Fallback for legacy/lowercase column
+        await supabase.from('financial_accounts').insert([{
+            name: rest.name,
+            store: rest.store,
+            initialbalance: rest.initialBalance
+        }]);
+    }
 };
 export const updateFinancialAccount = async (acc: FinancialAccount) => {
     const { id, ...rest } = acc;
-    await supabase.from('financial_accounts').update(rest).eq('id', id);
+    const { error } = await supabase.from('financial_accounts').update({
+        name: rest.name,
+        store: rest.store,
+        "initialBalance": rest.initialBalance
+    }).eq('id', id);
+
+    if (error) {
+        await supabase.from('financial_accounts').update({
+            name: rest.name,
+            store: rest.store,
+            initialbalance: rest.initialBalance
+        }).eq('id', id);
+    }
 };
 export const deleteFinancialAccount = async (id: string) => {
     await supabase.from('financial_accounts').delete().eq('id', id);
