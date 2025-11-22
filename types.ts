@@ -151,5 +151,5 @@ export type Controle043SubView = 'cadastrar' | 'consulta' | 'relatorios';
 export type SaldoSubView = 'lancamentos' | 'consulta' | 'relatorios';
 export type FinanceiroSubView = 'lancamentos' | 'consulta' | 'relatorios';
 export type NovoFinanceiroSubView = 'lancamentos' | 'consulta' | 'relatorios' | 'campos';
-export type AdminSubView = 'usuarios';
+export type AdminSubView = 'usuarios' | 'backup' | 'mensagens' | 'diagnostico' | 'sql';
 export type EstoqueSubView = 'controle_diario' | 'gerar_pedido';
