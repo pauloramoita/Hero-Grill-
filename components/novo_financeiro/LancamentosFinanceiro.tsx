@@ -330,19 +330,26 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         return merged;
     };
 
-    // Calculate Balance considering Filter Date
+    // --- CÁLCULO DE SALDO ROBUSTO (Real-time Balances for Cards) ---
     const getAccountCurrentBalance = (acc: FinancialAccount, maxDate: string) => {
         let balance = acc.initialBalance;
         transactions.forEach(t => {
-            if (t.status === 'Pago') {
-                // Strict Date Cutoff to match Summary
-                if (t.date > maxDate) return;
-
+            if (t.status === 'Pago' && t.date <= maxDate) {
+                // Lógica de SAÍDA (Débito)
+                // Se a conta é a ORIGEM
                 if (t.accountId === acc.id) {
-                    if (t.type === 'Receita') balance += t.value;
-                    if (t.type === 'Despesa') balance -= t.value;
-                    if (t.type === 'Transferência') balance -= t.value;
+                    if (t.type === 'Despesa' || t.type === 'Transferência') {
+                        balance -= t.value;
+                    }
+                    // Correção: Em alguns sistemas, Receita tem conta destino como accountId.
+                    // Assumimos que 'Receita' sempre soma na accountId.
+                    if (t.type === 'Receita') {
+                        balance += t.value;
+                    }
                 }
+                
+                // Lógica de ENTRADA (Crédito por Transferência)
+                // Se a conta é o DESTINO
                 if (t.type === 'Transferência' && t.destinationAccountId === acc.id) {
                     balance += t.value;
                 }
@@ -401,13 +408,14 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         if (t.type === 'Receita') return acc + t.value;
 
         // 2. Transferência Recebida (Entrada)
-        // Considera se a loja de DESTINO ou conta de DESTINO correspondem ao filtro
-        const isIncomingTransfer = t.type === 'Transferência' && (
-            (filterStore && t.destinationStore === filterStore) ||
-            (filterAccount && t.destinationAccountId === filterAccount)
-        );
-
-        if (isIncomingTransfer) return acc + t.value;
+        // Se tem filtro de loja, conta apenas se o destino for a loja filtrada
+        if (t.type === 'Transferência') {
+            const isIncoming = (!filterStore && !filterAccount) || // Global (todas transferências contam como movimentação)
+                               (filterStore && t.destinationStore === filterStore) ||
+                               (filterAccount && t.destinationAccountId === filterAccount);
+            
+            if (isIncoming) return acc + t.value;
+        }
 
         return acc;
     }, 0);
@@ -417,13 +425,14 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         if (t.type === 'Despesa') return acc + t.value;
 
         // 2. Transferência Realizada (Saída)
-        // Considera se a loja de ORIGEM ou conta de ORIGEM correspondem ao filtro
-        const isOutgoingTransfer = t.type === 'Transferência' && (
-            (filterStore && t.store === filterStore) ||
-            (filterAccount && t.accountId === filterAccount)
-        );
-
-        if (isOutgoingTransfer) return acc + t.value;
+        // Se tem filtro de loja, conta apenas se a origem for a loja filtrada
+        if (t.type === 'Transferência') {
+            const isOutgoing = (!filterStore && !filterAccount) || // Global
+                               (filterStore && t.store === filterStore) ||
+                               (filterAccount && t.accountId === filterAccount);
+            
+            if (isOutgoing) return acc + t.value;
+        }
 
         return acc;
     }, 0);
@@ -432,25 +441,25 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
 
     // --- CÁLCULO DE SALDO ANTERIOR (Dia Anterior ao Início do Filtro) ---
     const calculatePreviousBalance = () => {
-        // 1. Filtra contas relevantes
+        // 1. Soma Saldos Iniciais das Contas Filtradas
         const relevantAccounts = accounts.filter(a => {
             if (filterAccount && a.id !== filterAccount) return false;
             if (filterStore && a.store !== filterStore) return false;
-            // Permissions
+            // Permissions check
             if (availableStores.length > 0 && !user.isMaster && !availableStores.includes(a.store)) return false;
             return true;
         });
 
         const initialBalanceSum = relevantAccounts.reduce((acc, a) => acc + a.initialBalance, 0);
 
-        // 2. Filtra transações PAGAS anteriores à data de início
+        // 2. Soma Movimentações Pagas ANTERIORES à data de início
         const prevTransactions = transactions.filter(t => {
             if (t.date >= filterStart) return false;
             if (t.status !== 'Pago') return false; // Apenas concretizado
 
-            // Verifica se a transação envolve o contexto filtrado (Origem ou Destino)
+            // Verifica se a transação é relevante para o filtro (Origem OU Destino)
             const involvesContext =
-                (!filterStore && !filterAccount) || // Global (sem filtro)
+                (!filterStore && !filterAccount) || // Global
                 (filterStore && (t.store === filterStore || t.destinationStore === filterStore)) ||
                 (filterAccount && (t.accountId === filterAccount || t.destinationAccountId === filterAccount));
 
@@ -467,39 +476,38 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         const prevMovement = prevTransactions.reduce((acc, t) => {
             let change = 0;
 
-            // Visão Global (Sem Filtro de Loja/Conta)
-            if (!filterStore && !filterAccount) {
-                if (t.type === 'Receita') change += t.value;
-                if (t.type === 'Despesa') change -= t.value;
-                // Transferências globais se anulam, não afetam saldo total da empresa
-            } else {
-                // Visão Específica (Loja ou Conta)
-                
-                // Lógica de ENTRADA (Receita ou Transferência Recebida)
-                if (t.type === 'Receita') {
-                    // Receita pertence à loja/conta origem
-                    if ((!filterStore || t.store === filterStore) && (!filterAccount || t.accountId === filterAccount)) {
-                        change += t.value;
-                    }
-                } else if (t.type === 'Transferência') {
-                    // É Recebimento? (Destino == Filtro)
-                    if ((filterStore && t.destinationStore === filterStore) || (filterAccount && t.destinationAccountId === filterAccount)) {
-                        change += t.value;
-                    }
-                }
-
-                // Lógica de SAÍDA (Despesa ou Transferência Enviada)
-                if (t.type === 'Despesa') {
-                    if ((!filterStore || t.store === filterStore) && (!filterAccount || t.accountId === filterAccount)) {
-                        change -= t.value;
-                    }
-                } else if (t.type === 'Transferência') {
-                    // É Envio? (Origem == Filtro)
-                    if ((filterStore && t.store === filterStore) || (filterAccount && t.accountId === filterAccount)) {
-                        change -= t.value;
-                    }
+            // A) RECEITA (Entrada)
+            if (t.type === 'Receita') {
+                // Se não tem filtro ou se pertence ao filtro
+                if ((!filterStore || t.store === filterStore) && (!filterAccount || t.accountId === filterAccount)) {
+                    change += t.value;
                 }
             }
+
+            // B) DESPESA (Saída)
+            if (t.type === 'Despesa') {
+                if ((!filterStore || t.store === filterStore) && (!filterAccount || t.accountId === filterAccount)) {
+                    change -= t.value;
+                }
+            }
+
+            // C) TRANSFERÊNCIA (Entrada e Saída)
+            if (t.type === 'Transferência') {
+                // C.1 Entrada (Destino)
+                // Se estou vendo global ou se o filtro bate com o destino
+                if ((!filterStore && !filterAccount) || (filterStore && t.destinationStore === filterStore) || (filterAccount && t.destinationAccountId === filterAccount)) {
+                    change += t.value;
+                }
+
+                // C.2 Saída (Origem)
+                // Se estou vendo global ou se o filtro bate com a origem
+                if ((!filterStore && !filterAccount) || (filterStore && t.store === filterStore) || (filterAccount && t.accountId === filterAccount)) {
+                    change -= t.value;
+                }
+                
+                // Nota: Se for transferência interna (mesma loja/conta filtro), entra no C.1 (+val) e no C.2 (-val), resultando em 0. Correto.
+            }
+
             return acc + change;
         }, 0);
 
