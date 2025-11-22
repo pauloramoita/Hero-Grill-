@@ -43,6 +43,7 @@ export const CamposFinanceiro: React.FC = () => {
         setName(acc.name);
         setStore(acc.store);
         setInitialBalance(acc.initialBalance);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleCancelEdit = () => {
@@ -80,6 +81,7 @@ export const CamposFinanceiro: React.FC = () => {
             setStore('');
             setInitialBalance(0);
             load(); // Recarrega lista
+            alert('Conta salva com sucesso!');
         } catch (err: any) {
             alert('Erro ao salvar conta: ' + err.message);
         }

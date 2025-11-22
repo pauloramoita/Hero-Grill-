@@ -340,16 +340,16 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         setDateType('due');
     };
 
-    // --- LÓGICA UNIFICADA DE SALDO (Same as Consulta) ---
+    // --- LÓGICA UNIFICADA DE SALDO (Calcula Saldo Real Ignorando Filtros Detalhados) ---
     const getBalanceForAccount = (acc: FinancialAccount, dateLimit: string) => {
         let balance = acc.initialBalance;
         
         transactions.forEach(t => {
             if (t.status !== 'Pago' || t.date > dateLimit) return;
 
-            if (filterSupplier && t.supplier !== filterSupplier) return;
-            if (filterCategory && t.category !== filterCategory) return;
-            if (filterClassification && t.classification !== filterClassification) return;
+            // Saldo REAL não deve filtrar por categoria/fornecedor
+            // Mas deve respeitar o filtro de Loja se aplicável para cálculo de contexto
+            // No caso dos Cards, queremos o saldo TOTAL do banco.
             
             const isDebit = t.accountId === acc.id;
             const isCredit = t.destinationAccountId === acc.id && t.type === 'Transferência';
@@ -367,33 +367,15 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         return balance;
     };
 
-    // Wrapper for AutoPixModal (Gets balance up to TODAY, ignoring list filters)
-    const getCurrentBalanceForModal = (accountId: string) => {
-        const acc = accounts.find(a => a.id === accountId);
-        if (!acc) return 0;
-        // Just calculate based on all transactions up to today, no extra filters
-        let balance = acc.initialBalance;
-        const todayLimit = getTodayLocalISO();
-        transactions.forEach(t => {
-            if (t.status !== 'Pago' || t.date > todayLimit) return;
-            const isDebit = t.accountId === acc.id;
-            const isCredit = t.destinationAccountId === acc.id && t.type === 'Transferência';
-            if (isDebit) {
-                if (t.type === 'Despesa' || t.type === 'Transferência') balance -= t.value;
-                if (t.type === 'Receita') balance += t.value;
-            }
-            if (isCredit) balance += t.value;
-        });
-        return balance;
-    };
-
     // --- SALDOS EM TEMPO REAL (Cartões) ---
     const accountsByStore = useMemo(() => {
         const groups: Record<string, { accounts: FinancialAccount[], totalBalance: number }> = {};
         
         accounts.forEach(acc => {
             if (filterStore && acc.store !== filterStore) return; 
-            if (filterAccount && acc.id !== filterAccount) return;
+            // Ignore filterAccount for the card list grouping unless specifically requested, 
+            // but typically we want to see all accounts for the selected store.
+            if (filterAccount && acc.id !== filterAccount) return; 
             
             if (!groups[acc.store]) {
                 groups[acc.store] = { accounts: [], totalBalance: 0 };
@@ -410,65 +392,104 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
             group.accounts.sort((a, b) => a.name.localeCompare(b.name));
         });
 
-        const customOrder = ['Hero Joquei', 'Hero Shopping', 'Hero Centro'];
-        return Object.entries(groups).sort((a, b) => {
-            const indexA = customOrder.indexOf(a[0]);
-            const indexB = customOrder.indexOf(b[0]);
-            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-            if (indexA !== -1) return -1;
-            if (indexB !== -1) return 1;
-            return a[0].localeCompare(b[0]);
-        });
-    }, [accounts, transactions, filterStore, filterAccount, endDate, filterSupplier, filterCategory, filterClassification]);
+        // Sort Stores Alphabetically
+        return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+    }, [accounts, transactions, filterStore, filterAccount, endDate]); 
+    // Dependencias reduzidas: filterSupplier/Category removidos para não afetar o saldo real visualizado
 
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" size={40}/></div>;
 
     const filteredList = filteredTransactions;
     
-    // --- RESUMO DA SELEÇÃO ---
-    const accountsInContext = accounts.filter(a => {
-        if (filterAccount && a.id !== filterAccount) return false;
-        if (filterStore && a.store !== filterStore) return false;
-        if (availableStores.length > 0 && !user.isMaster && !availableStores.includes(a.store)) return false;
-        return true;
-    });
+    // --- RESUMO DA SELEÇÃO (Aqui sim filtramos tudo) ---
+    const calculateSummary = () => {
+        let totalReceitas = 0;
+        let totalDespesas = 0;
 
-    const getYesterday = (d: string) => {
-        const date = new Date(d);
-        date.setDate(date.getDate() - 1);
-        return date.toISOString().split('T')[0];
-    };
-
-    const previousBalance = accountsInContext.reduce((acc, a) => {
-        return acc + getBalanceForAccount(a, getYesterday(startDate));
-    }, 0);
-
-    const finalBalance = accountsInContext.reduce((acc, a) => {
-        return acc + getBalanceForAccount(a, endDate);
-    }, 0);
-
-    const totalReceitas = filteredList.reduce((acc, t) => {
-        if (t.type === 'Receita') return acc + t.value;
-        if (t.type === 'Transferência') {
-            const isIncoming = (!filterStore && !filterAccount) || 
+        filteredList.forEach(t => {
+             if (t.type === 'Receita') totalReceitas += t.value;
+             else if (t.type === 'Despesa') totalDespesas += t.value;
+             else if (t.type === 'Transferência') {
+                 const isIncoming = (!filterStore && !filterAccount) || 
                                (filterStore && t.destinationStore === filterStore) ||
                                (filterAccount && t.destinationAccountId === filterAccount);
-            if (isIncoming) return acc + t.value;
-        }
-        return acc;
-    }, 0);
-
-    const totalDespesas = filteredList.reduce((acc, t) => {
-        if (t.type === 'Despesa') return acc + t.value;
-        if (t.type === 'Transferência') {
-            const isOutgoing = (!filterStore && !filterAccount) || 
+                 const isOutgoing = (!filterStore && !filterAccount) || 
                                (filterStore && t.store === filterStore) ||
                                (filterAccount && t.accountId === filterAccount);
-            if (isOutgoing) return acc + t.value;
-        }
-        return acc;
-    }, 0);
+                 
+                 if (isIncoming) totalReceitas += t.value;
+                 if (isOutgoing) totalDespesas += t.value;
+             }
+        });
 
+        // Previous Balance Calculation
+        let initialBalanceSum = 0;
+        const isAccountView = !filterCategory && !filterSupplier && !filterClassification;
+        
+        if (isAccountView) {
+            accounts.forEach(a => {
+                if (filterStore && a.store !== filterStore) return;
+                if (filterAccount && a.id !== filterAccount) return;
+                initialBalanceSum += a.initialBalance;
+            });
+        }
+
+        let previousVariation = 0;
+
+        transactions.forEach(t => {
+            // Date Check
+            let targetDate = t.date; 
+            if (dateType === 'payment') targetDate = t.paymentDate || '';
+            else if (dateType === 'created') targetDate = t.createdAt ? t.createdAt.split('T')[0] : '';
+            
+            if (!targetDate || targetDate >= startDate) return; 
+
+            // Apply Filters
+            const matchesStore = !filterStore || t.store === filterStore || (t.type === 'Transferência' && t.destinationStore === filterStore);
+            const matchesCategory = !filterCategory || t.category === filterCategory;
+            const matchesSupplier = !filterSupplier || t.supplier === filterSupplier;
+            const matchesStatus = !filterStatus || t.status === filterStatus;
+            const matchesClassification = !filterClassification || t.classification === filterClassification;
+            
+            let matchesAccount = true;
+            if (filterAccount) {
+                if (t.type === 'Transferência') {
+                    matchesAccount = t.accountId === filterAccount || t.destinationAccountId === filterAccount;
+                } else {
+                    matchesAccount = t.accountId === filterAccount;
+                }
+            }
+
+            let allowed = true;
+            if (user && !user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
+                 allowed = user.permissions.stores.includes(t.store) || 
+                           (t.type === 'Transferência' && !!t.destinationStore && user.permissions.stores.includes(t.destinationStore));
+            }
+
+            if (matchesStore && matchesCategory && matchesSupplier && matchesAccount && matchesStatus && matchesClassification && allowed) {
+                if (t.type === 'Receita') previousVariation += t.value;
+                else if (t.type === 'Despesa') previousVariation -= t.value;
+                else if (t.type === 'Transferência') {
+                     const isIncoming = (!filterStore && !filterAccount) || 
+                                   (filterStore && t.destinationStore === filterStore) ||
+                                   (filterAccount && t.destinationAccountId === filterAccount);
+                     const isOutgoing = (!filterStore && !filterAccount) || 
+                                   (filterStore && t.store === filterStore) ||
+                                   (filterAccount && t.accountId === filterAccount);
+                     
+                     if (isIncoming) previousVariation += t.value;
+                     if (isOutgoing) previousVariation -= t.value;
+                }
+            }
+        });
+
+        const previousBalance = initialBalanceSum + previousVariation;
+        const finalBalance = previousBalance + totalReceitas - totalDespesas;
+
+        return { totalReceitas, totalDespesas, previousBalance, finalBalance };
+    };
+
+    const { totalReceitas, totalDespesas, previousBalance, finalBalance } = calculateSummary();
     const isSingleStore = availableStores.length === 1;
 
     return (
@@ -603,14 +624,14 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Categoria</label>
                         <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full border p-2 rounded text-sm">
-                            <option value="">Todas</option>
+                            <option value="">Todos</option>
                             {appData.categories.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Classificação</label>
                         <select value={filterClassification} onChange={e => setFilterClassification(e.target.value)} className="w-full border p-2 rounded text-sm">
-                            <option value="">Todas</option>
+                            <option value="">Todos</option>
                             {appData.types.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                     </div>

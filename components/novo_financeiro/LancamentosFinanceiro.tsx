@@ -73,7 +73,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [editingItem, setEditingItem] = useState<DailyTransaction | null>(null);
     const [showAutoPixModal, setShowAutoPixModal] = useState(false);
 
-    // Filters (Full Set like Consulta)
+    // Filters (Full Set matching ConsultaFinanceiro)
     const [dateType, setDateType] = usePersistedState<'due' | 'payment' | 'created'>('hero_state_fin_filter_dtype', 'due');
     const [startDate, setStartDate] = usePersistedState('hero_state_fin_filter_start', getTodayLocalISO());
     const [endDate, setEndDate] = usePersistedState('hero_state_fin_filter_end', getTodayLocalISO());
@@ -280,7 +280,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         return accounts.find(a => a.id === id)?.name || 'Conta Removida';
     };
 
-    // --- FILTERS LOGIC (Matches ConsultaFinanceiro) ---
+    // --- FILTERS LOGIC ---
     const applyFilters = () => {
         // Merge Transactions and Orders (Orders are virtual pending expenses)
         const existingIds = new Set(transactions.map(t => t.id));
@@ -358,6 +358,11 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                  const dateB = b.createdAt || '';
                  return dateB.localeCompare(dateA);
             }
+            if (dateType === 'payment') {
+                const dateA = a.paymentDate || '';
+                const dateB = b.paymentDate || '';
+                return dateB.localeCompare(dateA);
+            }
             return a.date.localeCompare(b.date);
         });
 
@@ -403,16 +408,16 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         setDateType('due');
     };
 
-    // --- LÓGICA UNIFICADA DE SALDO (Same as Consulta) ---
+    // --- LÓGICA UNIFICADA DE SALDO (Calcula Saldo Real Ignorando Filtros Detalhados) ---
     const getBalanceForAccount = (acc: FinancialAccount, dateLimit: string) => {
         let balance = acc.initialBalance;
         
         transactions.forEach(t => {
             if (t.status !== 'Pago' || t.date > dateLimit) return;
 
-            if (filterSupplier && t.supplier !== filterSupplier) return;
-            if (filterCategory && t.category !== filterCategory) return;
-            if (filterClassification && t.classification !== filterClassification) return;
+            // Saldo REAL não deve filtrar por categoria/fornecedor
+            // Mas deve respeitar o filtro de Loja se aplicável para cálculo de contexto
+            // No caso dos Cards, queremos o saldo TOTAL do banco.
             
             const isDebit = t.accountId === acc.id;
             const isCredit = t.destinationAccountId === acc.id && t.type === 'Transferência';
@@ -430,24 +435,11 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         return balance;
     };
 
-    // Wrapper for AutoPixModal (Gets balance up to TODAY, ignoring list filters)
+    // Função para o Modal de AutoPix
     const getCurrentBalanceForModal = (accountId: string) => {
         const acc = accounts.find(a => a.id === accountId);
         if (!acc) return 0;
-        // Just calculate based on all transactions up to today, no extra filters
-        let balance = acc.initialBalance;
-        const todayLimit = getTodayLocalISO();
-        transactions.forEach(t => {
-            if (t.status !== 'Pago' || t.date > todayLimit) return;
-            const isDebit = t.accountId === acc.id;
-            const isCredit = t.destinationAccountId === acc.id && t.type === 'Transferência';
-            if (isDebit) {
-                if (t.type === 'Despesa' || t.type === 'Transferência') balance -= t.value;
-                if (t.type === 'Receita') balance += t.value;
-            }
-            if (isCredit) balance += t.value;
-        });
-        return balance;
+        return getBalanceForAccount(acc, getTodayLocalISO());
     };
 
     // --- SALDOS EM TEMPO REAL (Cartões) ---
@@ -456,7 +448,9 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         
         accounts.forEach(acc => {
             if (filterStore && acc.store !== filterStore) return; 
-            if (filterAccount && acc.id !== filterAccount) return;
+            // Ignore filterAccount for the card list grouping unless specifically requested, 
+            // but typically we want to see all accounts for the selected store.
+            if (filterAccount && acc.id !== filterAccount) return; 
             
             if (!groups[acc.store]) {
                 groups[acc.store] = { accounts: [], totalBalance: 0 };
@@ -473,65 +467,129 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             group.accounts.sort((a, b) => a.name.localeCompare(b.name));
         });
 
-        const customOrder = ['Hero Joquei', 'Hero Shopping', 'Hero Centro'];
-        return Object.entries(groups).sort((a, b) => {
-            const indexA = customOrder.indexOf(a[0]);
-            const indexB = customOrder.indexOf(b[0]);
-            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-            if (indexA !== -1) return -1;
-            if (indexB !== -1) return 1;
-            return a[0].localeCompare(b[0]);
-        });
-    }, [accounts, transactions, filterStore, filterAccount, endDate, filterSupplier, filterCategory, filterClassification]);
+        // Sort Stores Alphabetically
+        return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+    }, [accounts, transactions, filterStore, filterAccount, endDate]); 
+    // Dependencias reduzidas: filterSupplier/Category removidos para não afetar o saldo real visualizado
 
     if (loading) return <Loader2 className="animate-spin mx-auto mt-10" />;
 
     const filteredList = filteredTransactions;
     
-    // --- RESUMO DA SELEÇÃO ---
-    const accountsInContext = accounts.filter(a => {
-        if (filterAccount && a.id !== filterAccount) return false;
-        if (filterStore && a.store !== filterStore) return false;
-        if (availableStores.length > 0 && !user.isMaster && !availableStores.includes(a.store)) return false;
-        return true;
-    });
+    // --- RESUMO DA SELEÇÃO (Aqui sim filtramos tudo) ---
+    const calculateSummary = () => {
+        let totalReceitas = 0;
+        let totalDespesas = 0;
 
-    const getYesterday = (d: string) => {
-        const date = new Date(d);
-        date.setDate(date.getDate() - 1);
-        return date.toISOString().split('T')[0];
-    };
-
-    const previousBalance = accountsInContext.reduce((acc, a) => {
-        return acc + getBalanceForAccount(a, getYesterday(startDate));
-    }, 0);
-
-    const finalBalance = accountsInContext.reduce((acc, a) => {
-        return acc + getBalanceForAccount(a, endDate);
-    }, 0);
-
-    const totalReceitas = filteredList.reduce((acc, t) => {
-        if (t.type === 'Receita') return acc + t.value;
-        if (t.type === 'Transferência') {
-            const isIncoming = (!filterStore && !filterAccount) || 
+        filteredList.forEach(t => {
+             if (t.type === 'Receita') totalReceitas += t.value;
+             else if (t.type === 'Despesa') totalDespesas += t.value;
+             else if (t.type === 'Transferência') {
+                 const isIncoming = (!filterStore && !filterAccount) || 
                                (filterStore && t.destinationStore === filterStore) ||
                                (filterAccount && t.destinationAccountId === filterAccount);
-            if (isIncoming) return acc + t.value;
-        }
-        return acc;
-    }, 0);
-
-    const totalDespesas = filteredList.reduce((acc, t) => {
-        if (t.type === 'Despesa') return acc + t.value;
-        if (t.type === 'Transferência') {
-            const isOutgoing = (!filterStore && !filterAccount) || 
+                 const isOutgoing = (!filterStore && !filterAccount) || 
                                (filterStore && t.store === filterStore) ||
                                (filterAccount && t.accountId === filterAccount);
-            if (isOutgoing) return acc + t.value;
-        }
-        return acc;
-    }, 0);
+                 
+                 if (isIncoming) totalReceitas += t.value;
+                 if (isOutgoing) totalDespesas += t.value;
+             }
+        });
 
+        // Calculate Previous Balance
+        // Merge Transactions and Orders for full history check
+        const existingIds = new Set(transactions.map(t => t.id));
+        const mappedOrders = orders
+            .filter(order => !existingIds.has(order.id))
+            .map(order => ({
+                id: order.id,
+                date: order.deliveryDate || order.date,
+                paymentDate: null,
+                store: order.store,
+                type: 'Despesa' as const,
+                accountId: null,
+                destinationStore: undefined,
+                destinationAccountId: undefined,
+                paymentMethod: 'Boleto',
+                product: order.product,
+                category: order.category || '',
+                supplier: order.supplier,
+                classification: order.type || 'Variável',
+                value: order.totalValue,
+                status: 'Pendente' as const,
+                description: `Pedido ref. ${order.product}`,
+                origin: 'pedido' as const,
+                createdAt: order.createdAt || order.date 
+            } as DailyTransaction));
+
+        const allMerged = [...transactions, ...mappedOrders];
+
+        let initialBalanceSum = 0;
+        const isAccountView = !filterCategory && !filterSupplier && !filterClassification;
+        
+        if (isAccountView) {
+            accounts.forEach(a => {
+                if (filterStore && a.store !== filterStore) return;
+                if (filterAccount && a.id !== filterAccount) return;
+                initialBalanceSum += a.initialBalance;
+            });
+        }
+
+        let previousVariation = 0;
+
+        allMerged.forEach(t => {
+            let targetDate = t.date; 
+            if (dateType === 'payment') targetDate = t.paymentDate || '';
+            else if (dateType === 'created') targetDate = t.createdAt ? t.createdAt.split('T')[0] : '';
+            
+            if (!targetDate || targetDate >= startDate) return; 
+
+            const matchesStore = !filterStore || t.store === filterStore || (t.type === 'Transferência' && t.destinationStore === filterStore);
+            const matchesCategory = !filterCategory || t.category === filterCategory;
+            const matchesSupplier = !filterSupplier || t.supplier === filterSupplier;
+            const matchesStatus = !filterStatus || t.status === filterStatus;
+            const matchesClassification = !filterClassification || t.classification === filterClassification;
+            
+            let matchesAccount = true;
+            if (filterAccount) {
+                if (t.type === 'Transferência') {
+                    matchesAccount = t.accountId === filterAccount || t.destinationAccountId === filterAccount;
+                } else {
+                    matchesAccount = t.accountId === filterAccount;
+                }
+            }
+
+            let allowed = true;
+            if (user && !user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
+                 allowed = user.permissions.stores.includes(t.store) || 
+                           (t.type === 'Transferência' && !!t.destinationStore && user.permissions.stores.includes(t.destinationStore));
+            }
+
+            if (matchesStore && matchesCategory && matchesSupplier && matchesAccount && matchesStatus && matchesClassification && allowed) {
+                if (t.type === 'Receita') previousVariation += t.value;
+                else if (t.type === 'Despesa') previousVariation -= t.value;
+                else if (t.type === 'Transferência') {
+                     const isIncoming = (!filterStore && !filterAccount) || 
+                                   (filterStore && t.destinationStore === filterStore) ||
+                                   (filterAccount && t.destinationAccountId === filterAccount);
+                     const isOutgoing = (!filterStore && !filterAccount) || 
+                                   (filterStore && t.store === filterStore) ||
+                                   (filterAccount && t.accountId === filterAccount);
+                     
+                     if (isIncoming) previousVariation += t.value;
+                     if (isOutgoing) previousVariation -= t.value;
+                }
+            }
+        });
+
+        const previousBalance = initialBalanceSum + previousVariation;
+        const finalBalance = previousBalance + totalReceitas - totalDespesas;
+
+        return { totalReceitas, totalDespesas, previousBalance, finalBalance };
+    };
+
+    const { totalReceitas, totalDespesas, previousBalance, finalBalance } = calculateSummary();
     const isSingleStore = availableStores.length === 1;
 
     return (
@@ -882,33 +940,26 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 </div>
             </form>
 
-            {/* Advanced Filter Bar (From ConsultaFinanceiro) */}
+            {/* Advanced Filter Bar (Identical to ConsultaFinanceiro) */}
             <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b pb-4">
-                    <div className="flex items-center gap-2 text-gray-700 font-bold">
-                        <Search size={18}/> <h3 className="text-lg">Pesquisa Avançada</h3>
+                    <div className="flex gap-2">
+                        <button onClick={() => setDateRange('hoje')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Hoje</button>
+                        <button onClick={() => setDateRange('semana')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Esta Semana</button>
+                        <button onClick={() => setDateRange('mes')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Este Mês</button>
+                        <button onClick={() => setDateRange('ano')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Este Ano</button>
                     </div>
-                    <div className="flex flex-col md:flex-row items-center gap-4">
-                        <div className="flex gap-2">
-                            <button onClick={() => { setStartDate(getTodayLocalISO()); setEndDate(getTodayLocalISO()); }} className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Hoje</button>
-                            <button onClick={() => { 
-                                const d = new Date(); d.setDate(1); 
-                                setStartDate(d.toISOString().split('T')[0]); 
-                                setEndDate(getTodayLocalISO());
-                            }} className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Mês Atual</button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-gray-500 uppercase">Referência:</span>
-                            <select 
-                                value={dateType} 
-                                onChange={e => setDateType(e.target.value as any)} 
-                                className={`border p-1.5 rounded text-xs font-bold uppercase cursor-pointer ${dateType === 'payment' ? 'bg-blue-50 border-blue-300 text-blue-800' : dateType === 'created' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-yellow-50 border-yellow-300 text-yellow-800'}`}
-                            >
-                                <option value="due">Vencimento</option>
-                                <option value="payment">Pagamento</option>
-                                <option value="created">Cadastro</option>
-                            </select>
-                        </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-500 uppercase">Referência de Data:</span>
+                        <select 
+                            value={dateType} 
+                            onChange={e => setDateType(e.target.value as any)} 
+                            className={`border p-2 rounded text-sm font-bold uppercase cursor-pointer ${dateType === 'payment' ? 'bg-blue-50 border-blue-300 text-blue-800' : dateType === 'created' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-yellow-50 border-yellow-300 text-yellow-800'}`}
+                        >
+                            <option value="due">Data de Vencimento</option>
+                            <option value="payment">Data de Pagamento</option>
+                            <option value="created">Data de Cadastro</option>
+                        </select>
                     </div>
                 </div>
 
@@ -930,7 +981,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja (Origem/Destino)</label>
                         <select 
                             value={filterStore} 
                             onChange={e => setFilterStore(e.target.value)} 
@@ -945,10 +996,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         <label className="block text-xs font-bold text-gray-600 mb-1">Conta</label>
                         <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)} className="w-full border p-2 rounded text-sm">
                             <option value="">Todas</option>
-                            {accounts
-                                .filter(a => !filterStore || a.store === filterStore)
-                                .map(a => <option key={a.id} value={a.id}>{a.name}</option>)
-                            }
+                            {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.store})</option>)}
                         </select>
                     </div>
                      <div>
@@ -975,16 +1023,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
 
                     <div className="md:col-span-4 flex justify-end">
                          <button 
-                            onClick={() => {
-                                if(availableStores.length !== 1) setFilterStore(''); 
-                                setFilterAccount(''); 
-                                setFilterCategory('');
-                                setFilterSupplier(''); 
-                                setFilterClassification(''); 
-                                setFilterStatus('');
-                                setStartDate(getTodayLocalISO()); 
-                                setEndDate(getTodayLocalISO());
-                            }} 
+                            onClick={clearFilters}
                             className="text-xs text-gray-500 hover:text-red-500 font-bold flex items-center gap-1"
                         >
                             <Filter size={12}/> Limpar Filtros

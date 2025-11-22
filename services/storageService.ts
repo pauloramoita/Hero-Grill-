@@ -121,47 +121,6 @@ export const getAppData = async (): Promise<AppData> => {
         config.categories = loadedData[findKey('categories') || 'categories'] || [];
     }
 
-    // AUTO-RECONSTRUCTION
-    if (config.stores.length === 0 || config.products.length === 0) {
-        try {
-            const { data: orders } = await supabase.from('orders').select('*');
-            if (orders && orders.length > 0) {
-                const uniqueStores = new Set<string>(config.stores);
-                const uniqueProducts = new Set<string>(config.products);
-                const uniqueBrands = new Set<string>(config.brands);
-                const uniqueSuppliers = new Set<string>(config.suppliers);
-                const uniqueTypes = new Set<string>(config.types);
-                const uniqueCategories = new Set<string>(config.categories);
-
-                orders.forEach((o: any) => {
-                    const s = safeString(o.store || o.Store);
-                    const p = safeString(o.product || o.Product);
-                    const b = safeString(o.brand || o.Brand);
-                    const sup = safeString(o.supplier || o.Supplier);
-                    const t = safeString(o.type || o.Type);
-                    const c = safeString(o.category || o.Category);
-
-                    if (s) uniqueStores.add(s);
-                    if (p) uniqueProducts.add(p);
-                    if (b) uniqueBrands.add(b);
-                    if (sup) uniqueSuppliers.add(sup);
-                    if (t && t !== 'undefined') uniqueTypes.add(t);
-                    if (c && c !== 'undefined') uniqueCategories.add(c);
-                });
-
-                config.stores = Array.from(uniqueStores).sort();
-                config.products = Array.from(uniqueProducts).sort();
-                config.brands = Array.from(uniqueBrands).sort();
-                config.suppliers = Array.from(uniqueSuppliers).sort();
-                config.types = Array.from(uniqueTypes).sort();
-                config.categories = Array.from(uniqueCategories).sort();
-                if (config.units.length === 0) config.units = ['Kg', 'Un', 'Lt', 'Cx', 'Pç'];
-            }
-        } catch (recError) {
-            console.error("Reconstruction failed:", recError);
-        }
-    }
-
     return {
         stores: Array.isArray(config.stores) ? config.stores : [],
         products: Array.isArray(config.products) ? config.products : [],
@@ -446,7 +405,6 @@ export const getAccountBalances = async (): Promise<AccountBalance[]> => {
         return [];
     }
     return (data || []).map((b: any) => {
-        // Mapeamento robusto cobrindo variações de caixa (camelCase, lowercase, PascalCase e snake_case)
         const caixaEconomica = safeNumber(b.caixaEconomica ?? b.caixaeconomica ?? b.CaixaEconomica ?? b.caixa_economica);
         const cofre = safeNumber(b.cofre ?? b.Cofre);
         const loteria = safeNumber(b.loteria ?? b.Loteria);
@@ -456,7 +414,6 @@ export const getAccountBalances = async (): Promise<AccountBalance[]> => {
         
         let totalBalance = safeNumber(b.totalBalance ?? b.totalbalance ?? b.TotalBalance ?? b.total_balance);
         
-        // Auto-repair: Se totalBalance vier 0 mas houver valores parciais, recalcula.
         if (totalBalance === 0 && (caixaEconomica || cofre || loteria || pagbankH || pagbankD || investimentos)) {
             totalBalance = caixaEconomica + cofre + loteria + pagbankH + pagbankD + investimentos;
         }
@@ -494,7 +451,6 @@ export const saveAccountBalance = async (b: AccountBalance) => {
 
     const { error } = await supabase.from('account_balances').insert([payloadSnake]);
     if (error) {
-        // Fallback Camel
         await supabase.from('account_balances').insert([rest]);
     }
 };
@@ -562,7 +518,6 @@ export const exportBalancesToXML = (data: AccountBalance[], filename: string) =>
 export const getFinancialRecords = async (): Promise<FinancialRecord[]> => {
     const { data } = await supabase.from('financial_records').select('*');
     return (data || []).map((r: any) => {
-        // Extensive mapping covering snake_case, camelCase, lowercase, etc.
         const creditCaixa = safeNumber(r.creditCaixa ?? r.creditcaixa ?? r.CreditCaixa ?? r.credit_caixa ?? r.Credit_Caixa);
         const creditDelta = safeNumber(r.creditDelta ?? r.creditdelta ?? r.CreditDelta ?? r.credit_delta);
         const creditPagBankH = safeNumber(r.creditPagBankH ?? r.creditpagbankh ?? r.CreditPagBankH ?? r.credit_pagbank_h ?? r.credit_pag_bank_h);
@@ -578,7 +533,6 @@ export const getFinancialRecords = async (): Promise<FinancialRecord[]> => {
         let totalExpenses = safeNumber(r.totalExpenses ?? r.totalexpenses ?? r.TotalExpenses ?? r.total_expenses);
         let netResult = safeNumber(r.netResult ?? r.netresult ?? r.NetResult ?? r.net_result);
 
-        // Auto-repair: Recalcula totais se vierem zerados mas houver valores parciais
         if (totalRevenues === 0 && (creditCaixa || creditDelta || creditPagBankH || creditPagBankD || creditIfood)) {
             totalRevenues = creditCaixa + creditDelta + creditPagBankH + creditPagBankD + creditIfood;
         }
@@ -623,7 +577,6 @@ export const saveFinancialRecord = async (r: FinancialRecord) => {
 
     const { error } = await supabase.from('financial_records').insert([payloadSnake]);
     if (error) {
-        // Fallback Camel
         await supabase.from('financial_records').insert([rest]);
     }
 };
@@ -679,7 +632,6 @@ export const getFinancialAccounts = async (): Promise<FinancialAccount[]> => {
 };
 export const saveFinancialAccount = async (acc: FinancialAccount) => {
     const { id, ...rest } = acc;
-    // Try standard quote-preserved identifier first
     const { error } = await supabase.from('financial_accounts').insert([{
         name: rest.name,
         store: rest.store,
@@ -687,7 +639,6 @@ export const saveFinancialAccount = async (acc: FinancialAccount) => {
     }]);
     
     if (error) {
-        // Fallback for legacy/lowercase column
         await supabase.from('financial_accounts').insert([{
             name: rest.name,
             store: rest.store,
@@ -697,6 +648,8 @@ export const saveFinancialAccount = async (acc: FinancialAccount) => {
 };
 export const updateFinancialAccount = async (acc: FinancialAccount) => {
     const { id, ...rest } = acc;
+    
+    // Try quote-preserved first
     const { error } = await supabase.from('financial_accounts').update({
         name: rest.name,
         store: rest.store,
@@ -704,11 +657,21 @@ export const updateFinancialAccount = async (acc: FinancialAccount) => {
     }).eq('id', id);
 
     if (error) {
-        await supabase.from('financial_accounts').update({
+        // Fallback for lowercase
+        const { error: err2 } = await supabase.from('financial_accounts').update({
             name: rest.name,
             store: rest.store,
             initialbalance: rest.initialBalance
         }).eq('id', id);
+
+        if (err2) {
+            // Last resort fallback for snake_case
+            await supabase.from('financial_accounts').update({
+                name: rest.name,
+                store: rest.store,
+                initial_balance: rest.initialBalance
+            }).eq('id', id);
+        }
     }
 };
 export const deleteFinancialAccount = async (id: string) => {
@@ -836,7 +799,6 @@ export const restoreBackup = async (file: File): Promise<{ success: boolean, mes
                 }
                 if (json.orders && json.orders.length) {
                     await supabase.from('orders').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-                    // Batch insert orders to avoid payload limits
                     const batchSize = 100;
                     for (let i = 0; i < json.orders.length; i += batchSize) {
                         const batch = json.orders.slice(i, i + batchSize).map((o: any) => ({
@@ -853,7 +815,6 @@ export const restoreBackup = async (file: File): Promise<{ success: boolean, mes
                         date: l.date, store: l.store, product: l.product, quantity_consumed: safeNumber(l.quantity_consumed), created_at: l.created_at
                     })));
                 }
-                // Restore other tables similarly...
                 
                 resolve({ success: true, message: 'Backup restaurado com sucesso!' });
             } catch (err: any) {
@@ -882,7 +843,6 @@ export const getConfigStatus = () => {
 };
 
 export const generateMockData = async () => {
-    // Dummy implementation for safety
     console.log("Mock data generation disabled in production.");
 };
 

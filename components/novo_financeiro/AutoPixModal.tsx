@@ -40,7 +40,6 @@ export const AutoPixModal: React.FC<AutoPixModalProps> = ({
         if (accountId) {
             const bal = getCurrentBalance(accountId);
             setCurrentSystemBalance(bal);
-            // Default real balance to system balance initially to show 0 diff
             if (realBalance === 0) setRealBalance(bal); 
         }
     }, [accountId]);
@@ -50,14 +49,12 @@ export const AutoPixModal: React.FC<AutoPixModalProps> = ({
     }, [accounts, store]);
 
     const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const rawValue = e.target.value;
-        const isNegative = rawValue.includes('-');
-        const cleanValue = rawValue.replace(/\D/g, '');
-        let floatValue = cleanValue ? parseInt(cleanValue, 10) / 100 : 0;
-        if (isNegative) floatValue = floatValue * -1;
+        const rawValue = e.target.value.replace(/\D/g, '');
+        const floatValue = rawValue ? parseInt(rawValue, 10) / 100 : 0;
         setRealBalance(floatValue);
     };
 
+    // Logic: Entry = Real (Typed) - System (Calculated)
     const calculatedDiff = realBalance - currentSystemBalance;
     const isPositive = calculatedDiff > 0;
 
@@ -102,7 +99,7 @@ export const AutoPixModal: React.FC<AutoPixModalProps> = ({
                             <Wand2 className="text-yellow-300" />
                             Pix Automático
                         </h2>
-                        <p className="text-purple-100 text-xs mt-1 font-medium">Lançamento inteligente por saldo final.</p>
+                        <p className="text-purple-100 text-xs mt-1 font-medium">O sistema calculará a diferença automaticamente.</p>
                     </div>
                     <button type="button" onClick={onClose} className="text-purple-200 hover:text-white transition-colors bg-white/10 p-2 rounded-full">
                         <X size={24} />
@@ -139,7 +136,7 @@ export const AutoPixModal: React.FC<AutoPixModalProps> = ({
 
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4">
                         <div className="flex justify-between items-center">
-                            <span className="text-sm font-bold text-slate-500">Saldo Atual (Sistema):</span>
+                            <span className="text-sm font-bold text-slate-500">Saldo Atual Calculado:</span>
                             <span className="font-mono font-bold text-slate-700 text-lg">{formatCurrency(currentSystemBalance)}</span>
                         </div>
                         
@@ -152,6 +149,7 @@ export const AutoPixModal: React.FC<AutoPixModalProps> = ({
                                     onChange={handleCurrencyChange} 
                                     className="w-full p-3 border-2 border-purple-100 rounded-lg text-right font-black text-2xl text-purple-900 focus:border-purple-500 focus:ring-4 focus:ring-purple-100 outline-none transition-all"
                                     autoFocus
+                                    placeholder="Quanto tem no banco?"
                                 />
                             </div>
                         </div>
@@ -167,7 +165,7 @@ export const AutoPixModal: React.FC<AutoPixModalProps> = ({
                         <span className="block text-xs font-black uppercase mb-1">Lançamento Automático de</span>
                         <span className="block text-3xl font-black tracking-tight">{formatCurrency(Math.abs(calculatedDiff))}</span>
                         <span className="block text-xs font-bold mt-1 uppercase bg-white/50 inline-block px-2 py-1 rounded">
-                            {calculatedDiff > 0 ? 'RECEITA (Crédito)' : calculatedDiff < 0 ? 'DESPESA (Débito)' : 'NENHUMA ALTERAÇÃO'}
+                            {calculatedDiff > 0 ? 'RECEITA (Ajuste Positivo)' : calculatedDiff < 0 ? 'DESPESA (Ajuste Negativo)' : 'NENHUMA ALTERAÇÃO'}
                         </span>
                     </div>
 
