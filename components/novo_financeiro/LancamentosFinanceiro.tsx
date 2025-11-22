@@ -330,10 +330,14 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         return merged;
     };
 
-    const getAccountCurrentBalance = (acc: FinancialAccount) => {
+    // Calculate Balance considering Filter Date
+    const getAccountCurrentBalance = (acc: FinancialAccount, maxDate: string) => {
         let balance = acc.initialBalance;
         transactions.forEach(t => {
             if (t.status === 'Pago') {
+                // Strict Date Cutoff to match Summary
+                if (t.date > maxDate) return;
+
                 if (t.accountId === acc.id) {
                     if (t.type === 'Receita') balance += t.value;
                     if (t.type === 'Despesa') balance -= t.value;
@@ -348,17 +352,21 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     };
 
     // Group Accounts By Store Logic (Used for Top Cards)
+    // Updated to respect FILTERS (filterStore, filterAccount) and DATE (filterEnd)
     const accountsByStore = useMemo(() => {
         const groups: Record<string, { accounts: FinancialAccount[], totalBalance: number }> = {};
         
         accounts.forEach(acc => {
-            if (store && acc.store !== store) return; // Filter by selected store (input form)
+            // Use FILTER STATE instead of FORM STATE to match list view
+            if (filterStore && acc.store !== filterStore) return; 
+            if (filterAccount && acc.id !== filterAccount) return;
             
             if (!groups[acc.store]) {
                 groups[acc.store] = { accounts: [], totalBalance: 0 };
             }
             
-            const currentBal = getAccountCurrentBalance(acc);
+            // Pass filterEnd to match "Saldo Final" calculation
+            const currentBal = getAccountCurrentBalance(acc, filterEnd);
             groups[acc.store].accounts.push(acc);
             groups[acc.store].totalBalance += currentBal;
         });
@@ -381,7 +389,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             if (indexB !== -1) return 1;
             return storeA.localeCompare(storeB);
         });
-    }, [accounts, transactions, store]);
+    }, [accounts, transactions, filterStore, filterAccount, filterEnd]);
 
     if (loading) return <Loader2 className="animate-spin mx-auto mt-10" />;
 
@@ -511,7 +519,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         <div className="bg-heroRed p-1.5 rounded-md text-white">
                             <Wallet size={18} />
                         </div>
-                        <h3 className="font-bold text-lg text-slate-700">Saldos em Tempo Real</h3>
+                        <h3 className="font-bold text-lg text-slate-700">Saldos em Tempo Real (Até {formatDateBr(filterEnd)})</h3>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -534,7 +542,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 {/* Accounts List */}
                                 <div className="divide-y divide-slate-50">
                                     {data.accounts.map(acc => {
-                                        const bal = getAccountCurrentBalance(acc);
+                                        const bal = getAccountCurrentBalance(acc, filterEnd);
                                         return (
                                             <div key={acc.id} className="flex justify-between items-center px-5 py-3 hover:bg-slate-50 transition-colors group">
                                                 <div className="flex items-center gap-3">
@@ -557,8 +565,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         {accountsByStore.length === 0 && (
                             <div className="col-span-full text-center p-8 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-slate-400">
                                 <Wallet size={48} className="mx-auto mb-2 opacity-20"/>
-                                <p>Nenhuma conta bancária encontrada.</p>
-                                <p className="text-xs mt-1">Cadastre contas no menu "Campos Financeiro".</p>
+                                <p>Nenhuma conta encontrada para os filtros selecionados.</p>
                             </div>
                         )}
                     </div>
