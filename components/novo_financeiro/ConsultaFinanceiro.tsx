@@ -31,11 +31,15 @@ import {
     Building2,
     EyeOff,
     FileSpreadsheet,
-    RefreshCw
+    RefreshCw,
+    CheckSquare,
+    Square,
+    Layers
 } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 import { ConfirmPaymentModal } from './ConfirmPaymentModal';
 import { NovoLancamentoModal } from './NovoLancamentoModal';
+import { BatchPaymentModal } from './BatchPaymentModal';
 
 interface ConsultaFinanceiroProps {
     user?: User;
@@ -68,6 +72,10 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
     const [showNewModal, setShowNewModal] = useState(false);
     const [editingItem, setEditingItem] = useState<DailyTransaction | null>(null);
     const [confirmingItem, setConfirmingItem] = useState<DailyTransaction | null>(null);
+    const [showBatchModal, setShowBatchModal] = useState(false);
+
+    // Selection State
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // Filters with Persistence
     const [dateType, setDateType] = usePersistedState<'due' | 'payment' | 'created'>('hero_state_fin_list_dtype', 'due'); 
@@ -87,6 +95,7 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
 
     useEffect(() => {
         applyFilters();
+        setSelectedIds(new Set()); // Clear selection on filter change
     }, [transactions, startDate, endDate, filterStore, filterAccount, filterCategory, filterSupplier, filterStatus, dateType, filterClassification, user]);
 
     const loadData = async () => {
@@ -211,6 +220,59 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         setFilteredTransactions(result);
     };
 
+    // Selection Logic
+    const toggleSelection = (id: string) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(id)) {
+            newSet.delete(id);
+        } else {
+            newSet.add(id);
+        }
+        setSelectedIds(newSet);
+    };
+
+    const handleSelectAll = () => {
+        const pendingInView = filteredTransactions.filter(t => t.status === 'Pendente').map(t => t.id);
+        
+        if (pendingInView.every(id => selectedIds.has(id)) && pendingInView.length > 0) {
+            // Unselect all (only visible)
+            setSelectedIds(new Set());
+        } else {
+            // Select all (only visible pending)
+            setSelectedIds(new Set(pendingInView));
+        }
+    };
+
+    // Batch Payment Logic
+    const getSelectedTransactions = () => {
+        return filteredTransactions.filter(t => selectedIds.has(t.id));
+    };
+
+    const handleBatchConfirm = async (details: { accountId: string, paymentMethod: string, paymentDate: string }) => {
+        const itemsToPay = getSelectedTransactions();
+        
+        try {
+            await Promise.all(itemsToPay.map(t => {
+                const updated: DailyTransaction = {
+                    ...t,
+                    accountId: details.accountId,
+                    paymentMethod: details.paymentMethod,
+                    paymentDate: details.paymentDate,
+                    status: 'Pago',
+                    origin: t.origin || 'manual'
+                };
+                return saveDailyTransaction(updated);
+            }));
+
+            alert(`${itemsToPay.length} lançamentos pagos com sucesso!`);
+            setShowBatchModal(false);
+            setSelectedIds(new Set());
+            loadData();
+        } catch (e: any) {
+            alert('Erro ao realizar pagamento em lote: ' + e.message);
+        }
+    };
+
     // Calculate Summary based on Selection
     const summary = useMemo(() => {
         // 1. Start with Initial Balances of relevant accounts
@@ -311,6 +373,11 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         if (window.confirm('Deseja realmente excluir este lançamento?')) {
             await deleteDailyTransaction(id);
             setTransactions(prev => prev.filter(item => item.id !== id));
+            if (selectedIds.has(id)) {
+                const newSet = new Set(selectedIds);
+                newSet.delete(id);
+                setSelectedIds(newSet);
+            }
         }
     };
 
@@ -365,6 +432,8 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
 
     const filterInputClass = "w-full border border-slate-200 p-2 rounded text-sm focus:ring-2 focus:ring-heroRed/10 focus:border-heroRed outline-none bg-slate-50";
     const labelClass = "block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wide";
+
+    const selectedTotal = getSelectedTransactions().reduce((acc, t) => acc + t.value, 0);
 
     return (
         <div className="space-y-4 animate-fadeIn pb-20">
@@ -482,15 +551,40 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                 </div>
             </div>
 
-            {/* Summary Panel (Restored above table) */}
-            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm no-print">
-                <div className="flex items-center gap-3">
+            {/* Summary Panel & Batch Actions */}
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm no-print relative overflow-hidden">
+                
+                {/* Title */}
+                <div className="flex items-center gap-3 z-10">
                     <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
                         <Calculator size={20} />
                     </div>
                     <span className="font-bold text-blue-900 text-sm uppercase tracking-wide">Resumo da Seleção:</span>
                 </div>
-                <div className="flex flex-wrap justify-center md:justify-end gap-6 text-sm w-full md:w-auto">
+
+                {/* Batch Selection Active - Overlay Effect */}
+                {selectedIds.size > 0 && (
+                    <div className="absolute inset-0 bg-white/90 z-20 flex items-center justify-between px-6 animate-fadeIn border-2 border-green-200 rounded-xl">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-green-100 p-2 rounded-full text-green-600">
+                                <CheckCircle size={24} />
+                            </div>
+                            <div>
+                                <span className="block text-sm font-bold text-green-800">{selectedIds.size} itens selecionados</span>
+                                <span className="block text-xs text-green-600 font-bold">Total: {formatCurrency(selectedTotal)}</span>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => setShowBatchModal(true)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-lg flex items-center gap-2 transition-all active:scale-95"
+                        >
+                            <Layers size={18} /> PAGAR SELECIONADOS
+                        </button>
+                    </div>
+                )}
+
+                {/* Default Summary */}
+                <div className="flex flex-wrap justify-center md:justify-end gap-6 text-sm w-full md:w-auto z-10">
                     <div className="text-center md:text-right">
                         <span className="block text-[10px] font-bold text-slate-400 uppercase">Saldo Anterior</span>
                         <span className="font-mono font-bold text-slate-600">{formatCurrency(summary.prevBalance)}</span>
@@ -516,6 +610,15 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                     <table className="min-w-full divide-y divide-slate-100">
                         <thead className="bg-slate-50">
                             <tr>
+                                <th className="px-3 py-4 text-center no-print w-10">
+                                    <button 
+                                        onClick={handleSelectAll} 
+                                        className="text-slate-400 hover:text-heroBlack transition-colors"
+                                        title="Selecionar Todos Pendentes Visíveis"
+                                    >
+                                        <CheckSquare size={18} />
+                                    </button>
+                                </th>
                                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Cadastro</th>
                                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Vencimento</th>
                                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Loja</th>
@@ -529,7 +632,16 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-50">
                             {filteredTransactions.map((t) => (
-                                <tr key={t.id} className="hover:bg-slate-50/80 transition-colors group">
+                                <tr key={t.id} className={`transition-colors group ${selectedIds.has(t.id) ? 'bg-blue-50' : 'hover:bg-slate-50/80'}`}>
+                                    <td className="px-3 py-4 text-center no-print">
+                                        <button 
+                                            onClick={() => t.status === 'Pendente' && toggleSelection(t.id)} 
+                                            className={`transition-colors ${t.status === 'Pago' ? 'text-slate-200 cursor-not-allowed' : selectedIds.has(t.id) ? 'text-heroRed' : 'text-slate-300 hover:text-slate-500'}`}
+                                            disabled={t.status === 'Pago'}
+                                        >
+                                            {selectedIds.has(t.id) ? <CheckSquare size={18} /> : <Square size={18} />}
+                                        </button>
+                                    </td>
                                     <td className="px-6 py-4 text-xs text-slate-400 font-mono flex items-center gap-1">
                                         <Calendar size={12}/>
                                         {t.createdAt ? formatDateBr(t.createdAt.split('T')[0]).slice(0, 5) : '-'}
@@ -602,7 +714,7 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                             ))}
                             {filteredTransactions.length === 0 && (
                                 <tr>
-                                    <td colSpan={9} className="py-12 text-center text-slate-400 italic">Nenhum lançamento encontrado.</td>
+                                    <td colSpan={10} className="py-12 text-center text-slate-400 italic">Nenhum lançamento encontrado.</td>
                                 </tr>
                             )}
                         </tbody>
@@ -632,6 +744,15 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                     user={user}
                     onClose={() => setShowNewModal(false)}
                     onSave={handleNewTransactionSave}
+                />
+            )}
+
+            {showBatchModal && (
+                <BatchPaymentModal 
+                    transactions={getSelectedTransactions()}
+                    accounts={accounts}
+                    onClose={() => setShowBatchModal(false)}
+                    onConfirm={handleBatchConfirm}
                 />
             )}
         </div>
