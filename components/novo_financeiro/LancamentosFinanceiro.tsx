@@ -12,8 +12,9 @@ import {
     getOrders
 } from '../../services/storageService';
 import { AppData, FinancialAccount, DailyTransaction, Order, User } from '../../types';
-import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock, Building2, Wallet, TrendingUp, TrendingDown, ArrowLeft, Landmark } from 'lucide-react';
+import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock, Building2, Wallet, TrendingUp, TrendingDown, ArrowLeft, Landmark, Plus, Wand2 } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
+import { AutoPixModal } from './AutoPixModal';
 
 interface LancamentosFinanceiroProps {
     user: User;
@@ -69,6 +70,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [recurrenceCount, setRecurrenceCount] = usePersistedState<number>('hero_state_fin_rec_count', 2);
 
     const [editingItem, setEditingItem] = useState<DailyTransaction | null>(null);
+    const [showAutoPixModal, setShowAutoPixModal] = useState(false);
 
     // Filtros (Persistidos)
     const [filterStart, setFilterStart] = usePersistedState('hero_state_fin_filter_start', getTodayLocalISO());
@@ -252,6 +254,17 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         }
     }
 
+    const handleAutoPixSave = async (t: DailyTransaction) => {
+        try {
+            await saveDailyTransaction(t);
+            setShowAutoPixModal(false);
+            loadData();
+            alert('Lançamento Automático Realizado com Sucesso!');
+        } catch (e: any) {
+            alert('Erro ao salvar: ' + e.message);
+        }
+    }
+
     const getAccountName = (id: string | null | undefined) => {
         if (!id) return '-';
         return accounts.find(a => a.id === id)?.name || 'Conta Removida';
@@ -328,21 +341,17 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     };
 
     // --- LÓGICA UNIFICADA DE SALDO ---
-    // Esta função calcula o saldo de uma conta em uma data específica,
-    // aplicando os filtros GLOBAIS (Fornecedor, Classificação, etc.) se necessário.
-    // Isso garante que o "Saldo em Tempo Real" corresponda ao "Saldo Final" quando filtrado.
+    // Calcula saldo da conta considerando transações até a data limite
     const getBalanceForAccount = (acc: FinancialAccount, dateLimit: string) => {
         let balance = acc.initialBalance;
         
         transactions.forEach(t => {
-            // 1. Status e Data Limite
             if (t.status !== 'Pago' || t.date > dateLimit) return;
 
-            // 2. Filtros Globais (Para igualar ao Resumo)
+            // Global Filters Apply
             if (filterSupplier && t.supplier !== filterSupplier) return;
             if (filterClassification && t.classification !== filterClassification) return;
             
-            // 3. Lógica de Movimentação (Débito/Crédito)
             const isDebit = t.accountId === acc.id;
             const isCredit = t.destinationAccountId === acc.id && t.type === 'Transferência';
 
@@ -359,12 +368,19 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         return balance;
     };
 
+    // Wrapper for AutoPixModal (Gets balance up to TODAY)
+    const getCurrentBalanceForModal = (accountId: string) => {
+        const acc = accounts.find(a => a.id === accountId);
+        if (!acc) return 0;
+        // Always use today as limit for reconciliation, ignoring list filters
+        return getBalanceForAccount(acc, getTodayLocalISO()); 
+    };
+
     // --- SALDOS EM TEMPO REAL (Cartões) ---
     const accountsByStore = useMemo(() => {
         const groups: Record<string, { accounts: FinancialAccount[], totalBalance: number }> = {};
         
         accounts.forEach(acc => {
-            // Apply filters to Account List
             if (filterStore && acc.store !== filterStore) return; 
             if (filterAccount && acc.id !== filterAccount) return;
             
@@ -372,7 +388,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 groups[acc.store] = { accounts: [], totalBalance: 0 };
             }
             
-            // Calcula saldo até a Data Fim do filtro, respeitando filtros globais
+            // Calcula saldo até a Data Fim do filtro
             const currentBal = getBalanceForAccount(acc, filterEnd);
             
             groups[acc.store].accounts.push(acc);
@@ -398,9 +414,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
 
     const filteredList = getFilteredList();
     
-    // --- RESUMO DA SELEÇÃO (Cálculo Baseado em Snapshots para Precisão) ---
-    
-    // 1. Saldo Anterior (Até dia anterior ao inicio)
+    // --- RESUMO DA SELEÇÃO ---
     const accountsInContext = accounts.filter(a => {
         if (filterAccount && a.id !== filterAccount) return false;
         if (filterStore && a.store !== filterStore) return false;
@@ -418,20 +432,13 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         return acc + getBalanceForAccount(a, getYesterday(filterStart));
     }, 0);
 
-    // 2. Saldo Final (Até dia fim)
     const finalBalance = accountsInContext.reduce((acc, a) => {
         return acc + getBalanceForAccount(a, filterEnd);
     }, 0);
 
-    // 3. Receitas e Despesas do Período (Meramente informativo, derivado da lista)
-    // Nota: Para bater com a matemática (Final = Anterior + Rec - Desp), precisamos somar apenas o filtrado.
-    // Mas transferências internas geram divergência visual (0 net change). 
-    // Vamos calcular baseado na lista filtrada visualmente.
-    
     const totalReceitas = filteredList.reduce((acc, t) => {
         if (t.type === 'Receita') return acc + t.value;
         if (t.type === 'Transferência') {
-            // Conta como entrada se o destino faz parte do contexto visualizado
             const isIncoming = (!filterStore && !filterAccount) || 
                                (filterStore && t.destinationStore === filterStore) ||
                                (filterAccount && t.destinationAccountId === filterAccount);
@@ -443,7 +450,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const totalDespesas = filteredList.reduce((acc, t) => {
         if (t.type === 'Despesa') return acc + t.value;
         if (t.type === 'Transferência') {
-            // Conta como saída se a origem faz parte do contexto visualizado
             const isOutgoing = (!filterStore && !filterAccount) || 
                                (filterStore && t.store === filterStore) ||
                                (filterAccount && t.accountId === filterAccount);
@@ -527,14 +533,25 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         </h2>
                         <p className="text-slate-400 text-xs mt-1">Registre receitas, despesas ou transferências.</p>
                     </div>
-                    {recurrenceType !== 'none' && (
-                        <span className="text-xs font-bold bg-purple-50 text-purple-700 px-3 py-1.5 rounded-full border border-purple-100 flex items-center gap-1.5 animate-pulse">
-                            <Repeat size={12} /> Modo Repetição Ativo
-                        </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {recurrenceType !== 'none' && (
+                            <span className="text-xs font-bold bg-purple-50 text-purple-700 px-3 py-1.5 rounded-full border border-purple-100 flex items-center gap-1.5 animate-pulse">
+                                <Repeat size={12} /> Modo Repetição Ativo
+                            </span>
+                        )}
+                        <button 
+                            type="button" 
+                            onClick={() => setShowAutoPixModal(true)}
+                            className="bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-black hover:bg-purple-700 flex items-center gap-2 shadow-md transform transition-all active:scale-95"
+                        >
+                            <Wand2 size={14} className="text-yellow-300"/>
+                            PIX AUTOMÁTICO
+                        </button>
+                    </div>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    {/* ... FORM FIELDS (UNCHANGED) ... */}
                     <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Tipo de Operação</label>
                         <div className="relative">
@@ -1009,6 +1026,18 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                     transaction={editingItem} 
                     onClose={() => setEditingItem(null)} 
                     onSave={handleModalSave} 
+                />
+            )}
+
+            {showAutoPixModal && (
+                <AutoPixModal 
+                    accounts={accounts}
+                    stores={availableStores}
+                    preSelectedStore={store}
+                    preSelectedAccount={accountId}
+                    getCurrentBalance={getCurrentBalanceForModal}
+                    onClose={() => setShowAutoPixModal(false)}
+                    onSave={handleAutoPixSave}
                 />
             )}
         </div>
