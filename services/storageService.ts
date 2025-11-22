@@ -360,26 +360,76 @@ export const exportToXML = (data: Order[], filename: string) => {
 
 export const getMeatConsumptionLogs = async (): Promise<MeatInventoryLog[]> => {
     const { data, error } = await supabase.from('meat_inventory_logs').select('*');
-    if (error) console.error(error);
+    if (error) console.error("Error fetching meat logs:", error);
+    
     return (data || []).map((log: any) => ({
         id: log.id,
         date: log.date ?? log.Date,
         store: safeString(log.store ?? log.Store),
         product: safeString(log.product ?? log.Product),
-        quantity_consumed: safeNumber(log.quantity_consumed ?? log.quantityconsumed),
-        created_at: log.created_at
+        // Map various possibilities for quantity
+        quantity_consumed: safeNumber(log.quantity_consumed ?? log.quantityconsumed ?? log.quantityConsumed ?? log.QuantityConsumed),
+        created_at: log.created_at ?? log.createdAt
     }));
 };
 
 export const saveMeatConsumption = async (log: MeatInventoryLog) => {
     const { id, ...rest } = log;
-    const { error } = await supabase.from('meat_inventory_logs').insert([rest]);
-    if (error) throw new Error(error.message);
+    const timestamp = rest.created_at || new Date().toISOString();
+
+    // Strategy: Try Snake Case (DB Standard), then Camel Case (Legacy), then Lowercase
+    
+    const payloadSnake = {
+        date: rest.date,
+        store: rest.store,
+        product: rest.product,
+        quantity_consumed: rest.quantity_consumed,
+        created_at: timestamp
+    };
+
+    const payloadCamel = {
+        date: rest.date,
+        store: rest.store,
+        product: rest.product,
+        quantityConsumed: rest.quantity_consumed, // CamelCase
+        createdAt: timestamp
+    };
+
+    const payloadLower = {
+        date: rest.date,
+        store: rest.store,
+        product: rest.product,
+        quantityconsumed: rest.quantity_consumed, // Lowercase
+        createdat: timestamp
+    };
+
+    // 1. Try Snake
+    let { error } = await supabase.from('meat_inventory_logs').insert([payloadSnake]);
+    if (!error) return;
+
+    // 2. Try Camel
+    console.warn("Snake save failed for meat log, trying Camel...", error.message);
+    let { error: errCamel } = await supabase.from('meat_inventory_logs').insert([payloadCamel]);
+    if (!errCamel) return;
+
+    // 3. Try Lower
+    console.warn("Camel save failed for meat log, trying Lower...", errCamel.message);
+    let { error: errLower } = await supabase.from('meat_inventory_logs').insert([payloadLower]);
+    if (!errLower) return;
+
+    throw new Error(`Erro ao salvar consumo: ${errLower.message}`);
 };
 
 export const updateMeatConsumption = async (id: string, quantity: number) => {
-    const { error } = await supabase.from('meat_inventory_logs').update({ quantity_consumed: quantity }).eq('id', id);
-    if (error) throw new Error(error.message);
+    // Try snake
+    let { error } = await supabase.from('meat_inventory_logs').update({ quantity_consumed: quantity }).eq('id', id);
+    if (!error) return;
+
+    // Try camel
+    let { error: errCamel } = await supabase.from('meat_inventory_logs').update({ quantityConsumed: quantity }).eq('id', id);
+    if (!errCamel) return;
+
+    throw new Error(error.message);
 };
 
 export const deleteMeatConsumption = async (id: string) => {
@@ -389,22 +439,51 @@ export const deleteMeatConsumption = async (id: string) => {
 
 export const getMeatAdjustments = async (): Promise<MeatStockAdjustment[]> => {
     const { data, error } = await supabase.from('meat_stock_adjustments').select('*');
-    if (error) console.error(error);
+    if (error) console.error("Error fetching meat adjustments:", error);
+    
     return (data || []).map((adj: any) => ({
         id: adj.id,
-        date: adj.date,
-        store: safeString(adj.store),
-        product: safeString(adj.product),
-        quantity: safeNumber(adj.quantity),
-        reason: safeString(adj.reason),
-        created_at: adj.created_at
+        date: adj.date ?? adj.Date,
+        store: safeString(adj.store ?? adj.Store),
+        product: safeString(adj.product ?? adj.Product),
+        quantity: safeNumber(adj.quantity ?? adj.Quantity),
+        reason: safeString(adj.reason ?? adj.Reason),
+        created_at: adj.created_at ?? adj.createdAt
     }));
 };
 
 export const saveMeatAdjustment = async (adj: MeatStockAdjustment) => {
     const { id, ...rest } = adj;
-    const { error } = await supabase.from('meat_stock_adjustments').insert([rest]);
-    if (error) throw new Error(error.message);
+    const timestamp = rest.created_at || new Date().toISOString();
+
+    // Payloads
+    const payloadSnake = {
+        date: rest.date,
+        store: rest.store,
+        product: rest.product,
+        quantity: rest.quantity,
+        reason: rest.reason,
+        created_at: timestamp
+    };
+
+    const payloadCamel = {
+        date: rest.date,
+        store: rest.store,
+        product: rest.product,
+        quantity: rest.quantity,
+        reason: rest.reason,
+        createdAt: timestamp
+    };
+
+    // Try Snake
+    let { error } = await supabase.from('meat_stock_adjustments').insert([payloadSnake]);
+    if (!error) return;
+
+    // Try Camel
+    let { error: errCamel } = await supabase.from('meat_stock_adjustments').insert([payloadCamel]);
+    if (!errCamel) return;
+
+    throw new Error(`Erro ao salvar ajuste: ${errCamel.message}`);
 };
 
 export const deleteMeatAdjustment = async (id: string) => {
@@ -937,4 +1016,9 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS "unit_measure" TEXT;
 -- GARANTIR DEFAULTS PARA DATAS (PREVINE ERRO NOT NULL)
 ALTER TABLE orders ALTER COLUMN "created_at" SET DEFAULT NOW();
 ALTER TABLE orders ALTER COLUMN "createdAt" SET DEFAULT NOW();
+
+-- CORREÇÃO ESTOQUE CARNES
+ALTER TABLE meat_inventory_logs ADD COLUMN IF NOT EXISTS "quantity_consumed" NUMERIC;
+ALTER TABLE meat_inventory_logs ADD COLUMN IF NOT EXISTS "quantityConsumed" NUMERIC;
+ALTER TABLE meat_inventory_logs ALTER COLUMN "created_at" SET DEFAULT NOW();
 `;

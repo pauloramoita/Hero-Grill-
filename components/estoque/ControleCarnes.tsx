@@ -122,28 +122,31 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
     const formatWeight = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
+    // Robust string normalization for comparison
+    const normalize = (s: string) => s.toLowerCase().trim();
+
     const processData = (orders: Order[], logs: MeatInventoryLog[], adjustments: MeatStockAdjustment[], store: string) => {
         if (!store) return;
 
         const data = MEAT_LIST.map(meat => {
-            // 1. Total Comprado
+            // 1. Total Comprado (Robust match)
             const totalBought = orders
-                .filter(o => o.store === store && o.product.toLowerCase() === meat.toLowerCase())
+                .filter(o => o.store === store && normalize(o.product) === normalize(meat))
                 .reduce((acc, o) => acc + (Number(o.quantity) || 0), 0);
 
             // 2. Total Consumido (Histórico ANTES de hoje)
             const totalConsumedPrev = logs
-                .filter(l => l.store === store && l.product.toLowerCase() === meat.toLowerCase() && l.date < today)
+                .filter(l => l.store === store && normalize(l.product) === normalize(meat) && l.date < today)
                 .reduce((acc, l) => acc + (Number(l.quantity_consumed) || 0), 0);
             
             // 3. Total Ajustes
             const totalAdjustments = adjustments
-                .filter(a => a.store === store && a.product.toLowerCase() === meat.toLowerCase())
+                .filter(a => a.store === store && normalize(a.product) === normalize(meat))
                 .reduce((acc, a) => acc + (Number(a.quantity) || 0), 0);
 
             // 4. Consumo de Hoje (Somatório do banco)
             const todayConsumptionVal = logs
-                .filter(l => l.store === store && l.product.toLowerCase() === meat.toLowerCase() && l.date === today)
+                .filter(l => l.store === store && normalize(l.product) === normalize(meat) && l.date === today)
                 .reduce((acc, l) => acc + Number(l.quantity_consumed), 0);
 
             // 5. Estoque Inicial do Dia
@@ -198,16 +201,18 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
         setSaving(true);
         try {
+            // Recalculate diff based on fresh logs to allow multiple edits in same day without overwriting
             const freshLogs = await getMeatConsumptionLogs();
             const logsToSave: MeatInventoryLog[] = [];
 
             for (const item of inventoryData) {
                 const savedToday = freshLogs
-                    .filter(l => l.store === selectedStore && l.product === item.name && l.date === today)
+                    .filter(l => l.store === selectedStore && normalize(l.product) === normalize(item.name) && l.date === today)
                     .reduce((acc, l) => acc + Number(l.quantity_consumed), 0);
                 
                 const currentInput = item.todayConsumptionVal;
                 
+                // Only save if there is a difference
                 if (Math.abs(currentInput - savedToday) > 0.0001) {
                     const diff = currentInput - savedToday;
                      logsToSave.push({
