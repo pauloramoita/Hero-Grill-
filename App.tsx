@@ -1,8 +1,8 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
 import { Controle043Module } from './components/controle043/Controle043Module';
-import { BackupModule } from './components/BackupModule';
 import { SaldoModule } from './components/saldo/SaldoModule';
 import { FinanceiroModule } from './components/financeiro/FinanceiroModule'; // Old Financeiro
 import { NovoFinanceiroModule } from './components/novo_financeiro/NovoFinanceiroModule'; // New Financeiro
@@ -161,6 +161,7 @@ const App: React.FC = () => {
     };
 
     // NEW RED & BLACK COLOR SCHEME
+    // Backup removed from main menu, now inside Admin
     const menuItems: { id: View, label: string, icon: React.ReactNode, bgClass: string, textClass: string, borderClass: string, description: string, requiredPerm: string }[] = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={28} />, bgClass: 'bg-[#1A1A1A]', textClass: 'text-white', borderClass: 'border-slate-800', description: 'Visão geral e indicadores', requiredPerm: 'dashboard' },
         { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={28} />, bgClass: 'bg-[#C0392B]', textClass: 'text-white', borderClass: 'border-red-800', description: 'Cadastro e gestão de compras', requiredPerm: 'pedidos' },
@@ -169,8 +170,7 @@ const App: React.FC = () => {
         { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={28} />, bgClass: 'bg-slate-700', textClass: 'text-white', borderClass: 'border-slate-600', description: 'Gestão de conta 043', requiredPerm: 'controle043' },
         { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={28} />, bgClass: 'bg-[#E74C3C]', textClass: 'text-white', borderClass: 'border-red-400', description: 'Balanço mensal consolidado', requiredPerm: 'saldo' },
         { id: 'financeiro', label: 'Entradas/Saídas', icon: <DollarSign size={28} />, bgClass: 'bg-gray-500', textClass: 'text-white', borderClass: 'border-gray-600', description: 'Registro consolidado (Legado)', requiredPerm: 'financeiro' },
-        { id: 'backup', label: 'Backup', icon: <Database size={28} />, bgClass: 'bg-slate-800', textClass: 'text-white', borderClass: 'border-slate-900', description: 'Segurança dos dados', requiredPerm: 'backup' },
-        { id: 'admin', label: 'Admin', icon: <Settings size={28} />, bgClass: 'bg-gray-200', textClass: 'text-slate-800', borderClass: 'border-gray-300', description: 'Usuários e permissões', requiredPerm: 'admin' },
+        { id: 'admin', label: 'Admin & Dados', icon: <Settings size={28} />, bgClass: 'bg-gray-200', textClass: 'text-slate-800', borderClass: 'border-gray-300', description: 'Usuários, Backup e SQL', requiredPerm: 'admin' },
     ];
 
     return (
@@ -245,7 +245,6 @@ const App: React.FC = () => {
                         {currentView === 'saldo' && <SaldoModule user={user} />}
                         {currentView === 'financeiro' && <FinanceiroModule user={user} />}
                         {currentView === 'novo_financeiro' && <NovoFinanceiroModule user={user} />}
-                        {currentView === 'backup' && <BackupModule />}
                         {currentView === 'admin' && <AdminModule />}
                     </div>
                 )}
