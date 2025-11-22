@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getFinancialRecords, getAppData, formatCurrency, deleteFinancialRecord, updateFinancialRecord, exportFinancialToXML } from '../../services/storageService';
 import { AppData, FinancialRecord, User } from '../../types';
-import { Search, Trash2, Edit, FileSpreadsheet, Printer, TrendingUp, TrendingDown, Layers, DollarSign, ArrowUpCircle, ArrowDownCircle, Loader2 } from 'lucide-react';
+import { Search, Trash2, Edit, FileSpreadsheet, Printer, TrendingUp, TrendingDown, Layers, DollarSign, ArrowUpCircle, ArrowDownCircle, Loader2, RefreshCw } from 'lucide-react';
 import { EditFinanceiroModal } from './EditFinanceiroModal';
 
 interface FinancialRecordWithAgg extends FinancialRecord {
@@ -212,6 +212,7 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                         {availableStores.length !== 1 && <option value="">Todas as Lojas (Consolidado)</option>}
                         {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
+                    {storeFilter === '' && <p className="text-[10px] text-orange-500 mt-1 font-bold italic">Modo Consolidado: Edição indisponível.</p>}
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-600 mb-1">Ano</label>
@@ -232,6 +233,9 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                 
                 {/* Action Buttons Inside Panel */}
                 <div className="md:col-span-3 flex justify-end gap-2 border-t pt-4 mt-2">
+                    <button onClick={loadData} className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded hover:bg-gray-200 shadow-sm mr-auto">
+                        <RefreshCw size={18}/> Atualizar
+                    </button>
                     <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">
                         <FileSpreadsheet size={18}/> Excel
                     </button>

@@ -526,14 +526,43 @@ export const exportBalancesToXML = (data: AccountBalance[], filename: string) =>
 
 export const getFinancialRecords = async (): Promise<FinancialRecord[]> => {
     const { data } = await supabase.from('financial_records').select('*');
-    return (data || []).map((r: any) => ({
-        ...r,
-        totalRevenues: safeNumber(r.totalRevenues ?? r.totalrevenues),
-        totalExpenses: safeNumber(r.totalExpenses ?? r.totalexpenses),
-        netResult: safeNumber(r.netResult ?? r.netresult),
-        creditCaixa: safeNumber(r.creditCaixa), creditDelta: safeNumber(r.creditDelta), creditPagBankH: safeNumber(r.creditPagBankH), creditPagBankD: safeNumber(r.creditPagBankD), creditIfood: safeNumber(r.creditIfood),
-        debitCaixa: safeNumber(r.debitCaixa), debitPagBankH: safeNumber(r.debitPagBankH), debitPagBankD: safeNumber(r.debitPagBankD), debitLoteria: safeNumber(r.debitLoteria)
-    }));
+    return (data || []).map((r: any) => {
+        const creditCaixa = safeNumber(r.creditCaixa ?? r.creditcaixa ?? r.CreditCaixa);
+        const creditDelta = safeNumber(r.creditDelta ?? r.creditdelta ?? r.CreditDelta);
+        const creditPagBankH = safeNumber(r.creditPagBankH ?? r.creditpagbankh ?? r.CreditPagBankH);
+        const creditPagBankD = safeNumber(r.creditPagBankD ?? r.creditpagbankd ?? r.CreditPagBankD);
+        const creditIfood = safeNumber(r.creditIfood ?? r.creditifood ?? r.CreditIfood);
+        
+        const debitCaixa = safeNumber(r.debitCaixa ?? r.debitcaixa ?? r.DebitCaixa);
+        const debitPagBankH = safeNumber(r.debitPagBankH ?? r.debitpagbankh ?? r.DebitPagBankH);
+        const debitPagBankD = safeNumber(r.debitPagBankD ?? r.debitpagbankd ?? r.DebitPagBankD);
+        const debitLoteria = safeNumber(r.debitLoteria ?? r.debitloteria ?? r.DebitLoteria);
+
+        let totalRevenues = safeNumber(r.totalRevenues ?? r.totalrevenues ?? r.TotalRevenues);
+        let totalExpenses = safeNumber(r.totalExpenses ?? r.totalexpenses ?? r.TotalExpenses);
+        let netResult = safeNumber(r.netResult ?? r.netresult ?? r.NetResult);
+
+        // Auto-repair: Recalcula totais se vierem zerados mas houver valores parciais
+        if (totalRevenues === 0 && (creditCaixa || creditDelta || creditPagBankH || creditPagBankD || creditIfood)) {
+            totalRevenues = creditCaixa + creditDelta + creditPagBankH + creditPagBankD + creditIfood;
+        }
+        if (totalExpenses === 0 && (debitCaixa || debitPagBankH || debitPagBankD || debitLoteria)) {
+            totalExpenses = debitCaixa + debitPagBankH + debitPagBankD + debitLoteria;
+        }
+        if (netResult === 0 && (totalRevenues !== 0 || totalExpenses !== 0)) {
+            netResult = totalRevenues - totalExpenses;
+        }
+
+        return {
+            id: r.id,
+            store: r.store,
+            year: r.year,
+            month: r.month,
+            creditCaixa, creditDelta, creditPagBankH, creditPagBankD, creditIfood,
+            debitCaixa, debitPagBankH, debitPagBankD, debitLoteria,
+            totalRevenues, totalExpenses, netResult
+        };
+    });
 };
 export const saveFinancialRecord = async (r: FinancialRecord) => {
     const { id, ...rest } = r;
