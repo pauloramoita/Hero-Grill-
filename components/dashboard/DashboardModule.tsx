@@ -18,7 +18,8 @@ import {
     Loader2,
     Lock,
     Hammer,
-    AlertCircle
+    AlertCircle,
+    Layers
 } from 'lucide-react';
 
 interface DashboardModuleProps {
@@ -38,8 +39,14 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     const [accountBalances, setAccountBalances] = useState<AccountBalance[]>([]);
 
     const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
+    
+    // Sorting State
     const [sortFixed, setSortFixed] = useState<'alpha' | 'value'>('value');
     const [sortVariable, setSortVariable] = useState<'alpha' | 'value'>('value');
+
+    // Grouping State
+    const [groupFixed, setGroupFixed] = useState<'desc' | 'cat' | 'sup'>('desc');
+    const [groupVar, setGroupVar] = useState<'prod' | 'cat' | 'sup'>('prod');
 
     // Determine available stores based on user permissions
     const availableStores = useMemo(() => {
@@ -100,6 +107,28 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     };
 
     const filterStore = (storeName: string | null | undefined) => !selectedStore || storeName === selectedStore;
+
+    const toggleFixedGroup = () => {
+        const modes: ('desc' | 'cat' | 'sup')[] = ['desc', 'cat', 'sup'];
+        const next = modes[(modes.indexOf(groupFixed) + 1) % modes.length];
+        setGroupFixed(next);
+    };
+
+    const toggleVarGroup = () => {
+        const modes: ('prod' | 'cat' | 'sup')[] = ['prod', 'cat', 'sup'];
+        const next = modes[(modes.indexOf(groupVar) + 1) % modes.length];
+        setGroupVar(next);
+    };
+
+    const getGroupLabel = (mode: string) => {
+        switch(mode) {
+            case 'desc': return 'Descrição';
+            case 'prod': return 'Produto';
+            case 'cat': return 'Categoria';
+            case 'sup': return 'Fornecedor';
+            default: return 'Item';
+        }
+    };
 
     // --- KPIs Calculations ---
 
@@ -223,18 +252,45 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
             filterStore(o.store)
         );
 
+        // --- FIXED EXPENSES ---
         const fixedList = periodTransactions
             .filter(t => t.classification === 'Fixa' || t.classification === 'Fixo')
-            .map(t => ({ name: t.description || t.category || t.supplier || 'Sem Descrição', value: t.value || 0 }));
+            .map(t => {
+                let name = 'N/D';
+                if (groupFixed === 'cat') name = t.category || 'Sem Categoria';
+                else if (groupFixed === 'sup') name = t.supplier || 'Sem Fornecedor';
+                else name = t.description || t.category || 'Sem Descrição';
+                
+                return { name, value: t.value || 0 };
+            });
 
-        const variableList = [
-            ...periodTransactions
-                .filter(t => t.classification !== 'Fixa' && t.classification !== 'Fixo')
-                .map(t => ({ name: t.description || t.category || t.supplier || 'Sem Descrição', value: t.value || 0 })),
-            ...periodOrders
-                .map(o => ({ name: o.product || 'Produto', value: o.totalValue || 0 }))
-        ];
+        // --- VARIABLE EXPENSES ---
+        // 1. From Transactions
+        const variableTransList = periodTransactions
+            .filter(t => t.classification !== 'Fixa' && t.classification !== 'Fixo')
+            .map(t => {
+                let name = 'N/D';
+                if (groupVar === 'cat') name = t.category || 'Sem Categoria';
+                else if (groupVar === 'sup') name = t.supplier || 'Sem Fornecedor';
+                else name = t.product || t.description || t.category || 'Sem Descrição';
 
+                return { name, value: t.value || 0 };
+            });
+
+        // 2. From Orders (Implicitly Variable)
+        const variableOrdersList = periodOrders
+            .map(o => {
+                let name = 'N/D';
+                if (groupVar === 'cat') name = o.category || 'Sem Categoria';
+                else if (groupVar === 'sup') name = o.supplier || 'Sem Fornecedor';
+                else name = o.product || 'Produto Sem Nome';
+
+                return { name, value: o.totalValue || 0 };
+            });
+
+        const fullVariableList = [...variableTransList, ...variableOrdersList];
+
+        // Grouping Function
         const groupAndSum = (list: any[]) => {
             const grouped: Record<string, number> = {};
             list.forEach(item => {
@@ -244,8 +300,9 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
         };
 
         const groupedFixed = groupAndSum(fixedList);
-        const groupedVariable = groupAndSum(variableList);
+        const groupedVariable = groupAndSum(fullVariableList);
 
+        // Sort Function
         const sortFn = (type: 'alpha' | 'value') => (a: any, b: any) => {
             if (type === 'value') return b.value - a.value;
             return a.name.localeCompare(b.name);
@@ -492,9 +549,14 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
                         <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="text-gray-600 font-bold uppercase text-sm">DESPESAS FIXAS (Mês Atual)</h3>
-                                <button onClick={() => setSortFixed(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded hover:bg-gray-50">
-                                    {sortFixed === 'value' ? 'Ordenar: Valor' : 'Ordenar: A-Z'}
-                                </button>
+                                <div className="flex gap-2">
+                                    <button onClick={toggleFixedGroup} className="text-xs border px-2 py-1 rounded hover:bg-gray-50 flex items-center gap-1" title="Agrupar Por">
+                                        <Layers size={12} /> {getGroupLabel(groupFixed)}
+                                    </button>
+                                    <button onClick={() => setSortFixed(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded hover:bg-gray-50">
+                                        {sortFixed === 'value' ? 'Ordenar: Valor' : 'Ordenar: A-Z'}
+                                    </button>
+                                </div>
                             </div>
                             <div className="max-h-64 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
                                 {expenseLists.fixed.length > 0 ? expenseLists.fixed.map((item, idx) => (
@@ -510,9 +572,14 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
                         <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="text-gray-600 font-bold uppercase text-sm">DESPESAS VARIÁVEIS (Mês Atual)</h3>
-                                <button onClick={() => setSortVariable(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded hover:bg-gray-50">
-                                    {sortVariable === 'value' ? 'Ordenar: Valor' : 'Ordenar: A-Z'}
-                                </button>
+                                <div className="flex gap-2">
+                                    <button onClick={toggleVarGroup} className="text-xs border px-2 py-1 rounded hover:bg-gray-50 flex items-center gap-1" title="Agrupar Por">
+                                        <Layers size={12} /> {getGroupLabel(groupVar)}
+                                    </button>
+                                    <button onClick={() => setSortVariable(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded hover:bg-gray-50">
+                                        {sortVariable === 'value' ? 'Ordenar: Valor' : 'Ordenar: A-Z'}
+                                    </button>
+                                </div>
                             </div>
                             <div className="max-h-64 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
                                 {expenseLists.variable.length > 0 ? expenseLists.variable.map((item, idx) => (
