@@ -35,13 +35,14 @@ export const ConsultaPedidos: React.FC<ConsultaPedidosProps> = ({ user }) => {
     const [editingOrder, setEditingOrder] = useState<Order | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
-    const today = new Date();
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-    const todayStr = today.toISOString().split('T')[0];
+    // Datas
+    const todayStr = getTodayLocalISO();
+    const [y, m, d] = todayStr.split('-');
+    const firstDayStr = `${y}-${m}-01`;
 
     // Persistindo filtros
     const [filters, setFilters] = usePersistedState('hero_state_cons_ped_filters', {
-        dateStart: firstDay,
+        dateStart: firstDayStr,
         dateEnd: todayStr,
         store: '',
         product: '',
@@ -146,7 +147,7 @@ export const ConsultaPedidos: React.FC<ConsultaPedidosProps> = ({ user }) => {
                     </div>
                     <button 
                         onClick={() => setFilters({
-                            dateStart: firstDay, dateEnd: todayStr, store: availableStores.length === 1 ? availableStores[0] : '',
+                            dateStart: firstDayStr, dateEnd: todayStr, store: availableStores.length === 1 ? availableStores[0] : '',
                             product: '', brand: '', supplier: '', type: '', category: ''
                         })}
                         className="text-xs text-red-500 hover:underline flex items-center gap-1"

@@ -140,7 +140,13 @@ export const saveAppData = async (appData: AppData) => {
 // --- ORDERS ---
 
 export const getOrders = async (): Promise<Order[]> => {
-    const { data, error } = await supabase.from('orders').select('*');
+    // Ordena por data decrescente e limita a 3000 para garantir que pedidos recentes apareçam mesmo com muitos registros
+    const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(3000);
+
     if (error) throw new Error(error.message);
     
     return (data || []).map((order: any) => ({
@@ -268,7 +274,12 @@ export const exportToXML = (data: Order[], filename: string) => {
 // --- MEAT STOCK ---
 
 export const getMeatConsumptionLogs = async (): Promise<MeatInventoryLog[]> => {
-    const { data, error } = await supabase.from('meat_inventory_logs').select('*');
+    const { data, error } = await supabase
+        .from('meat_inventory_logs')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(2000);
+
     if (error) console.error("Error fetching meat logs:", error);
     
     return (data || []).map((log: any) => ({
@@ -320,7 +331,12 @@ export const deleteMeatConsumption = async (id: string) => {
 };
 
 export const getMeatAdjustments = async (): Promise<MeatStockAdjustment[]> => {
-    const { data, error } = await supabase.from('meat_stock_adjustments').select('*');
+    const { data, error } = await supabase
+        .from('meat_stock_adjustments')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(2000);
+
     if (error) console.error("Error fetching meat adjustments:", error);
     
     return (data || []).map((adj: any) => ({
@@ -370,7 +386,11 @@ export const deleteMeatAdjustment = async (id: string) => {
 // --- OTHERS ---
 
 export const getTransactions043 = async (): Promise<Transaction043[]> => {
-    const { data } = await supabase.from('transactions_043').select('*');
+    const { data } = await supabase
+        .from('transactions_043')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(3000);
     return (data || []).map((t: any) => ({ ...t, value: safeNumber(t.value) }));
 };
 export const saveTransaction043 = async (t: Transaction043) => {
@@ -679,7 +699,12 @@ export const deleteFinancialAccount = async (id: string) => {
 };
 
 export const getDailyTransactions = async (): Promise<DailyTransaction[]> => {
-    const { data } = await supabase.from('daily_transactions').select('*');
+    const { data } = await supabase
+        .from('daily_transactions')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(3000);
+
     return (data || []).map((t: any) => ({
         ...t,
         paymentDate: t.payment_date ?? t.paymentDate,

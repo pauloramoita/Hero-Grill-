@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { getAppData, saveOrder, getLastOrderForProduct, formatCurrency } from '../../services/storageService';
+import { getAppData, saveOrder, getLastOrderForProduct, formatCurrency, getTodayLocalISO } from '../../services/storageService';
 import { AppData, User } from '../../types';
 import { AlertCircle, CheckCircle, Loader2, Save, ShoppingCart, Calendar } from 'lucide-react';
 
@@ -31,7 +31,7 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
     const [saving, setSaving] = useState(false);
     
     // Usando persistência para manter os dados ao trocar de aba
-    const [date, setDate] = usePersistedState('hero_state_cad_ped_date', new Date().toISOString().split('T')[0]);
+    const [date, setDate] = usePersistedState('hero_state_cad_ped_date', getTodayLocalISO());
     const [store, setStore] = usePersistedState('hero_state_cad_ped_store', '');
     const [type, setType] = usePersistedState('hero_state_cad_ped_type', 'Variável');
     const [category, setCategory] = usePersistedState('hero_state_cad_ped_category', '');
