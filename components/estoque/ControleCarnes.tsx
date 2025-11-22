@@ -14,7 +14,7 @@ import {
     formatDateBr
 } from '../../services/storageService';
 import { MeatInventoryLog, Order, MeatStockAdjustment, AppData, User } from '../../types';
-import { Save, Loader2, AlertCircle, PenTool, X, History, RotateCcw, Edit, Trash2, Filter, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Save, Loader2, PenTool, X, History, RotateCcw, Edit, Trash2, Filter, CheckCircle, AlertTriangle, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface ControleCarnesProps {
     user?: User;
@@ -80,7 +80,9 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
             setRawLogs(logs); 
             setRawAdjustments(adjustments);
             
-            // Initial process will happen in useEffect dependant on selectedStore
+            if (selectedStore) {
+                processData(orders, logs, adjustments, selectedStore);
+            }
         } catch (e) {
             console.error("Erro ao carregar dados de estoque", e);
         } finally {
@@ -122,31 +124,74 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
     const formatWeight = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
-    // Robust string normalization for comparison
-    const normalize = (s: string) => s.toLowerCase().trim();
+    // --- MATCHING LOGIC (Robust) ---
+    const normalize = (s: string) => {
+        if (!s) return '';
+        return s.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+            .trim();
+    };
+
+    const isProductMatch = (dbProduct: string, targetMeat: string) => {
+        if (!dbProduct || !targetMeat) return false;
+        
+        const db = normalize(dbProduct);
+        const target = normalize(targetMeat);
+
+        // Correspondência exata
+        if (db === target) return true;
+
+        // Regras Específicas (Tolerantes)
+        
+        // Costela de Boi -> Aceita "Costela", "Costela Bovinha", "Costela Minga"
+        if (target.includes('costela')) return db.includes('costela');
+
+        // Capa do Filé -> Aceita "Capa de File", "Capa File"
+        if (target.includes('capa') && target.includes('file')) return db.includes('capa') && db.includes('file');
+
+        // Contra Filé -> Aceita "Contra File", "Chorizo"
+        if (target.includes('contra') && target.includes('file')) {
+            return (db.includes('contra') && db.includes('file')) || db.includes('chorizo') || db === 'contra';
+        }
+
+        // Coxão Mole -> Aceita "Coxao", "Coxão"
+        if (target.includes('coxao')) return db.includes('coxao') || db.includes('mole');
+
+        // Coração
+        if (target.includes('coracao')) return db.includes('coracao');
+
+        // Correspondências Genéricas
+        if (target.includes('picanha')) return db.includes('picanha');
+        if (target.includes('alcatra')) return db.includes('alcatra');
+        if (target.includes('cupim')) return db.includes('cupim');
+        if (target.includes('fraldinha')) return db.includes('fraldinha');
+        if (target.includes('patinho')) return db.includes('patinho');
+        
+        return false;
+    };
 
     const processData = (orders: Order[], logs: MeatInventoryLog[], adjustments: MeatStockAdjustment[], store: string) => {
         if (!store) return;
 
         const data = MEAT_LIST.map(meat => {
-            // 1. Total Comprado (Robust match)
+            // 1. Total Comprado (Use Smart Match)
             const totalBought = orders
-                .filter(o => o.store === store && normalize(o.product) === normalize(meat))
+                .filter(o => o.store === store && isProductMatch(o.product, meat))
                 .reduce((acc, o) => acc + (Number(o.quantity) || 0), 0);
 
             // 2. Total Consumido (Histórico ANTES de hoje)
             const totalConsumedPrev = logs
-                .filter(l => l.store === store && normalize(l.product) === normalize(meat) && l.date < today)
+                .filter(l => l.store === store && isProductMatch(l.product, meat) && l.date < today)
                 .reduce((acc, l) => acc + (Number(l.quantity_consumed) || 0), 0);
             
             // 3. Total Ajustes
             const totalAdjustments = adjustments
-                .filter(a => a.store === store && normalize(a.product) === normalize(meat))
+                .filter(a => a.store === store && isProductMatch(a.product, meat))
                 .reduce((acc, a) => acc + (Number(a.quantity) || 0), 0);
 
             // 4. Consumo de Hoje (Somatório do banco)
             const todayConsumptionVal = logs
-                .filter(l => l.store === store && normalize(l.product) === normalize(meat) && l.date === today)
+                .filter(l => l.store === store && isProductMatch(l.product, meat) && l.date === today)
                 .reduce((acc, l) => acc + Number(l.quantity_consumed), 0);
 
             // 5. Estoque Inicial do Dia
@@ -201,25 +246,23 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
         setSaving(true);
         try {
-            // Recalculate diff based on fresh logs to allow multiple edits in same day without overwriting
             const freshLogs = await getMeatConsumptionLogs();
             const logsToSave: MeatInventoryLog[] = [];
 
             for (const item of inventoryData) {
                 const savedToday = freshLogs
-                    .filter(l => l.store === selectedStore && normalize(l.product) === normalize(item.name) && l.date === today)
+                    .filter(l => l.store === selectedStore && isProductMatch(l.product, item.name) && l.date === today)
                     .reduce((acc, l) => acc + Number(l.quantity_consumed), 0);
                 
                 const currentInput = item.todayConsumptionVal;
                 
-                // Only save if there is a difference
                 if (Math.abs(currentInput - savedToday) > 0.0001) {
                     const diff = currentInput - savedToday;
                      logsToSave.push({
                         id: '',
                         date: today,
                         store: selectedStore,
-                        product: item.name,
+                        product: item.name, 
                         quantity_consumed: diff
                     });
                 }
@@ -277,7 +320,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
     // --- REPORT LOGIC ---
     
     const getFilteredReportData = () => {
-        // 1. Consumption Logs
         const logs = rawLogs
             .filter(log => log.store === selectedStore && log.date >= reportStartDate && log.date <= reportEndDate)
             .map(log => ({
@@ -289,19 +331,17 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                 reason: ''
             }));
 
-        // 2. Adjustments
         const adjustments = rawAdjustments
             .filter(adj => adj.store === selectedStore && adj.date >= reportStartDate && adj.date <= reportEndDate)
             .map(adj => ({
                 id: adj.id,
                 date: adj.date,
                 product: adj.product,
-                value: adj.quantity, // Keep sign (+/-)
+                value: adj.quantity, 
                 type: 'adjustment' as const,
                 reason: adj.reason
             }));
 
-        // Merge and Sort by Date (Newest first)
         return [...logs, ...adjustments].sort((a, b) => b.date.localeCompare(a.date));
     };
 
@@ -356,10 +396,8 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
     return (
         <div className="max-w-6xl mx-auto animate-fadeIn pb-32">
-             {/* Parent Container with NO overflow-hidden to allow sticky header to work properly on mobile */}
              <div className="bg-white rounded-lg shadow-card border border-slate-200 mb-8">
                 
-                {/* Header da Ferramenta */}
                 <div className="p-4 md:p-6 border-b border-slate-100 bg-slate-50 flex flex-col gap-4 sticky top-16 z-30 shadow-sm rounded-t-lg">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
@@ -373,6 +411,9 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                         </div>
                         
                         <div className="flex gap-2 w-full md:w-auto">
+                            <button onClick={loadData} className="p-3 bg-white border border-slate-300 rounded-lg text-slate-500 hover:bg-slate-50 transition-colors" title="Atualizar Dados">
+                                <RefreshCw size={16}/>
+                            </button>
                             <button 
                                 onClick={() => setShowModal(true)}
                                 className="flex-1 md:flex-none bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 shadow-sm transition-colors text-xs uppercase"
@@ -458,7 +499,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                 <div className="md:hidden bg-slate-100 p-4 space-y-4 relative z-0">
                     {inventoryData.map((item, idx) => (
                         <div key={item.name} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            {/* Header of the Card: Explicitly styled for visibility */}
                             <div className="bg-gray-100 p-3 border-b border-gray-200 flex justify-between items-center">
                                 <span className="font-black text-slate-900 text-lg uppercase">{item.name}</span>
                                 <div className="text-right">
@@ -531,18 +571,14 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                 </div>
             </div>
 
-            {/* RELATÓRIO ADMINISTRATIVO (NOVO) */}
+            {/* RELATÓRIO ADMINISTRATIVO */}
             {isAdmin && (
                 <div className="mt-8 mx-4 md:mx-0 bg-white rounded-lg shadow border border-gray-200 animate-fadeIn">
                     <div className="bg-gray-800 text-white p-4 rounded-t-lg flex justify-between items-center">
                         <h3 className="font-bold uppercase flex items-center gap-2 text-sm">
                             <Filter size={16}/> Relatório de Retiradas (Consumo)
                         </h3>
-                        <span className="text-[10px] bg-gray-700 px-2 py-1 rounded font-bold text-yellow-400 border border-gray-600">
-                            ÁREA ADMINISTRATIVA
-                        </span>
                     </div>
-                    
                     <div className="p-6">
                         <div className="flex flex-wrap gap-4 mb-6 items-end">
                             <div className="w-full md:w-auto">
@@ -558,7 +594,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                                 <span className="text-xl font-black text-gray-800">{formatWeight(totalReportWeight)} Kg</span>
                             </div>
                         </div>
-
                         <div className="overflow-x-auto border border-gray-200 rounded-lg">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">

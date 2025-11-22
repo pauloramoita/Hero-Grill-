@@ -27,7 +27,7 @@ export const BackupModule: React.FC = () => {
         setConfigInfo(getConfigStatus());
         const result = await checkConnection();
         
-        setConnectionStatus(result.status);
+        setConnectionStatus(result.status as 'checking' | 'ok' | 'error' | 'config_missing');
         const time = new Date().toLocaleTimeString();
         setConnectionMessage(`[${time}] ${result.message}` + (result.details ? ` (${result.details})` : ''));
     };

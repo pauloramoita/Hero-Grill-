@@ -16,7 +16,6 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
     const [selectedStore, setSelectedStore] = useState('');
     const [showStock, setShowStock] = useState(false);
     
-    // Estado para controlar filtro de itens zerados
     const [hideZero, setHideZero] = useState(false);
 
     const printRef = useRef<HTMLDivElement>(null);
@@ -50,7 +49,6 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
         }
     };
 
-    // Determine available stores based on user permissions
     const availableStores = useMemo(() => {
         if (!user) return appData.stores;
         if (user.isMaster) return appData.stores;
@@ -60,7 +58,6 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
         return appData.stores;
     }, [appData.stores, user]);
 
-    // Auto-select if only one store available or if none selected
     useEffect(() => {
         if (availableStores.length > 0 && !selectedStore) {
             setSelectedStore(availableStores[0]);
@@ -76,20 +73,52 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
         }
     }, [selectedStore]);
 
+    // --- MATCHING LOGIC (Updated to match ControleCarnes) ---
+    const normalize = (s: string) => {
+        if (!s) return '';
+        return s.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+            .trim();
+    };
+
+    const isProductMatch = (dbProduct: string, targetMeat: string) => {
+        if (!dbProduct || !targetMeat) return false;
+        
+        const db = normalize(dbProduct);
+        const target = normalize(targetMeat);
+
+        if (db === target) return true;
+
+        if (target.includes('costela')) return db.includes('costela');
+        if (target.includes('capa') && target.includes('file')) return db.includes('capa') && db.includes('file');
+        if (target.includes('contra') && target.includes('file')) {
+            return (db.includes('contra') && db.includes('file')) || db.includes('chorizo') || db === 'contra';
+        }
+        if (target.includes('coxao')) return db.includes('coxao') || db.includes('mole');
+        if (target.includes('coracao')) return db.includes('coracao');
+        if (target.includes('picanha')) return db.includes('picanha');
+        if (target.includes('alcatra')) return db.includes('alcatra');
+        if (target.includes('cupim')) return db.includes('cupim');
+        if (target.includes('fraldinha')) return db.includes('fraldinha');
+        if (target.includes('patinho')) return db.includes('patinho');
+        
+        return false;
+    };
+
     const fetchDataForStore = async (store: string) => {
         const [orders, logs, adjustments] = await Promise.all([getOrders(), getMeatConsumptionLogs(), getMeatAdjustments()]);
         
         const data = MEAT_LIST.map(meat => {
             const totalBought = orders
-                .filter(o => o.store === store && o.product.toLowerCase() === meat.toLowerCase())
+                .filter(o => o.store === store && isProductMatch(o.product, meat))
                 .reduce((acc, o) => acc + (Number(o.quantity) || 0), 0);
 
             const totalConsumed = logs
-                .filter(l => l.store === store && l.product.toLowerCase() === meat.toLowerCase())
+                .filter(l => l.store === store && isProductMatch(l.product, meat))
                 .reduce((acc, l) => acc + (Number(l.quantity_consumed) || 0), 0);
 
             const totalAdjusted = adjustments
-                .filter(a => a.store === store && a.product.toLowerCase() === meat.toLowerCase())
+                .filter(a => a.store === store && isProductMatch(a.product, meat))
                 .reduce((acc, a) => acc + (Number(a.quantity) || 0), 0);
             
             return {
@@ -97,7 +126,7 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
                 currentStock: totalBought - totalConsumed + totalAdjusted,
                 orderQtyStr: '0,000',
                 orderQtyNum: 0,
-                unit: 'PÇ' // Padrão PÇ
+                unit: 'PÇ' 
             };
         });
 
@@ -209,7 +238,6 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
     return (
         <div className="w-full max-w-md mx-auto animate-fadeIn pb-32 px-2 sm:px-0">
             
-            {/* Controles (Não sai na impressão) */}
             <div className="mb-4 no-print bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
                  <div className="flex flex-col gap-2">
                     <label className="block text-xs font-bold text-slate-500 uppercase">Loja Solicitante</label>
@@ -243,7 +271,6 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
                  </div>
             </div>
 
-            {/* ÁREA DE IMPRESSÃO */}
             <div className="flex justify-center w-full shadow-2xl rounded-sm overflow-hidden">
                 <div 
                     id="print-area" 
@@ -251,7 +278,6 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
                     className="bg-white w-full relative"
                     style={{ fontFamily: "'Courier New', Courier, monospace" }}
                 >
-                    {/* CABEÇALHO */}
                     <div className="p-4 pb-2 text-center bg-white border-b-2 border-black">
                         <div className="flex justify-center items-baseline gap-1 mb-2">
                             <span className="font-black text-3xl italic tracking-tighter text-black" style={{ fontFamily: 'Arial Black, sans-serif' }}>HERO</span>
@@ -260,7 +286,6 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
                         
                         <h2 className="text-lg font-black uppercase tracking-[0.2em] border-y-2 border-black py-1 mb-4">PEDIDO DE COMPRA</h2>
                         
-                        {/* CAIXA PRETA DA LOJA */}
                         <div className="bg-black text-white p-3 mb-4 mx-auto w-full">
                             <span className="block text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">UNIDADE SOLICITANTE</span>
                             <span className="block text-2xl font-black uppercase leading-none break-words">{selectedStore || 'SELECIONE LOJA'}</span>
@@ -272,7 +297,6 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
                         </div>
                     </div>
 
-                    {/* TABELA */}
                     <div className="bg-white min-h-[200px]">
                         <table className="w-full text-sm">
                             <thead>
@@ -331,7 +355,6 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
                         </table>
                     </div>
 
-                    {/* RODAPÉ */}
                     <div className="bg-black text-white p-4">
                         <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
                             <span className="text-[10px] font-bold uppercase opacity-70">Itens com Pedido:</span>
@@ -340,7 +363,6 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
                         <div className="flex justify-between items-center pt-1">
                             <span className="text-xs font-black uppercase tracking-wider">TOTAL GERAL:</span>
                             <div className="text-right leading-tight">
-                                {/* Lógica de exibição priorizando PÇs */}
                                 {totalPieces > 0 ? (
                                     <>
                                         <span className="text-2xl font-black block text-yellow-400">{formatWeight(totalPieces)} <span className="text-base font-normal text-white">Pçs</span></span>
@@ -353,7 +375,6 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
                         </div>
                     </div>
 
-                    {/* ASSINATURA */}
                     <div className="p-6 bg-white border-t border-gray-200 text-center mt-1">
                         <div className="h-10 border-b-2 border-black w-3/4 mx-auto mb-2"></div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">ASSINATURA DO RESPONSÁVEL</p>
@@ -362,7 +383,6 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
                 </div>
             </div>
 
-            {/* Botão Flutuante */}
             <div className="fixed bottom-6 left-0 w-full px-4 flex justify-center z-50 no-print">
                 <button 
                     onClick={handleShareImage}
