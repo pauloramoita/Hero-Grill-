@@ -29,7 +29,9 @@ import {
     Landmark,
     Wallet,
     Building2,
-    EyeOff
+    EyeOff,
+    FileSpreadsheet,
+    RefreshCw
 } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 import { ConfirmPaymentModal } from './ConfirmPaymentModal';
@@ -78,8 +80,6 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
     const [filterSupplier, setFilterSupplier] = usePersistedState('hero_state_fin_list_supplier', '');
     const [filterStatus, setFilterStatus] = usePersistedState('hero_state_fin_list_status', ''); 
     const [filterClassification, setFilterClassification] = usePersistedState('hero_state_fin_list_class', '');
-
-    const canViewBalances = user?.isMaster || (user?.permissions?.modules && user.permissions.modules.includes('view_balances'));
 
     useEffect(() => {
         loadData();
@@ -211,33 +211,73 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         setFilteredTransactions(result);
     };
 
-    const setDateRange = (type: 'hoje' | 'semana' | 'mes' | 'ano') => {
-        const today = new Date();
-        const formatDate = (d: Date) => d.toISOString().split('T')[0];
-
-        if (type === 'hoje') {
-            const str = formatDate(today);
-            setStartDate(str);
-            setEndDate(str);
-        } else if (type === 'semana') {
-            const day = today.getDay();
-            const diffToMon = today.getDate() - day + (day === 0 ? -6 : 1);
-            const monday = new Date(today.setDate(diffToMon));
-            const sunday = new Date(today.setDate(monday.getDate() + 6));
-            setStartDate(formatDate(monday));
-            setEndDate(formatDate(sunday));
-        } else if (type === 'mes') {
-            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-            setStartDate(formatDate(firstDay));
-            setEndDate(formatDate(lastDay));
-        } else if (type === 'ano') {
-            const firstDay = new Date(today.getFullYear(), 0, 1);
-            const lastDay = new Date(today.getFullYear(), 11, 31);
-            setStartDate(formatDate(firstDay));
-            setEndDate(formatDate(lastDay));
+    // Calculate Summary based on Selection
+    const summary = useMemo(() => {
+        // 1. Start with Initial Balances of relevant accounts
+        let initialSum = 0;
+        const relevantAccounts = accounts.filter(a => !filterStore || a.store === filterStore);
+        
+        if (filterAccount) {
+             const acc = accounts.find(a => a.id === filterAccount);
+             if (acc) initialSum = acc.initialBalance;
+        } else {
+             initialSum = relevantAccounts.reduce((acc, a) => acc + a.initialBalance, 0);
         }
-    };
+
+        let accumulatedDelta = 0;
+        let periodRevenues = 0;
+        let periodExpenses = 0;
+
+        transactions.forEach(t => {
+            // Check filters (Store, Account, Permissions)
+            const matchesStore = !filterStore || t.store === filterStore || (t.type === 'Transferência' && t.destinationStore === filterStore);
+            
+            let matchesAccount = true;
+            if (filterAccount) {
+                if (t.type === 'Transferência') {
+                    matchesAccount = t.accountId === filterAccount || t.destinationAccountId === filterAccount;
+                } else {
+                    matchesAccount = t.accountId === filterAccount;
+                }
+            }
+            
+            let allowed = true;
+            if (user && !user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
+                 allowed = user.permissions.stores.includes(t.store) || 
+                           (t.type === 'Transferência' && !!t.destinationStore && user.permissions.stores.includes(t.destinationStore));
+            }
+
+            if (!matchesStore || !matchesAccount || !allowed) return;
+            if (t.status !== 'Pago') return; // Only paid items affect the running balance
+
+            // Date comparison
+            const tDate = dateType === 'payment' ? (t.paymentDate || t.date) : t.date;
+            
+            if (tDate < startDate) {
+                // Before period -> Affects Previous Balance
+                if (t.type === 'Receita') accumulatedDelta += t.value;
+                else if (t.type === 'Despesa') accumulatedDelta -= t.value;
+                else if (t.type === 'Transferência') {
+                    if (filterAccount) {
+                        if (t.accountId === filterAccount) accumulatedDelta -= t.value; 
+                        if (t.destinationAccountId === filterAccount) accumulatedDelta += t.value; 
+                    } else if (filterStore) {
+                         if (t.store === filterStore && t.destinationStore !== filterStore) accumulatedDelta -= t.value;
+                         if (t.store !== filterStore && t.destinationStore === filterStore) accumulatedDelta += t.value;
+                    }
+                }
+            } else if (tDate <= endDate) {
+                // In period
+                if (t.type === 'Receita') periodRevenues += t.value;
+                else if (t.type === 'Despesa') periodExpenses += t.value;
+            }
+        });
+
+        const prevBalance = initialSum + accumulatedDelta;
+        const finalBalance = prevBalance + periodRevenues - periodExpenses;
+
+        return { prevBalance, revenues: periodRevenues, expenses: periodExpenses, finalBalance };
+    }, [transactions, accounts, startDate, endDate, filterStore, filterAccount, dateType, user]);
 
     const handlePay = async (t: DailyTransaction) => {
         const missingAccount = !t.accountId;
@@ -255,9 +295,8 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                 paymentDate: getTodayLocalISO()
             };
             await saveDailyTransaction(updated);
-            // Optimistic update
             setTransactions(prev => prev.map(item => item.id === t.id ? updated : item));
-            loadData(); // Reload to ensure IDs are correct if it was a converted order
+            loadData(); 
         }
     };
 
@@ -288,7 +327,6 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
 
     const handleExport = () => {
         let xmlContent = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Financeiro"><Table>';
-        
         xmlContent += '<Row>';
         ['Cadastro', 'Data Vencimento', 'Data Pagamento', 'Loja', 'Tipo', 'Descrição', 'Conta', 'Categoria', 'Fornecedor', 'Valor', 'Status'].forEach(h => {
             xmlContent += `<Cell><Data ss:Type="String">${h}</Data></Cell>`;
@@ -312,7 +350,6 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         });
 
         xmlContent += '</Table></Worksheet></Workbook>';
-        
         const blob = new Blob([xmlContent], { type: 'application/vnd.ms-excel' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -322,501 +359,267 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         document.body.removeChild(link);
     };
 
-    const getAccountName = (id: string | null | undefined) => {
-        if (!id) return '-';
-        return accounts.find(a => a.id === id)?.name || 'Conta Removida';
-    };
+    const getAccountName = (id: string | null) => accounts.find(a => a.id === id)?.name || '-';
 
-    const clearFilters = () => {
-        if (availableStores.length !== 1) {
-             setFilterStore(''); 
-        }
-        setFilterAccount(''); 
-        setFilterCategory(''); 
-        setFilterSupplier(''); 
-        setFilterStatus('');
-        setFilterClassification('');
-        setDateRange('hoje');
-        setDateType('due');
-    };
+    if (loading) return <Loader2 className="animate-spin mx-auto mt-10" />;
 
-    // --- LÓGICA UNIFICADA DE SALDO (Calcula Saldo Real Ignorando Filtros Detalhados) ---
-    const getBalanceForAccount = (acc: FinancialAccount, dateLimit: string) => {
-        let balance = acc.initialBalance;
-        
-        transactions.forEach(t => {
-            if (t.status !== 'Pago' || t.date > dateLimit) return;
-
-            // Saldo REAL não deve filtrar por categoria/fornecedor
-            // Mas deve respeitar o filtro de Loja se aplicável para cálculo de contexto
-            // No caso dos Cards, queremos o saldo TOTAL do banco.
-            
-            const isDebit = t.accountId === acc.id;
-            const isCredit = t.destinationAccountId === acc.id && t.type === 'Transferência';
-
-            if (isDebit) {
-                if (t.type === 'Despesa' || t.type === 'Transferência') balance -= t.value;
-                if (t.type === 'Receita') balance += t.value;
-            }
-            
-            if (isCredit) {
-                balance += t.value;
-            }
-        });
-        
-        return balance;
-    };
-
-    // --- SALDOS EM TEMPO REAL (Cartões) ---
-    const accountsByStore = useMemo(() => {
-        const groups: Record<string, { accounts: FinancialAccount[], totalBalance: number }> = {};
-        
-        accounts.forEach(acc => {
-            if (filterStore && acc.store !== filterStore) return; 
-            // Ignore filterAccount for the card list grouping unless specifically requested, 
-            // but typically we want to see all accounts for the selected store.
-            if (filterAccount && acc.id !== filterAccount) return; 
-            
-            if (!groups[acc.store]) {
-                groups[acc.store] = { accounts: [], totalBalance: 0 };
-            }
-            
-            // Use endDate from filters as cut-off
-            const currentBal = getBalanceForAccount(acc, endDate);
-            
-            groups[acc.store].accounts.push(acc);
-            groups[acc.store].totalBalance += currentBal;
-        });
-
-        Object.values(groups).forEach(group => {
-            group.accounts.sort((a, b) => a.name.localeCompare(b.name));
-        });
-
-        // Sort Stores Alphabetically
-        return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
-    }, [accounts, transactions, filterStore, filterAccount, endDate]); 
-    // Dependencias reduzidas: filterSupplier/Category removidos para não afetar o saldo real visualizado
-
-    if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" size={40}/></div>;
-
-    const filteredList = filteredTransactions;
-    
-    // --- RESUMO DA SELEÇÃO (Aqui sim filtramos tudo) ---
-    const calculateSummary = () => {
-        let totalReceitas = 0;
-        let totalDespesas = 0;
-
-        filteredList.forEach(t => {
-             if (t.type === 'Receita') totalReceitas += t.value;
-             else if (t.type === 'Despesa') totalDespesas += t.value;
-             else if (t.type === 'Transferência') {
-                 const isIncoming = (!filterStore && !filterAccount) || 
-                               (filterStore && t.destinationStore === filterStore) ||
-                               (filterAccount && t.destinationAccountId === filterAccount);
-                 const isOutgoing = (!filterStore && !filterAccount) || 
-                               (filterStore && t.store === filterStore) ||
-                               (filterAccount && t.accountId === filterAccount);
-                 
-                 if (isIncoming) totalReceitas += t.value;
-                 if (isOutgoing) totalDespesas += t.value;
-             }
-        });
-
-        // Previous Balance Calculation
-        let initialBalanceSum = 0;
-        const isAccountView = !filterCategory && !filterSupplier && !filterClassification;
-        
-        if (isAccountView) {
-            accounts.forEach(a => {
-                if (filterStore && a.store !== filterStore) return;
-                if (filterAccount && a.id !== filterAccount) return;
-                initialBalanceSum += a.initialBalance;
-            });
-        }
-
-        let previousVariation = 0;
-
-        transactions.forEach(t => {
-            // Date Check
-            let targetDate = t.date; 
-            if (dateType === 'payment') targetDate = t.paymentDate || '';
-            else if (dateType === 'created') targetDate = t.createdAt ? t.createdAt.split('T')[0] : '';
-            
-            if (!targetDate || targetDate >= startDate) return; 
-
-            // Apply Filters
-            const matchesStore = !filterStore || t.store === filterStore || (t.type === 'Transferência' && t.destinationStore === filterStore);
-            const matchesCategory = !filterCategory || t.category === filterCategory;
-            const matchesSupplier = !filterSupplier || t.supplier === filterSupplier;
-            const matchesStatus = !filterStatus || t.status === filterStatus;
-            const matchesClassification = !filterClassification || t.classification === filterClassification;
-            
-            let matchesAccount = true;
-            if (filterAccount) {
-                if (t.type === 'Transferência') {
-                    matchesAccount = t.accountId === filterAccount || t.destinationAccountId === filterAccount;
-                } else {
-                    matchesAccount = t.accountId === filterAccount;
-                }
-            }
-
-            let allowed = true;
-            if (user && !user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
-                 allowed = user.permissions.stores.includes(t.store) || 
-                           (t.type === 'Transferência' && !!t.destinationStore && user.permissions.stores.includes(t.destinationStore));
-            }
-
-            if (matchesStore && matchesCategory && matchesSupplier && matchesAccount && matchesStatus && matchesClassification && allowed) {
-                if (t.type === 'Receita') previousVariation += t.value;
-                else if (t.type === 'Despesa') previousVariation -= t.value;
-                else if (t.type === 'Transferência') {
-                     const isIncoming = (!filterStore && !filterAccount) || 
-                                   (filterStore && t.destinationStore === filterStore) ||
-                                   (filterAccount && t.destinationAccountId === filterAccount);
-                     const isOutgoing = (!filterStore && !filterAccount) || 
-                                   (filterStore && t.store === filterStore) ||
-                                   (filterAccount && t.accountId === filterAccount);
-                     
-                     if (isIncoming) previousVariation += t.value;
-                     if (isOutgoing) previousVariation -= t.value;
-                }
-            }
-        });
-
-        const previousBalance = initialBalanceSum + previousVariation;
-        const finalBalance = previousBalance + totalReceitas - totalDespesas;
-
-        return { totalReceitas, totalDespesas, previousBalance, finalBalance };
-    };
-
-    const { totalReceitas, totalDespesas, previousBalance, finalBalance } = calculateSummary();
-    const isSingleStore = availableStores.length === 1;
+    const filterInputClass = "w-full border border-slate-200 p-2 rounded text-sm focus:ring-2 focus:ring-heroRed/10 focus:border-heroRed outline-none bg-slate-50";
+    const labelClass = "block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wide";
 
     return (
-        <div className="space-y-6">
-            {canViewBalances ? (
-                <div className="space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="bg-heroRed p-1.5 rounded-md text-white">
-                            <Wallet size={18} />
-                        </div>
-                        <h3 className="font-bold text-lg text-slate-700">Saldos em Tempo Real (Até {formatDateBr(endDate)})</h3>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {accountsByStore.map(([storeName, data]) => (
-                            <div key={storeName} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow duration-300">
-                                <div className="bg-slate-50 px-5 py-4 border-b border-slate-100 flex justify-between items-center">
-                                    <div className="flex items-center gap-2">
-                                        <Building2 size={18} className="text-slate-400" />
-                                        <span className="font-bold text-slate-700 truncate max-w-[150px]" title={storeName}>{storeName}</span>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Loja</span>
-                                        <span className={`text-lg font-black ${data.totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                            {formatCurrency(data.totalBalance)}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="divide-y divide-slate-50">
-                                    {data.accounts.map(acc => {
-                                        const bal = getBalanceForAccount(acc, endDate);
-                                        return (
-                                            <div key={acc.id} className="flex justify-between items-center px-5 py-3 hover:bg-slate-50 transition-colors group">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-2 h-2 rounded-full ${bal >= 0 ? 'bg-emerald-400' : 'bg-red-400'}`}></div>
-                                                    <span className="text-sm font-medium text-slate-600 group-hover:text-slate-900 transition-colors">{acc.name}</span>
-                                                </div>
-                                                <span className={`text-sm font-bold font-mono ${bal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                                    {formatCurrency(bal)}
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-                                    {data.accounts.length === 0 && (
-                                        <div className="p-4 text-center text-xs text-slate-400 italic">Nenhuma conta encontrada.</div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                        {accountsByStore.length === 0 && (
-                            <div className="col-span-full text-center p-8 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-slate-400">
-                                <Wallet size={48} className="mx-auto mb-2 opacity-20"/>
-                                <p>Nenhuma conta encontrada para os filtros selecionados.</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            ) : (
-                <div className="bg-gray-100 border border-gray-200 rounded p-4 flex items-center justify-center gap-2 text-gray-500">
-                    <EyeOff size={20} />
-                    <span className="text-sm font-bold">Visualização de saldos restrita ao Gerente/Administrador.</span>
-                </div>
-            )}
-
-            {/* Filters and List */}
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
-                {/* ... Filter Controls (Same as before) ... */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b pb-4">
-                    <div className="flex gap-2">
-                        <button onClick={() => setDateRange('hoje')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Hoje</button>
-                        <button onClick={() => setDateRange('semana')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Esta Semana</button>
-                        <button onClick={() => setDateRange('mes')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Este Mês</button>
-                        <button onClick={() => setDateRange('ano')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Este Ano</button>
-                    </div>
+        <div className="space-y-4 animate-fadeIn pb-20">
+            {/* Filters Panel */}
+            <div className="bg-white p-5 rounded-xl shadow-card border border-slate-200 no-print">
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
                     <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-gray-500 uppercase">Referência de Data:</span>
-                        <select 
-                            value={dateType} 
-                            onChange={e => setDateType(e.target.value as any)} 
-                            className={`border p-2 rounded text-sm font-bold uppercase cursor-pointer ${dateType === 'payment' ? 'bg-blue-50 border-blue-300 text-blue-800' : dateType === 'created' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-yellow-50 border-yellow-300 text-yellow-800'}`}
-                        >
-                            <option value="due">Data de Vencimento</option>
-                            <option value="payment">Data de Pagamento</option>
-                            <option value="created">Data de Cadastro</option>
-                        </select>
+                        <Filter size={18} className="text-slate-400"/>
+                        <h3 className="font-bold text-slate-700">Filtros de Pesquisa</h3>
+                    </div>
+                    <div className="flex gap-4 text-xs items-center">
+                        <span className="font-bold text-slate-500 uppercase">Referência de Data:</span>
+                        <div className="flex bg-slate-100 rounded-lg p-1">
+                            <button onClick={() => setDateType('due')} className={`px-3 py-1 rounded-md font-bold transition-all ${dateType === 'due' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>Data de Vencimento</button>
+                            <button onClick={() => setDateType('payment')} className={`px-3 py-1 rounded-md font-bold transition-all ${dateType === 'payment' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>Data do Pagamento</button>
+                            <button onClick={() => setDateType('created')} className={`px-3 py-1 rounded-md font-bold transition-all ${dateType === 'created' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>Data de Cadastro</button>
+                        </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Início</label>
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border p-2 rounded text-sm"/>
+                        <label className={labelClass}>Data Início</label>
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={filterInputClass}/>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Fim</label>
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border p-2 rounded text-sm"/>
+                        <label className={labelClass}>Data Fim</label>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={filterInputClass}/>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Status</label>
-                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full border p-2 rounded text-sm font-bold bg-gray-50">
+                        <label className={labelClass}>Status</label>
+                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={filterInputClass}>
                             <option value="">Todos</option>
-                            <option value="Pago">Apenas Pagos</option>
-                            <option value="Pendente">Apenas Pendentes</option>
+                            <option value="Pendente">Pendente</option>
+                            <option value="Pago">Pago</option>
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja (Origem/Destino)</label>
+                        <label className={labelClass}>Loja (Origem/Destino)</label>
                         <select 
                             value={filterStore} 
                             onChange={e => setFilterStore(e.target.value)} 
-                            className={`w-full border p-2 rounded text-sm ${isSingleStore ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                            disabled={isSingleStore}
+                            className={`${filterInputClass} ${availableStores.length === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                            disabled={availableStores.length === 1}
                         >
-                            {!isSingleStore && <option value="">Todas</option>}
+                            {availableStores.length !== 1 && <option value="">Todas</option>}
                             {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Conta</label>
-                        <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)} className="w-full border p-2 rounded text-sm">
+                        <label className={labelClass}>Conta</label>
+                        <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)} className={filterInputClass}>
                             <option value="">Todas</option>
                             {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.store})</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
-                        <select value={filterSupplier} onChange={e => setFilterSupplier(e.target.value)} className="w-full border p-2 rounded text-sm">
+                        <label className={labelClass}>Fornecedor</label>
+                        <select value={filterSupplier} onChange={e => setFilterSupplier(e.target.value)} className={filterInputClass}>
                             <option value="">Todos</option>
                             {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Categoria</label>
-                        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full border p-2 rounded text-sm">
+                        <label className={labelClass}>Categoria</label>
+                        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className={filterInputClass}>
                             <option value="">Todos</option>
                             {appData.categories.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Classificação</label>
-                        <select value={filterClassification} onChange={e => setFilterClassification(e.target.value)} className="w-full border p-2 rounded text-sm">
+                        <label className={labelClass}>Classificação</label>
+                        <select value={filterClassification} onChange={e => setFilterClassification(e.target.value)} className={filterInputClass}>
                             <option value="">Todos</option>
                             {appData.types.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                     </div>
-                    <div className="flex items-end">
-                        <button onClick={clearFilters} className="text-xs text-gray-500 hover:text-red-500 font-bold flex items-center gap-1 mb-2">
-                            <Filter size={12}/> Limpar Filtros
-                        </button>
-                    </div>
                 </div>
-
-                <div className="flex justify-between items-center border-t pt-4 mt-4">
-                    <div>
-                        <button 
-                            onClick={() => setShowNewModal(true)}
-                            className="bg-heroBlack text-white px-6 py-2 rounded font-bold hover:bg-slate-800 flex items-center gap-2 shadow-lg transition-all active:scale-95"
-                        >
-                            <Plus size={20}/> Novo Lançamento
-                        </button>
-                    </div>
-
-                    <div className="flex gap-2">
-                        <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">
-                            <Download size={18}/> Exportar Excel
-                        </button>
-                        <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow-sm">
-                            <Printer size={18}/> Imprimir
-                        </button>
-                    </div>
+                
+                <div className="flex justify-end mt-2 pt-2 border-t border-slate-100">
+                    <button 
+                        onClick={() => {
+                            setFilterStore(availableStores.length === 1 ? availableStores[0] : '');
+                            setFilterAccount('');
+                            setFilterCategory('');
+                            setFilterSupplier('');
+                            setFilterStatus('');
+                            setFilterClassification('');
+                            setStartDate(getTodayLocalISO());
+                            setEndDate(getTodayLocalISO());
+                        }}
+                        className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1"
+                    >
+                        <Filter size={12}/> Limpar Filtros
+                    </button>
                 </div>
             </div>
 
-            {/* Totals Banner */}
-            <div className="bg-blue-50 p-4 border-b border-blue-100 flex flex-wrap gap-6 justify-between items-center text-sm rounded-lg shadow-sm border">
-                <div className="flex items-center gap-2">
-                    <Calculator size={20} className="text-blue-600"/>
-                    <span className="font-bold text-gray-600">RESUMO DA SELEÇÃO:</span>
+            {/* Actions Bar */}
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4 no-print">
+                <button 
+                    onClick={() => setShowNewModal(true)}
+                    className="bg-heroBlack text-white px-6 py-3 rounded-lg font-bold hover:bg-slate-800 shadow-md flex items-center gap-2 transition-all active:scale-95"
+                >
+                    <Plus size={20}/> Novo Lançamento
+                </button>
+
+                <div className="flex gap-2">
+                    <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-lg hover:bg-green-700 font-bold shadow-sm text-sm">
+                        <FileSpreadsheet size={18}/> Exportar Excel
+                    </button>
+                    <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 font-bold shadow-sm text-sm">
+                        <Printer size={18}/> Imprimir
+                    </button>
                 </div>
-                <div className="flex gap-6 md:gap-8 flex-wrap justify-end">
-                    <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase">Saldo Anterior</span>
-                        <span className="font-bold text-gray-600 font-mono text-lg">{formatCurrency(previousBalance)}</span>
+            </div>
+
+            {/* Summary Panel (Restored above table) */}
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm no-print">
+                <div className="flex items-center gap-3">
+                    <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
+                        <Calculator size={20} />
                     </div>
-                    <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-bold text-green-600 uppercase">Receitas</span>
-                        <span className="font-bold text-green-700 font-mono">{formatCurrency(totalReceitas)}</span>
+                    <span className="font-bold text-blue-900 text-sm uppercase tracking-wide">Resumo da Seleção:</span>
+                </div>
+                <div className="flex flex-wrap justify-center md:justify-end gap-6 text-sm w-full md:w-auto">
+                    <div className="text-center md:text-right">
+                        <span className="block text-[10px] font-bold text-slate-400 uppercase">Saldo Anterior</span>
+                        <span className="font-mono font-bold text-slate-600">{formatCurrency(summary.prevBalance)}</span>
                     </div>
-                    <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-bold text-red-600 uppercase">Despesas</span>
-                        <span className="font-bold text-red-700 font-mono">{formatCurrency(totalDespesas)}</span>
+                    <div className="text-center md:text-right">
+                        <span className="block text-[10px] font-bold text-green-600 uppercase">Receitas</span>
+                        <span className="font-mono font-bold text-green-600">+ {formatCurrency(summary.revenues)}</span>
                     </div>
-                    <div className="flex flex-col items-end border-l pl-6 border-blue-200 bg-white/50 p-1 rounded">
-                        <span className="text-xs font-black text-blue-800 uppercase flex items-center gap-1"><Landmark size={12}/> Saldo Final</span>
-                        <span className={`font-black text-xl font-mono ${finalBalance >= 0 ? 'text-blue-800' : 'text-red-600'}`}>{formatCurrency(finalBalance)}</span>
+                    <div className="text-center md:text-right">
+                        <span className="block text-[10px] font-bold text-red-600 uppercase">Despesas</span>
+                        <span className="font-mono font-bold text-red-600">- {formatCurrency(summary.expenses)}</span>
+                    </div>
+                    <div className="pl-4 md:border-l border-blue-200 text-center md:text-right bg-white md:bg-transparent p-2 md:p-0 rounded shadow-sm md:shadow-none">
+                        <span className="block text-[10px] font-black text-blue-700 uppercase">Saldo Final</span>
+                        <span className="font-mono font-black text-lg text-blue-800">{formatCurrency(summary.finalBalance)}</span>
                     </div>
                 </div>
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-100">
-                        <tr>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Cadastro</th>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Vencimento</th>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Loja</th>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Descrição / Detalhes</th>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Conta</th>
-                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Categoria</th>
-                            <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">Valor</th>
-                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase">Status</th>
-                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase no-print">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredTransactions.map((t) => {
-                            const isIncoming = t.type === 'Transferência' && filterStore && t.destinationStore === filterStore;
-                            const valueColor = t.type === 'Receita' || isIncoming ? 'text-green-600' : t.type === 'Transferência' ? 'text-purple-600' : 'text-red-600';
-                            
-                            return (
-                                <tr key={t.id} className={`hover:bg-gray-50 break-inside-avoid ${t.origin === 'pedido' ? 'bg-blue-50/30' : ''}`}>
-                                    <td className="px-4 py-3 text-xs text-gray-500">
-                                        <div className="flex items-center gap-1">
-                                            <Calendar size={12} className="text-gray-300"/>
-                                            {t.createdAt ? formatDateBr(t.createdAt.split('T')[0]) : '-'}
-                                        </div>
+            <div className="bg-white rounded-xl shadow-card border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-100">
+                        <thead className="bg-slate-50">
+                            <tr>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Cadastro</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Vencimento</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Loja</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Descrição / Detalhes</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Conta</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Categoria</th>
+                                <th className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Valor</th>
+                                <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider no-print">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-slate-50">
+                            {filteredTransactions.map((t) => (
+                                <tr key={t.id} className="hover:bg-slate-50/80 transition-colors group">
+                                    <td className="px-6 py-4 text-xs text-slate-400 font-mono flex items-center gap-1">
+                                        <Calendar size={12}/>
+                                        {t.createdAt ? formatDateBr(t.createdAt.split('T')[0]).slice(0, 5) : '-'}
                                     </td>
-                                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                                    <td className="px-6 py-4 text-sm font-medium text-slate-700">
                                         {formatDateBr(t.date)}
-                                        {t.paymentDate && dateType !== 'due' && (
-                                            <div className="text-[10px] text-green-600 font-bold">Pg: {formatDateBr(t.paymentDate)}</div>
-                                        )}
                                     </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">
-                                        {isIncoming ? (
-                                            <span className="font-bold text-green-700">{t.destinationStore}</span>
+                                    <td className="px-6 py-4 text-sm text-slate-600">
+                                        {t.type === 'Transferência' ? (
+                                            <div className="flex flex-col text-xs">
+                                                <span className="text-red-500 font-bold flex items-center gap-1"><ArrowRight size={10}/> {t.store}</span>
+                                                <span className="text-green-600 font-bold flex items-center gap-1"><ArrowLeft size={10}/> {t.destinationStore}</span>
+                                            </div>
                                         ) : (
                                             t.store
                                         )}
                                     </td>
-                                    <td className="px-4 py-3 text-sm">
-                                        {t.type === 'Transferência' ? (
-                                            <div className="flex items-center gap-1 font-bold">
-                                                {isIncoming ? (
-                                                    <div className="flex items-center gap-1 text-green-700">
-                                                        <ArrowLeft size={12}/> Recebido de {t.store}
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-1 text-purple-700">
-                                                        <ArrowRight size={12}/> Enviado para {t.destinationStore}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="font-bold text-gray-700">{t.description || t.supplier}</div>
-                                                {t.product && <div className="text-xs text-gray-500">{t.product}</div>}
-                                            </>
-                                        )}
-                                        {t.origin === 'pedido' && <span className="inline-block mt-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-bold border border-blue-200">PEDIDO</span>}
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-bold text-slate-800">{t.description || t.product || 'Sem descrição'}</span>
+                                            <span className="text-xs text-slate-400">{t.supplier}</span>
+                                        </div>
                                     </td>
-                                    <td className="px-4 py-3 text-sm">
+                                    <td className="px-6 py-4 text-sm text-slate-500">
                                         {t.type === 'Transferência' ? (
-                                            <div className="flex flex-col text-xs">
-                                                <span className="text-red-500">De: {getAccountName(t.accountId)}</span>
-                                                <span className="text-green-500">Para: {getAccountName(t.destinationAccountId)}</span>
+                                            <div className="flex items-center gap-1 text-purple-600 font-bold text-xs bg-purple-50 px-2 py-1 rounded-full w-fit">
+                                                <ArrowLeftRight size={12}/> Transferência
                                             </div>
                                         ) : (
-                                            <span className={!t.accountId ? 'text-red-400 italic font-bold text-xs' : 'text-gray-600'}>
-                                                {getAccountName(t.accountId) || 'Definir Conta'}
+                                            getAccountName(t.accountId)
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-sm text-slate-600">{t.category || '-'}</span>
+                                            {t.classification && <span className="text-[10px] border border-slate-200 rounded px-1.5 py-0.5 w-fit text-slate-400">{t.classification}</span>}
+                                        </div>
+                                    </td>
+                                    <td className={`px-6 py-4 text-right font-mono font-bold text-sm ${t.type === 'Receita' ? 'text-green-600' : t.type === 'Despesa' ? 'text-red-600' : 'text-purple-600'}`}>
+                                        {t.type === 'Receita' ? '+' : t.type === 'Despesa' ? '-' : ''}
+                                        {formatCurrency(t.value)}
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        {t.status === 'Pago' ? (
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-700 border border-green-100">
+                                                <CheckCircle size={12}/> PAGO
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                                                PENDENTE
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">
-                                        {t.category || '-'}
-                                        {t.classification && <div className="text-[10px] text-gray-400 border px-1 rounded w-fit mt-1">{t.classification}</div>}
-                                    </td>
-                                    <td className={`px-4 py-3 text-right font-bold font-mono text-sm ${valueColor}`}>
-                                        {t.type === 'Receita' || isIncoming ? '+' : t.type === 'Transferência' ? '-' : '-'}{formatCurrency(t.value)}
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        {t.status === 'Pago' ? (
-                                            <span className="text-green-600 font-bold text-xs flex items-center justify-center gap-1"><CheckCircle size={14}/> PAGO</span>
-                                        ) : (
-                                            <span className="text-yellow-600 font-bold text-xs bg-yellow-100 px-2 py-1 rounded border border-yellow-200">PENDENTE</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3 text-center whitespace-nowrap no-print">
-                                        <div className="flex items-center justify-center gap-2">
+                                    <td className="px-6 py-4 text-center no-print">
+                                        <div className="flex items-center justify-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
                                             {t.status === 'Pendente' && (
-                                                <button onClick={() => handlePay(t)} className="text-green-600 hover:bg-green-50 p-1 rounded" title="Confirmar Pagamento">
+                                                <button onClick={() => handlePay(t)} className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors" title="Pagar">
                                                     <CheckCircle size={18}/>
                                                 </button>
                                             )}
-                                            <button onClick={() => setEditingItem(t)} className="text-blue-600 hover:bg-blue-50 p-1 rounded" title="Editar">
-                                                <Edit size={18} />
+                                            <button onClick={() => setEditingItem(t)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Editar">
+                                                <Edit size={18}/>
                                             </button>
-                                            <button onClick={() => handleDelete(t.id)} className="text-red-500 hover:bg-red-50 p-1 rounded" title="Excluir">
-                                                <Trash2 size={18} />
+                                            <button onClick={() => handleDelete(t.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors" title="Excluir">
+                                                <Trash2 size={18}/>
                                             </button>
                                         </div>
                                     </td>
                                 </tr>
-                            );
-                        })}
-                        {filteredTransactions.length === 0 && (
-                            <tr>
-                                <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
-                                    Nenhum registro encontrado para os filtros selecionados.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                            ))}
+                            {filteredTransactions.length === 0 && (
+                                <tr>
+                                    <td colSpan={9} className="py-12 text-center text-slate-400 italic">Nenhum lançamento encontrado.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            {showNewModal && (
-                <NovoLancamentoModal 
-                    user={user}
-                    onClose={() => setShowNewModal(false)} 
-                    onSave={handleNewTransactionSave} 
+            {editingItem && (
+                <EditLancamentoModal 
+                    transaction={editingItem} 
+                    onClose={() => setEditingItem(null)} 
+                    onSave={handleModalSave} 
                 />
             )}
 
             {confirmingItem && (
-                <ConfirmPaymentModal
+                <ConfirmPaymentModal 
                     transaction={confirmingItem}
                     accounts={accounts}
                     onClose={() => setConfirmingItem(null)}
@@ -824,11 +627,11 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                 />
             )}
 
-            {editingItem && (
-                <EditLancamentoModal 
-                    transaction={editingItem} 
-                    onClose={() => setEditingItem(null)} 
-                    onSave={handleModalSave} 
+            {showNewModal && (
+                <NovoLancamentoModal 
+                    user={user}
+                    onClose={() => setShowNewModal(false)}
+                    onSave={handleNewTransactionSave}
                 />
             )}
         </div>
