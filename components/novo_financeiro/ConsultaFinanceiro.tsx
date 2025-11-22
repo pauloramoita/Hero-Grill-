@@ -255,7 +255,9 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                 paymentDate: getTodayLocalISO()
             };
             await saveDailyTransaction(updated);
+            // Optimistic update
             setTransactions(prev => prev.map(item => item.id === t.id ? updated : item));
+            loadData(); // Reload to ensure IDs are correct if it was a converted order
         }
     };
 
@@ -263,6 +265,7 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         await saveDailyTransaction(updated);
         setTransactions(prev => prev.map(item => item.id === updated.id ? updated : item));
         setConfirmingItem(null);
+        loadData();
     };
 
     const handleDelete = async (id: string) => {
@@ -337,15 +340,13 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         setDateType('due');
     };
 
-    // --- LÓGICA UNIFICADA DE SALDO ---
-    // Calcula saldo de uma conta específica na data limite, aplicando os mesmos filtros da lista
+    // --- LÓGICA UNIFICADA DE SALDO (Same as Consulta) ---
     const getBalanceForAccount = (acc: FinancialAccount, dateLimit: string) => {
         let balance = acc.initialBalance;
         
         transactions.forEach(t => {
             if (t.status !== 'Pago' || t.date > dateLimit) return;
 
-            // Aplica os mesmos filtros globais do resumo
             if (filterSupplier && t.supplier !== filterSupplier) return;
             if (filterCategory && t.category !== filterCategory) return;
             if (filterClassification && t.classification !== filterClassification) return;
@@ -366,7 +367,27 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         return balance;
     };
 
-    // --- CARTÕES DE SALDO EM TEMPO REAL ---
+    // Wrapper for AutoPixModal (Gets balance up to TODAY, ignoring list filters)
+    const getCurrentBalanceForModal = (accountId: string) => {
+        const acc = accounts.find(a => a.id === accountId);
+        if (!acc) return 0;
+        // Just calculate based on all transactions up to today, no extra filters
+        let balance = acc.initialBalance;
+        const todayLimit = getTodayLocalISO();
+        transactions.forEach(t => {
+            if (t.status !== 'Pago' || t.date > todayLimit) return;
+            const isDebit = t.accountId === acc.id;
+            const isCredit = t.destinationAccountId === acc.id && t.type === 'Transferência';
+            if (isDebit) {
+                if (t.type === 'Despesa' || t.type === 'Transferência') balance -= t.value;
+                if (t.type === 'Receita') balance += t.value;
+            }
+            if (isCredit) balance += t.value;
+        });
+        return balance;
+    };
+
+    // --- SALDOS EM TEMPO REAL (Cartões) ---
     const accountsByStore = useMemo(() => {
         const groups: Record<string, { accounts: FinancialAccount[], totalBalance: number }> = {};
         
@@ -378,7 +399,8 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                 groups[acc.store] = { accounts: [], totalBalance: 0 };
             }
             
-            const currentBal = getBalanceForAccount(acc, endDate); // Usa endDate como corte
+            // Use endDate from filters as cut-off
+            const currentBal = getBalanceForAccount(acc, endDate);
             
             groups[acc.store].accounts.push(acc);
             groups[acc.store].totalBalance += currentBal;
@@ -401,16 +423,13 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
 
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" size={40}/></div>;
 
-    const filteredList = filteredTransactions; // Já filtrado pelo useEffect
-    const isSingleStore = availableStores.length === 1;
-    const isIncomingTransfer = (t: DailyTransaction) => t.type === 'Transferência' && filterStore && t.destinationStore === filterStore;
-
-    // --- RESUMO ---
-    // 1. Saldo Anterior (Snapshots de todas as contas relevantes até start-1)
+    const filteredList = filteredTransactions;
+    
+    // --- RESUMO DA SELEÇÃO ---
     const accountsInContext = accounts.filter(a => {
         if (filterAccount && a.id !== filterAccount) return false;
         if (filterStore && a.store !== filterStore) return false;
-        if (availableStores.length > 0 && !user?.isMaster && !availableStores.includes(a.store)) return false;
+        if (availableStores.length > 0 && !user.isMaster && !availableStores.includes(a.store)) return false;
         return true;
     });
 
@@ -424,12 +443,10 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         return acc + getBalanceForAccount(a, getYesterday(startDate));
     }, 0);
 
-    // 2. Saldo Final (Snapshots de todas as contas relevantes até end)
     const finalBalance = accountsInContext.reduce((acc, a) => {
         return acc + getBalanceForAccount(a, endDate);
     }, 0);
 
-    // 3. Receitas/Despesas (Informativo da lista)
     const totalReceitas = filteredList.reduce((acc, t) => {
         if (t.type === 'Receita') return acc + t.value;
         if (t.type === 'Transferência') {
@@ -451,6 +468,8 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         }
         return acc;
     }, 0);
+
+    const isSingleStore = availableStores.length === 1;
 
     return (
         <div className="space-y-6">
@@ -667,7 +686,7 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {filteredTransactions.map((t) => {
-                            const isIncoming = isIncomingTransfer(t);
+                            const isIncoming = t.type === 'Transferência' && filterStore && t.destinationStore === filterStore;
                             const valueColor = t.type === 'Receita' || isIncoming ? 'text-green-600' : t.type === 'Transferência' ? 'text-purple-600' : 'text-red-600';
                             
                             return (

@@ -749,8 +749,12 @@ export const saveDailyTransaction = async (t: DailyTransaction) => {
         origin: rest.origin,
         created_at: rest.createdAt
     };
-    if (id) await supabase.from('daily_transactions').update(snakeCasePayload).eq('id', id);
-    else await supabase.from('daily_transactions').insert([snakeCasePayload]);
+    if (id) {
+        // Use upsert to update existing record or insert if not exists (but PK must match)
+        await supabase.from('daily_transactions').upsert({ id, ...snakeCasePayload });
+    } else {
+        await supabase.from('daily_transactions').insert([snakeCasePayload]);
+    }
 };
 export const deleteDailyTransaction = async (id: string) => {
     await supabase.from('daily_transactions').delete().eq('id', id);
