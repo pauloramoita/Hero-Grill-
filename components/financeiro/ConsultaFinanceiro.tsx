@@ -64,10 +64,15 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
 
     const loadData = async () => {
         setLoading(true);
-        const [d, loaded] = await Promise.all([getAppData(), getFinancialRecords()]);
-        setAppData(d);
-        setRawRecords(loaded);
-        setLoading(false);
+        try {
+            const [d, loaded] = await Promise.all([getAppData(), getFinancialRecords()]);
+            setAppData(d);
+            setRawRecords(loaded);
+        } catch (error) {
+            console.error("Error loading data", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Determine available stores based on user permissions

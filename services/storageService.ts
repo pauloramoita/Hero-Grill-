@@ -446,15 +446,15 @@ export const getAccountBalances = async (): Promise<AccountBalance[]> => {
         return [];
     }
     return (data || []).map((b: any) => {
-        // Mapeamento robusto cobrindo variações de caixa (camelCase, lowercase, PascalCase)
-        const caixaEconomica = safeNumber(b.caixaEconomica ?? b.caixaeconomica ?? b.CaixaEconomica);
+        // Mapeamento robusto cobrindo variações de caixa (camelCase, lowercase, PascalCase e snake_case)
+        const caixaEconomica = safeNumber(b.caixaEconomica ?? b.caixaeconomica ?? b.CaixaEconomica ?? b.caixa_economica);
         const cofre = safeNumber(b.cofre ?? b.Cofre);
         const loteria = safeNumber(b.loteria ?? b.Loteria);
-        const pagbankH = safeNumber(b.pagbankH ?? b.pagbankh ?? b.PagbankH ?? b.PagBankH);
-        const pagbankD = safeNumber(b.pagbankD ?? b.pagbankd ?? b.PagbankD ?? b.PagBankD);
+        const pagbankH = safeNumber(b.pagbankH ?? b.pagbankh ?? b.PagbankH ?? b.PagBankH ?? b.pagbank_h);
+        const pagbankD = safeNumber(b.pagbankD ?? b.pagbankd ?? b.PagbankD ?? b.PagBankD ?? b.pagbank_d);
         const investimentos = safeNumber(b.investimentos ?? b.Investimentos);
         
-        let totalBalance = safeNumber(b.totalBalance ?? b.totalbalance ?? b.TotalBalance);
+        let totalBalance = safeNumber(b.totalBalance ?? b.totalbalance ?? b.TotalBalance ?? b.total_balance);
         
         // Auto-repair: Se totalBalance vier 0 mas houver valores parciais, recalcula.
         if (totalBalance === 0 && (caixaEconomica || cofre || loteria || pagbankH || pagbankD || investimentos)) {
@@ -478,11 +478,46 @@ export const getAccountBalances = async (): Promise<AccountBalance[]> => {
 };
 export const saveAccountBalance = async (b: AccountBalance) => {
     const { id, ...rest } = b;
-    await supabase.from('account_balances').insert([rest]);
+    
+    const payloadSnake = {
+        store: rest.store,
+        year: rest.year,
+        month: rest.month,
+        caixa_economica: rest.caixaEconomica,
+        cofre: rest.cofre,
+        loteria: rest.loteria,
+        pagbank_h: rest.pagbankH,
+        pagbank_d: rest.pagbankD,
+        investimentos: rest.investimentos,
+        total_balance: rest.totalBalance
+    };
+
+    const { error } = await supabase.from('account_balances').insert([payloadSnake]);
+    if (error) {
+        // Fallback Camel
+        await supabase.from('account_balances').insert([rest]);
+    }
 };
 export const updateAccountBalance = async (b: AccountBalance) => {
     const { id, ...rest } = b;
-    await supabase.from('account_balances').update(rest).eq('id', id);
+    
+    const payloadSnake = {
+        store: rest.store,
+        year: rest.year,
+        month: rest.month,
+        caixa_economica: rest.caixaEconomica,
+        cofre: rest.cofre,
+        loteria: rest.loteria,
+        pagbank_h: rest.pagbankH,
+        pagbank_d: rest.pagbankD,
+        investimentos: rest.investimentos,
+        total_balance: rest.totalBalance
+    };
+
+    let { error } = await supabase.from('account_balances').update(payloadSnake).eq('id', id);
+    if (error) {
+        await supabase.from('account_balances').update(rest).eq('id', id);
+    }
 };
 export const deleteAccountBalance = async (id: string) => {
     await supabase.from('account_balances').delete().eq('id', id);
@@ -507,7 +542,7 @@ export const getPreviousMonthBalance = async (store: string, year: number, month
 
     return { 
         ...data, 
-        totalBalance: safeNumber(data.totalBalance ?? data.totalbalance ?? data.TotalBalance) 
+        totalBalance: safeNumber(data.totalBalance ?? data.totalbalance ?? data.TotalBalance ?? data.total_balance) 
     };
 };
 export const exportBalancesToXML = (data: AccountBalance[], filename: string) => { 
@@ -527,20 +562,21 @@ export const exportBalancesToXML = (data: AccountBalance[], filename: string) =>
 export const getFinancialRecords = async (): Promise<FinancialRecord[]> => {
     const { data } = await supabase.from('financial_records').select('*');
     return (data || []).map((r: any) => {
-        const creditCaixa = safeNumber(r.creditCaixa ?? r.creditcaixa ?? r.CreditCaixa);
-        const creditDelta = safeNumber(r.creditDelta ?? r.creditdelta ?? r.CreditDelta);
-        const creditPagBankH = safeNumber(r.creditPagBankH ?? r.creditpagbankh ?? r.CreditPagBankH);
-        const creditPagBankD = safeNumber(r.creditPagBankD ?? r.creditpagbankd ?? r.CreditPagBankD);
-        const creditIfood = safeNumber(r.creditIfood ?? r.creditifood ?? r.CreditIfood);
+        // Extensive mapping covering snake_case, camelCase, lowercase, etc.
+        const creditCaixa = safeNumber(r.creditCaixa ?? r.creditcaixa ?? r.CreditCaixa ?? r.credit_caixa ?? r.Credit_Caixa);
+        const creditDelta = safeNumber(r.creditDelta ?? r.creditdelta ?? r.CreditDelta ?? r.credit_delta);
+        const creditPagBankH = safeNumber(r.creditPagBankH ?? r.creditpagbankh ?? r.CreditPagBankH ?? r.credit_pagbank_h ?? r.credit_pag_bank_h);
+        const creditPagBankD = safeNumber(r.creditPagBankD ?? r.creditpagbankd ?? r.CreditPagBankD ?? r.credit_pagbank_d ?? r.credit_pag_bank_d);
+        const creditIfood = safeNumber(r.creditIfood ?? r.creditifood ?? r.CreditIfood ?? r.credit_ifood);
         
-        const debitCaixa = safeNumber(r.debitCaixa ?? r.debitcaixa ?? r.DebitCaixa);
-        const debitPagBankH = safeNumber(r.debitPagBankH ?? r.debitpagbankh ?? r.DebitPagBankH);
-        const debitPagBankD = safeNumber(r.debitPagBankD ?? r.debitpagbankd ?? r.DebitPagBankD);
-        const debitLoteria = safeNumber(r.debitLoteria ?? r.debitloteria ?? r.DebitLoteria);
+        const debitCaixa = safeNumber(r.debitCaixa ?? r.debitcaixa ?? r.DebitCaixa ?? r.debit_caixa);
+        const debitPagBankH = safeNumber(r.debitPagBankH ?? r.debitpagbankh ?? r.DebitPagBankH ?? r.debit_pagbank_h ?? r.debit_pag_bank_h);
+        const debitPagBankD = safeNumber(r.debitPagBankD ?? r.debitpagbankd ?? r.DebitPagBankD ?? r.debit_pagbank_d ?? r.debit_pag_bank_d);
+        const debitLoteria = safeNumber(r.debitLoteria ?? r.debitloteria ?? r.DebitLoteria ?? r.debit_loteria);
 
-        let totalRevenues = safeNumber(r.totalRevenues ?? r.totalrevenues ?? r.TotalRevenues);
-        let totalExpenses = safeNumber(r.totalExpenses ?? r.totalexpenses ?? r.TotalExpenses);
-        let netResult = safeNumber(r.netResult ?? r.netresult ?? r.NetResult);
+        let totalRevenues = safeNumber(r.totalRevenues ?? r.totalrevenues ?? r.TotalRevenues ?? r.total_revenues);
+        let totalExpenses = safeNumber(r.totalExpenses ?? r.totalexpenses ?? r.TotalExpenses ?? r.total_expenses);
+        let netResult = safeNumber(r.netResult ?? r.netresult ?? r.NetResult ?? r.net_result);
 
         // Auto-repair: Recalcula totais se vierem zerados mas houver valores parciais
         if (totalRevenues === 0 && (creditCaixa || creditDelta || creditPagBankH || creditPagBankD || creditIfood)) {
@@ -566,11 +602,56 @@ export const getFinancialRecords = async (): Promise<FinancialRecord[]> => {
 };
 export const saveFinancialRecord = async (r: FinancialRecord) => {
     const { id, ...rest } = r;
-    await supabase.from('financial_records').insert([rest]);
+    
+    const payloadSnake = {
+        store: rest.store,
+        year: rest.year,
+        month: rest.month,
+        credit_caixa: rest.creditCaixa,
+        credit_delta: rest.creditDelta,
+        credit_pagbank_h: rest.creditPagBankH,
+        credit_pagbank_d: rest.creditPagBankD,
+        credit_ifood: rest.creditIfood,
+        total_revenues: rest.totalRevenues,
+        debit_caixa: rest.debitCaixa,
+        debit_pagbank_h: rest.debitPagBankH,
+        debit_pagbank_d: rest.debitPagBankD,
+        debit_loteria: rest.debitLoteria,
+        total_expenses: rest.totalExpenses,
+        net_result: rest.netResult
+    };
+
+    const { error } = await supabase.from('financial_records').insert([payloadSnake]);
+    if (error) {
+        // Fallback Camel
+        await supabase.from('financial_records').insert([rest]);
+    }
 };
 export const updateFinancialRecord = async (r: FinancialRecord) => {
     const { id, ...rest } = r;
-    await supabase.from('financial_records').update(rest).eq('id', id);
+    
+    const payloadSnake = {
+        store: rest.store,
+        year: rest.year,
+        month: rest.month,
+        credit_caixa: rest.creditCaixa,
+        credit_delta: rest.creditDelta,
+        credit_pagbank_h: rest.creditPagBankH,
+        credit_pagbank_d: rest.creditPagBankD,
+        credit_ifood: rest.creditIfood,
+        total_revenues: rest.totalRevenues,
+        debit_caixa: rest.debitCaixa,
+        debit_pagbank_h: rest.debitPagBankH,
+        debit_pagbank_d: rest.debitPagBankD,
+        debit_loteria: rest.debitLoteria,
+        total_expenses: rest.totalExpenses,
+        net_result: rest.netResult
+    };
+
+    let { error } = await supabase.from('financial_records').update(payloadSnake).eq('id', id);
+    if (error) {
+        await supabase.from('financial_records').update(rest).eq('id', id);
+    }
 };
 export const deleteFinancialRecord = async (id: string) => {
     await supabase.from('financial_records').delete().eq('id', id);
