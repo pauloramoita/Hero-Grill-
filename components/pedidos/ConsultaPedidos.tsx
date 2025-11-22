@@ -9,6 +9,23 @@ interface ConsultaPedidosProps {
     user: User;
 }
 
+// Hook para persistência de estado
+function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [state, setState] = useState<T>(() => {
+        const storageValue = localStorage.getItem(key);
+        if (storageValue) {
+            try { return JSON.parse(storageValue); } catch {}
+        }
+        return initialState;
+    });
+
+    useEffect(() => {
+        localStorage.setItem(key, JSON.stringify(state));
+    }, [key, state]);
+
+    return [state, setState];
+}
+
 export const ConsultaPedidos: React.FC<ConsultaPedidosProps> = ({ user }) => {
     const [allOrders, setAllOrders] = useState<Order[]>([]);
     const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
@@ -22,7 +39,8 @@ export const ConsultaPedidos: React.FC<ConsultaPedidosProps> = ({ user }) => {
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
     const todayStr = today.toISOString().split('T')[0];
 
-    const [filters, setFilters] = useState({
+    // Persistindo filtros
+    const [filters, setFilters] = usePersistedState('hero_state_cons_ped_filters', {
         dateStart: firstDay,
         dateEnd: todayStr,
         store: '',
@@ -121,18 +139,29 @@ export const ConsultaPedidos: React.FC<ConsultaPedidosProps> = ({ user }) => {
         <div className="space-y-6 animate-fadeIn">
             {/* Filter Panel */}
             <div className="bg-white p-6 rounded-xl shadow-card border border-slate-200 no-print">
-                <div className="flex items-center gap-2 mb-4 text-slate-700 font-bold">
-                    <Filter size={18} className="text-heroRed"/>
-                    <h3>Filtros de Pesquisa</h3>
+                <div className="flex items-center justify-between mb-4 text-slate-700 font-bold">
+                    <div className="flex items-center gap-2">
+                        <Filter size={18} className="text-heroRed"/>
+                        <h3>Filtros de Pesquisa</h3>
+                    </div>
+                    <button 
+                        onClick={() => setFilters({
+                            dateStart: firstDay, dateEnd: todayStr, store: availableStores.length === 1 ? availableStores[0] : '',
+                            product: '', brand: '', supplier: '', type: '', category: ''
+                        })}
+                        className="text-xs text-red-500 hover:underline flex items-center gap-1"
+                    >
+                        <X size={12} /> Limpar
+                    </button>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     <div>
-                        <label className={labelClass}>Data Início</label>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Data Início</label>
                         <input type="date" value={filters.dateStart} onChange={e => setFilters({...filters, dateStart: e.target.value})} className={filterInputClass}/>
                     </div>
                     <div>
-                        <label className={labelClass}>Data Final</label>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Data Final</label>
                         <input type="date" value={filters.dateEnd} onChange={e => setFilters({...filters, dateEnd: e.target.value})} className={filterInputClass}/>
                     </div>
                     <div>

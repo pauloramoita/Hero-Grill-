@@ -8,22 +8,40 @@ interface CadastroPedidoProps {
     user: User;
 }
 
+// Hook para persistência de estado
+function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [state, setState] = useState<T>(() => {
+        const storageValue = localStorage.getItem(key);
+        if (storageValue) {
+            try { return JSON.parse(storageValue); } catch {}
+        }
+        return initialState;
+    });
+
+    useEffect(() => {
+        localStorage.setItem(key, JSON.stringify(state));
+    }, [key, state]);
+
+    return [state, setState];
+}
+
 export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
     const [data, setData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loadingData, setLoadingData] = useState(true);
     const [saving, setSaving] = useState(false);
     
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [store, setStore] = useState('');
-    const [type, setType] = useState('Variável');
-    const [category, setCategory] = useState('');
-    const [product, setProduct] = useState('');
-    const [brand, setBrand] = useState('');
-    const [supplier, setSupplier] = useState('');
-    const [unitValue, setUnitValue] = useState<number>(0);
-    const [unitMeasure, setUnitMeasure] = useState('');
-    const [quantity, setQuantity] = useState<string>('');
-    const [deliveryDate, setDeliveryDate] = useState(''); 
+    // Usando persistência para manter os dados ao trocar de aba
+    const [date, setDate] = usePersistedState('hero_state_cad_ped_date', new Date().toISOString().split('T')[0]);
+    const [store, setStore] = usePersistedState('hero_state_cad_ped_store', '');
+    const [type, setType] = usePersistedState('hero_state_cad_ped_type', 'Variável');
+    const [category, setCategory] = usePersistedState('hero_state_cad_ped_category', '');
+    const [product, setProduct] = usePersistedState('hero_state_cad_ped_product', '');
+    const [brand, setBrand] = usePersistedState('hero_state_cad_ped_brand', '');
+    const [supplier, setSupplier] = usePersistedState('hero_state_cad_ped_supplier', '');
+    const [unitValue, setUnitValue] = usePersistedState<number>('hero_state_cad_ped_unitvalue', 0);
+    const [unitMeasure, setUnitMeasure] = usePersistedState('hero_state_cad_ped_unitmeasure', '');
+    const [quantity, setQuantity] = usePersistedState<string>('hero_state_cad_ped_quantity', '');
+    const [deliveryDate, setDeliveryDate] = usePersistedState('hero_state_cad_ped_deliverydate', ''); 
 
     const [errors, setErrors] = useState<Record<string, boolean>>({});
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -48,10 +66,10 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
 
     // Auto-select if only one store available
     useEffect(() => {
-        if (availableStores.length === 1) {
+        if (availableStores.length === 1 && !store) {
             setStore(availableStores[0]);
         }
-    }, [availableStores]);
+    }, [availableStores, store]);
 
     useEffect(() => {
         const checkHistory = async () => {
@@ -106,8 +124,6 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
             store: !store,
             category: !category,
             product: !product,
-            // brand: !brand, // Marca agora é opcional
-            // supplier: !supplier, // Fornecedor agora é opcional
             unitMeasure: !unitMeasure,
             unitValue: unitValue <= 0,
             quantity: qtyFloat <= 0,
@@ -118,7 +134,6 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
 
         if (Object.values(newErrors).some(Boolean)) {
             setSubmitError('Preencha os campos obrigatórios.');
-            // Scroll to top to see error
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
         }
@@ -128,8 +143,8 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
             await saveOrder({
                 id: '', 
                 date, store, product, 
-                brand: brand || '-', // Save generic dash if empty
-                supplier: supplier || '-', // Save generic dash if empty
+                brand: brand || '-', 
+                supplier: supplier || '-', 
                 unitValue, unitMeasure,
                 quantity: qtyFloat, totalValue: unitValue * qtyFloat, 
                 deliveryDate: deliveryDate || null,
@@ -137,13 +152,11 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
                 category
             });
 
-            // Reset fields partially to allow quick entry
+            // Limpa campos após salvar (Isso também atualiza o localStorage para vazio)
             setProduct('');
-            // setBrand(''); // Keep brand? No, reset.
-            // setSupplier(''); // Keep supplier? No, reset.
-            // setUnitMeasure('');
             setUnitValue(0);
             setQuantity('');
+            // Não limpamos Loja, Tipo, Categoria, etc para facilitar digitação sequencial
             setErrors({});
             alert('Pedido registrado com sucesso!');
         } catch (err: any) {
@@ -160,7 +173,6 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
 
     if (loadingData) return <div className="text-center p-10"><Loader2 className="animate-spin mx-auto text-heroRed" size={32}/></div>;
 
-    // Design System Classes
     const labelClass = "block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1";
     const inputClass = (hasError: boolean, disabled: boolean = false) => 
         `w-full p-3 md:p-2.5 text-base md:text-sm rounded-lg outline-none transition-all duration-200 font-medium appearance-none
@@ -172,10 +184,9 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
         }`;
 
     return (
-        <div className="pb-32 md:pb-0"> {/* Padding bottom for mobile sticky footer */}
+        <div className="pb-32 md:pb-0">
             <form onSubmit={handleSubmit} className="bg-white md:rounded-xl shadow-none md:shadow-card border-y md:border border-slate-200 max-w-5xl mx-auto animate-fadeIn overflow-hidden">
                 
-                {/* Header - Sticky on Mobile */}
                 <div className="sticky top-16 z-20 md:static bg-slate-50/95 md:bg-slate-50 backdrop-blur-sm px-6 py-4 md:px-8 md:py-6 border-b border-slate-200 shadow-sm md:shadow-none flex justify-between items-center">
                     <div>
                         <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 uppercase">

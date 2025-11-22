@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
     getAppData, 
@@ -20,6 +19,23 @@ interface LancamentosFinanceiroProps {
     user: User;
 }
 
+// Hook para persistência de estado
+function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [state, setState] = useState<T>(() => {
+        const storageValue = localStorage.getItem(key);
+        if (storageValue) {
+            try { return JSON.parse(storageValue); } catch {}
+        }
+        return initialState;
+    });
+
+    useEffect(() => {
+        localStorage.setItem(key, JSON.stringify(state));
+    }, [key, state]);
+
+    return [state, setState];
+}
+
 export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ user }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -29,35 +45,38 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [transactions, setTransactions] = useState<DailyTransaction[]>([]);
     const [orders, setOrders] = useState<Order[]>([]);
 
-    const [date, setDate] = useState(getTodayLocalISO()); 
-    const [paymentDate, setPaymentDate] = useState(getTodayLocalISO()); 
-    const [store, setStore] = useState('');
-    const [type, setType] = useState<'Receita' | 'Despesa' | 'Transferência'>('Despesa'); 
-    const [accountId, setAccountId] = useState('');
+    // Estados do Formulário (Persistidos)
+    const [date, setDate] = usePersistedState('hero_state_fin_date', getTodayLocalISO()); 
+    const [paymentDate, setPaymentDate] = usePersistedState('hero_state_fin_paymentdate', getTodayLocalISO()); 
+    const [store, setStore] = usePersistedState('hero_state_fin_store', '');
+    const [type, setType] = usePersistedState<'Receita' | 'Despesa' | 'Transferência'>('hero_state_fin_type', 'Despesa'); 
+    const [accountId, setAccountId] = usePersistedState('hero_state_fin_account', '');
     
-    const [destinationStore, setDestinationStore] = useState('');
-    const [destinationAccountId, setDestinationAccountId] = useState('');
+    const [destinationStore, setDestinationStore] = usePersistedState('hero_state_fin_dest_store', '');
+    const [destinationAccountId, setDestinationAccountId] = usePersistedState('hero_state_fin_dest_account', '');
 
-    const [paymentMethod, setPaymentMethod] = useState('Boleto'); 
-    const [product, setProduct] = useState('');
-    const [category, setCategory] = useState('');
-    const [classification, setClassification] = useState('Variável'); 
-    const [supplier, setSupplier] = useState('');
-    const [value, setValue] = useState(0);
-    const [status, setStatus] = useState<'Pago' | 'Pendente'>('Pendente');
-    const [description, setDescription] = useState(''); 
+    const [paymentMethod, setPaymentMethod] = usePersistedState('hero_state_fin_method', 'Boleto'); 
+    const [product, setProduct] = usePersistedState('hero_state_fin_product', '');
+    const [category, setCategory] = usePersistedState('hero_state_fin_category', '');
+    const [classification, setClassification] = usePersistedState('hero_state_fin_classification', 'Variável'); 
+    const [supplier, setSupplier] = usePersistedState('hero_state_fin_supplier', '');
+    const [value, setValue] = usePersistedState<number>('hero_state_fin_value', 0);
+    const [status, setStatus] = usePersistedState<'Pago' | 'Pendente'>('hero_state_fin_status', 'Pendente');
+    const [description, setDescription] = usePersistedState('hero_state_fin_description', ''); 
 
-    const [recurrenceType, setRecurrenceType] = useState<'none' | 'installment' | 'fixed'>('none');
-    const [recurrenceCount, setRecurrenceCount] = useState<number>(2);
+    // Estados de Recorrência (Persistidos)
+    const [recurrenceType, setRecurrenceType] = usePersistedState<'none' | 'installment' | 'fixed'>('hero_state_fin_recurrence', 'none');
+    const [recurrenceCount, setRecurrenceCount] = usePersistedState<number>('hero_state_fin_rec_count', 2);
 
     const [editingItem, setEditingItem] = useState<DailyTransaction | null>(null);
 
-    const [filterStart, setFilterStart] = useState(getTodayLocalISO());
-    const [filterEnd, setFilterEnd] = useState(getTodayLocalISO());
-    const [filterStore, setFilterStore] = useState('');
-    const [filterAccount, setFilterAccount] = useState('');
-    const [filterSupplier, setFilterSupplier] = useState('');
-    const [filterClassification, setFilterClassification] = useState('');
+    // Filtros (Persistidos)
+    const [filterStart, setFilterStart] = usePersistedState('hero_state_fin_filter_start', getTodayLocalISO());
+    const [filterEnd, setFilterEnd] = usePersistedState('hero_state_fin_filter_end', getTodayLocalISO());
+    const [filterStore, setFilterStore] = usePersistedState('hero_state_fin_filter_store', '');
+    const [filterAccount, setFilterAccount] = usePersistedState('hero_state_fin_filter_account', '');
+    const [filterSupplier, setFilterSupplier] = usePersistedState('hero_state_fin_filter_supplier', '');
+    const [filterClassification, setFilterClassification] = usePersistedState('hero_state_fin_filter_class', '');
 
     const canViewBalances = user.isMaster || (user.permissions?.modules && user.permissions.modules.includes('view_balances'));
 
@@ -93,10 +112,10 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     useEffect(() => {
         if (availableStores.length === 1) {
             const singleStore = availableStores[0];
-            setStore(singleStore);
-            setFilterStore(singleStore);
+            if(!store) setStore(singleStore);
+            if(!filterStore) setFilterStore(singleStore);
         }
-    }, [availableStores]);
+    }, [availableStores, store, filterStore]);
 
     const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawValue = e.target.value.replace(/\D/g, '');
@@ -179,9 +198,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             setDescription('');
             setRecurrenceType('none');
             setRecurrenceCount(2);
-            
-            // Nota: Campos como Store, Account, Category, Supplier e Classification 
-            // NÃO são resetados para facilitar lançamentos em sequência.
+            // Outros campos mantidos para facilitar lançamento sequencial
             
             alert(loopCount > 1 ? `${loopCount} Lançamentos Gerados com Sucesso!` : 'Lançamento Salvo!');
             loadData(); 
@@ -342,12 +359,10 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             groups[acc.store].totalBalance += currentBal;
         });
 
-        // Ordenar as contas alfabeticamente dentro de cada loja
         Object.values(groups).forEach(group => {
             group.accounts.sort((a, b) => a.name.localeCompare(b.name));
         });
 
-        // Ordem personalizada das lojas
         const customOrder = ['Hero Joquei', 'Hero Shopping', 'Hero Centro'];
 
         return Object.entries(groups).sort((a, b) => {
@@ -357,16 +372,9 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             const indexA = customOrder.indexOf(storeA);
             const indexB = customOrder.indexOf(storeB);
 
-            // Se ambas estão na lista personalizada, ordena pelo índice
             if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-            
-            // Se apenas A está na lista, A vem primeiro
             if (indexA !== -1) return -1;
-            
-            // Se apenas B está na lista, B vem primeiro
             if (indexB !== -1) return 1;
-            
-            // Se nenhuma está, ordem alfabética
             return storeA.localeCompare(storeB);
         });
     }, [accounts, transactions, store]);

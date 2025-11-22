@@ -20,12 +20,31 @@ interface ControleCarnesProps {
     user?: User;
 }
 
+// Hook para persistência de estado
+function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [state, setState] = useState<T>(() => {
+        const storageValue = localStorage.getItem(key);
+        if (storageValue) {
+            try { return JSON.parse(storageValue); } catch {}
+        }
+        return initialState;
+    });
+
+    useEffect(() => {
+        localStorage.setItem(key, JSON.stringify(state));
+    }, [key, state]);
+
+    return [state, setState];
+}
+
 export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
-    const [selectedStore, setSelectedStore] = useState('');
+    
+    // Persistindo a loja selecionada
+    const [selectedStore, setSelectedStore] = usePersistedState('hero_state_stock_store', '');
 
     // Dados de Estoque (Cálculo)
     const [inventoryData, setInventoryData] = useState<{
@@ -90,6 +109,7 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
             setRawLogs(logs); 
             setRawAdjustments(adjustments);
             
+            // Only process if a store is selected (might be restored from storage)
             if (selectedStore) {
                 processData(orders, logs, adjustments, selectedStore);
             }
@@ -110,11 +130,9 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
         return appData.stores;
     }, [appData.stores, user]);
 
-    // Auto-select store logic
+    // Auto-select store logic (only if not already set by persistence)
     useEffect(() => {
-        if (availableStores.length > 0 && !selectedStore) {
-            setSelectedStore(availableStores[0]);
-        } else if (availableStores.length === 1) {
+        if (availableStores.length === 1 && !selectedStore) {
             setSelectedStore(availableStores[0]);
         }
     }, [availableStores, selectedStore]);

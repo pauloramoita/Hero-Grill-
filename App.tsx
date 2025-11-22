@@ -70,8 +70,17 @@ const App: React.FC = () => {
     const handleLogout = useCallback(() => {
         setUser(null);
         setCurrentView('home');
+        
+        // Limpa Sessão
         localStorage.removeItem(SESSION_KEY);
         localStorage.removeItem(ACTIVITY_KEY);
+
+        // Limpa Estados Persistidos das Telas (Filtros, Formulários em andamento)
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('hero_state_')) {
+                localStorage.removeItem(key);
+            }
+        });
     }, []);
 
     // Monitor de Inatividade
