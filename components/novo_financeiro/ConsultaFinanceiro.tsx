@@ -22,8 +22,10 @@ import {
     Calculator,
     Loader2,
     ArrowRight,
+    ArrowLeft,
     Calendar,
-    Plus
+    Plus,
+    ArrowLeftRight
 } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 import { ConfirmPaymentModal } from './ConfirmPaymentModal';
@@ -154,7 +156,13 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
             if ((dateType === 'payment' || dateType === 'created') && !targetDate) return false;
 
             const matchesDate = targetDate >= startDate && targetDate <= endDate;
-            const matchesStore = !filterStore || t.store === filterStore;
+            
+            // Store Filter Logic (Enhanced for Transfers)
+            // Se for transferência, verifica se a loja é Origem OU Destino
+            const matchesStore = !filterStore || 
+                                 t.store === filterStore || 
+                                 (t.type === 'Transferência' && t.destinationStore === filterStore);
+
             const matchesCategory = !filterCategory || t.category === filterCategory;
             const matchesSupplier = !filterSupplier || t.supplier === filterSupplier;
             const matchesStatus = !filterStatus || t.status === filterStatus;
@@ -170,7 +178,9 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
 
             let allowed = true;
             if (user && !user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
-                 allowed = user.permissions.stores.includes(t.store);
+                 // Permite ver se for Origem OU Destino em lojas permitidas
+                 allowed = user.permissions.stores.includes(t.store) || 
+                           (t.type === 'Transferência' && !!t.destinationStore && user.permissions.stores.includes(t.destinationStore));
             }
 
             return matchesDate && matchesStore && matchesCategory && matchesSupplier && matchesAccount && matchesStatus && allowed;
@@ -320,13 +330,32 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         setDateType('due');
     };
 
-    const totalReceitas = filteredTransactions.filter(t => t.type === 'Receita').reduce((acc, t) => acc + t.value, 0);
-    const totalDespesas = filteredTransactions.filter(t => t.type === 'Despesa').reduce((acc, t) => acc + t.value, 0);
+    // --- Calculation Logic ---
+    const totalReceitas = filteredTransactions.reduce((acc, t) => {
+        // Receita normal
+        if (t.type === 'Receita') return acc + t.value;
+        // Transferência recebida (se estiver filtrando por loja de destino)
+        if (t.type === 'Transferência' && filterStore && t.destinationStore === filterStore) return acc + t.value;
+        return acc;
+    }, 0);
+
+    const totalDespesas = filteredTransactions.reduce((acc, t) => {
+        // Despesa normal
+        if (t.type === 'Despesa') return acc + t.value;
+        // Transferência enviada (se estiver filtrando por loja de origem)
+        if (t.type === 'Transferência' && filterStore && t.store === filterStore) return acc + t.value;
+        // Se não tiver filtro de loja (visão global), transferências não somam em despesas (apenas anulam saldo se contarmos in/out, mas aqui separamos)
+        return acc;
+    }, 0);
+
     const saldo = totalReceitas - totalDespesas;
 
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" size={40}/></div>;
 
     const isSingleStore = availableStores.length === 1;
+
+    // Helper to check if row is an incoming transfer
+    const isIncomingTransfer = (t: DailyTransaction) => t.type === 'Transferência' && filterStore && t.destinationStore === filterStore;
 
     return (
         <div className="space-y-6">
@@ -371,7 +400,7 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja (Origem/Destino)</label>
                         <select 
                             value={filterStore} 
                             onChange={e => setFilterStore(e.target.value)} 
@@ -474,77 +503,96 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredTransactions.map((t) => (
-                            <tr key={t.id} className={`hover:bg-gray-50 break-inside-avoid ${t.origin === 'pedido' ? 'bg-blue-50/30' : ''}`}>
-                                <td className="px-4 py-3 text-xs text-gray-500">
-                                    <div className="flex items-center gap-1">
-                                        <Calendar size={12} className="text-gray-300"/>
-                                        {t.createdAt ? formatDateBr(t.createdAt.split('T')[0]) : '-'}
-                                    </div>
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                                    {formatDateBr(t.date)}
-                                    {t.paymentDate && dateType !== 'due' && (
-                                        <div className="text-[10px] text-green-600 font-bold">Pg: {formatDateBr(t.paymentDate)}</div>
-                                    )}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-600">{t.store}</td>
-                                <td className="px-4 py-3 text-sm">
-                                    {t.type === 'Transferência' ? (
-                                        <div className="flex items-center gap-1 text-purple-700 font-bold">
-                                            <ArrowRight size={12}/> {t.destinationStore}
+                        {filteredTransactions.map((t) => {
+                            const isIncoming = isIncomingTransfer(t);
+                            const valueColor = t.type === 'Receita' || isIncoming ? 'text-green-600' : t.type === 'Transferência' ? 'text-purple-600' : 'text-red-600';
+                            
+                            return (
+                                <tr key={t.id} className={`hover:bg-gray-50 break-inside-avoid ${t.origin === 'pedido' ? 'bg-blue-50/30' : ''}`}>
+                                    <td className="px-4 py-3 text-xs text-gray-500">
+                                        <div className="flex items-center gap-1">
+                                            <Calendar size={12} className="text-gray-300"/>
+                                            {t.createdAt ? formatDateBr(t.createdAt.split('T')[0]) : '-'}
                                         </div>
-                                    ) : (
-                                        <>
-                                            <div className="font-bold text-gray-700">{t.description || t.supplier}</div>
-                                            {t.product && <div className="text-xs text-gray-500">{t.product}</div>}
-                                        </>
-                                    )}
-                                    {t.origin === 'pedido' && <span className="inline-block mt-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-bold border border-blue-200">PEDIDO</span>}
-                                </td>
-                                <td className="px-4 py-3 text-sm">
-                                    {t.type === 'Transferência' ? (
-                                        <div className="flex flex-col text-xs">
-                                            <span className="text-red-500">De: {getAccountName(t.accountId)}</span>
-                                            <span className="text-green-500">Para: {getAccountName(t.destinationAccountId)}</span>
-                                        </div>
-                                    ) : (
-                                        <span className={!t.accountId ? 'text-red-400 italic font-bold text-xs' : 'text-gray-600'}>
-                                            {getAccountName(t.accountId) || 'Definir Conta'}
-                                        </span>
-                                    )}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-600">
-                                    {t.category || '-'}
-                                    {t.classification && <div className="text-[10px] text-gray-400 border px-1 rounded w-fit mt-1">{t.classification}</div>}
-                                </td>
-                                <td className={`px-4 py-3 text-sm text-right font-bold font-mono ${t.type === 'Receita' ? 'text-green-600' : t.type === 'Transferência' ? 'text-purple-600' : 'text-red-600'}`}>
-                                    {t.type === 'Receita' ? '+' : t.type === 'Transferência' ? 'T' : '-'}{formatCurrency(t.value)}
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                    {t.status === 'Pago' ? (
-                                        <span className="text-green-600 font-bold text-xs flex items-center justify-center gap-1"><CheckCircle size={14}/> PAGO</span>
-                                    ) : (
-                                        <span className="text-yellow-600 font-bold text-xs bg-yellow-100 px-2 py-1 rounded border border-yellow-200">PENDENTE</span>
-                                    )}
-                                </td>
-                                <td className="px-4 py-3 text-center whitespace-nowrap no-print">
-                                    <div className="flex items-center justify-center gap-2">
-                                        {t.status === 'Pendente' && (
-                                            <button onClick={() => handlePay(t)} className="text-green-600 hover:bg-green-50 p-1 rounded" title="Confirmar Pagamento">
-                                                <CheckCircle size={18}/>
-                                            </button>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                                        {formatDateBr(t.date)}
+                                        {t.paymentDate && dateType !== 'due' && (
+                                            <div className="text-[10px] text-green-600 font-bold">Pg: {formatDateBr(t.paymentDate)}</div>
                                         )}
-                                        <button onClick={() => setEditingItem(t)} className="text-blue-600 hover:bg-blue-50 p-1 rounded" title="Editar">
-                                            <Edit size={18} />
-                                        </button>
-                                        <button onClick={() => handleDelete(t.id)} className="text-red-500 hover:bg-red-50 p-1 rounded" title="Excluir">
-                                            <Trash2 size={18} />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-600">
+                                        {isIncoming ? (
+                                            <span className="font-bold text-green-700">{t.destinationStore}</span>
+                                        ) : (
+                                            t.store
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm">
+                                        {t.type === 'Transferência' ? (
+                                            <div className="flex items-center gap-1 font-bold">
+                                                {isIncoming ? (
+                                                    <div className="flex items-center gap-1 text-green-700">
+                                                        <ArrowLeft size={12}/> Recebido de {t.store}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1 text-purple-700">
+                                                        <ArrowRight size={12}/> Enviado para {t.destinationStore}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="font-bold text-gray-700">{t.description || t.supplier}</div>
+                                                {t.product && <div className="text-xs text-gray-500">{t.product}</div>}
+                                            </>
+                                        )}
+                                        {t.origin === 'pedido' && <span className="inline-block mt-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-bold border border-blue-200">PEDIDO</span>}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm">
+                                        {t.type === 'Transferência' ? (
+                                            <div className="flex flex-col text-xs">
+                                                <span className="text-red-500">De: {getAccountName(t.accountId)}</span>
+                                                <span className="text-green-500">Para: {getAccountName(t.destinationAccountId)}</span>
+                                            </div>
+                                        ) : (
+                                            <span className={!t.accountId ? 'text-red-400 italic font-bold text-xs' : 'text-gray-600'}>
+                                                {getAccountName(t.accountId) || 'Definir Conta'}
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-600">
+                                        {t.category || '-'}
+                                        {t.classification && <div className="text-[10px] text-gray-400 border px-1 rounded w-fit mt-1">{t.classification}</div>}
+                                    </td>
+                                    <td className={`px-4 py-3 text-right font-bold font-mono text-sm ${valueColor}`}>
+                                        {t.type === 'Receita' || isIncoming ? '+' : t.type === 'Transferência' ? '-' : '-'}{formatCurrency(t.value)}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                        {t.status === 'Pago' ? (
+                                            <span className="text-green-600 font-bold text-xs flex items-center justify-center gap-1"><CheckCircle size={14}/> PAGO</span>
+                                        ) : (
+                                            <span className="text-yellow-600 font-bold text-xs bg-yellow-100 px-2 py-1 rounded border border-yellow-200">PENDENTE</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-center whitespace-nowrap no-print">
+                                        <div className="flex items-center justify-center gap-2">
+                                            {t.status === 'Pendente' && (
+                                                <button onClick={() => handlePay(t)} className="text-green-600 hover:bg-green-50 p-1 rounded" title="Confirmar Pagamento">
+                                                    <CheckCircle size={18}/>
+                                                </button>
+                                            )}
+                                            <button onClick={() => setEditingItem(t)} className="text-blue-600 hover:bg-blue-50 p-1 rounded" title="Editar">
+                                                <Edit size={18} />
+                                            </button>
+                                            <button onClick={() => handleDelete(t.id)} className="text-red-500 hover:bg-red-50 p-1 rounded" title="Excluir">
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                         {filteredTransactions.length === 0 && (
                             <tr>
                                 <td colSpan={9} className="px-4 py-12 text-center text-gray-500">

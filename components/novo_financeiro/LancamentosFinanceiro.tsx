@@ -12,7 +12,7 @@ import {
     getOrders
 } from '../../services/storageService';
 import { AppData, FinancialAccount, DailyTransaction, Order, User } from '../../types';
-import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock, Building2, Wallet, TrendingUp, TrendingDown } from 'lucide-react';
+import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock, Building2, Wallet, TrendingUp, TrendingDown, ArrowLeft } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 
 interface LancamentosFinanceiroProps {
@@ -261,10 +261,14 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const getFilteredList = () => {
         const filteredTrans = transactions.filter(t => {
             const matchesDate = t.date >= filterStart && t.date <= filterEnd;
-            const matchesStore = !filterStore || t.store === filterStore;
             const matchesSupplier = !filterSupplier || t.supplier === filterSupplier;
             const matchesClassification = !filterClassification || t.classification === filterClassification;
             
+            // Store Filter: Matches if it is Source OR Destination
+            const matchesStore = !filterStore || 
+                                 t.store === filterStore || 
+                                 (t.type === 'Transferência' && t.destinationStore === filterStore);
+
             let matchesAccount = true;
             if (filterAccount) {
                 if (t.type === 'Transferência') {
@@ -277,8 +281,9 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             // Permission Check
             let allowed = true;
             if (availableStores.length > 0 && !user.isMaster) {
-                // For transfers, check if user has access to origin store
-                allowed = availableStores.includes(t.store);
+                // Allows if user has permission for source store OR destination store
+                allowed = availableStores.includes(t.store) || 
+                          (t.type === 'Transferência' && !!t.destinationStore && availableStores.includes(t.destinationStore));
             }
 
             return matchesDate && matchesStore && matchesSupplier && matchesAccount && matchesClassification && allowed;
@@ -343,7 +348,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         return balance;
     };
 
-    // Group Accounts By Store Logic
+    // Group Accounts By Store Logic (Used for Top Cards)
     const accountsByStore = useMemo(() => {
         const groups: Record<string, { accounts: FinancialAccount[], totalBalance: number }> = {};
         
@@ -383,11 +388,26 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
 
     const filteredList = getFilteredList();
     const totalQty = filteredList.length;
-    const totalReceitas = filteredList.filter(i => i.type === 'Receita').reduce((acc, i) => acc + i.value, 0);
-    const totalDespesas = filteredList.filter(i => i.type === 'Despesa').reduce((acc, i) => acc + i.value, 0);
+    
+    // Correct Totals Calculation accounting for Transfer Direction relative to Filter
+    const totalReceitas = filteredList.reduce((acc, t) => {
+        if (t.type === 'Receita') return acc + t.value;
+        if (t.type === 'Transferência' && filterStore && t.destinationStore === filterStore) return acc + t.value;
+        return acc;
+    }, 0);
+
+    const totalDespesas = filteredList.reduce((acc, t) => {
+        if (t.type === 'Despesa') return acc + t.value;
+        if (t.type === 'Transferência' && filterStore && t.store === filterStore) return acc + t.value;
+        return acc;
+    }, 0);
+
     const totalSaldo = totalReceitas - totalDespesas;
 
     const isSingleStore = availableStores.length === 1;
+
+    // Helper
+    const isIncomingTransfer = (t: DailyTransaction) => t.type === 'Transferência' && filterStore && t.destinationStore === filterStore;
 
     return (
         <div className="space-y-8 pb-20">
@@ -845,79 +865,97 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 text-sm">
-                            {filteredList.map((item, idx) => (
-                                <tr key={item.id} className={`hover:bg-gray-50 ${item.origin === 'pedido' ? 'bg-blue-50/30' : ''}`}>
-                                    <td className="px-4 py-3 whitespace-nowrap">{formatDateBr(item.date)}</td>
-                                    <td className="px-4 py-3">{item.store}</td>
-                                    <td className="px-4 py-3">
-                                        {item.origin === 'pedido' ? (
-                                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold">Cadastro</span>
-                                        ) : item.type === 'Transferência' ? (
-                                            <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold">Transf.</span>
-                                        ) : (
-                                            <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs font-bold">Manual</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        {item.type === 'Transferência' ? (
-                                            <div className="flex items-center gap-1 text-purple-700 font-bold">
-                                                 <ArrowRight size={12}/> {item.destinationStore} <span className="text-gray-400">|</span> {getAccountName(item.destinationAccountId)}
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="font-bold text-gray-700">{item.description || item.category || item.supplier}</div>
-                                                <div className="text-xs text-gray-500">{item.product}</div>
-                                            </>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        {item.accountId ? getAccountName(item.accountId) : <span className="text-red-400 text-xs italic font-bold">Definir Conta</span>}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        {item.classification && (
-                                            <span className="text-[10px] bg-gray-100 px-1 rounded border border-gray-300 text-gray-600">{item.classification}</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3">{item.paymentMethod}</td>
-                                    <td className={`px-4 py-3 text-right font-bold ${item.type === 'Receita' ? 'text-green-600' : item.type === 'Transferência' ? 'text-purple-600' : 'text-red-600'}`}>
-                                        {item.type === 'Receita' ? '+' : '-'}{formatCurrency(item.value)}
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        {item.status === 'Pago' ? (
-                                            <span className="text-green-600 font-bold text-xs flex items-center justify-center gap-1"><CheckCircle size={12}/> PAGO</span>
-                                        ) : (
-                                            <span className="text-yellow-600 font-bold text-xs bg-yellow-100 px-2 py-1 rounded">PENDENTE</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <div className="flex justify-center gap-2">
-                                            {item.status === 'Pendente' && (
-                                                <button 
-                                                    onClick={() => handlePay(item as DailyTransaction)} 
-                                                    className="text-green-600 hover:bg-green-100 p-1 rounded transition-colors" 
-                                                    title={!item.accountId ? "Preencha a conta para pagar" : "Confirmar Pagamento"}
-                                                >
-                                                    <DollarSign size={16}/>
-                                                </button>
+                            {filteredList.map((item, idx) => {
+                                const isIncoming = item.type === 'Transferência' && filterStore && item.destinationStore === filterStore;
+                                return (
+                                    <tr key={item.id} className={`hover:bg-gray-50 ${item.origin === 'pedido' ? 'bg-blue-50/30' : ''}`}>
+                                        <td className="px-4 py-3 whitespace-nowrap">{formatDateBr(item.date)}</td>
+                                        <td className="px-4 py-3 text-gray-600">
+                                            {isIncoming ? (
+                                                <span className="font-bold text-green-700">{item.destinationStore}</span>
+                                            ) : (
+                                                item.store
                                             )}
-                                            <button 
-                                                onClick={() => handleEditClick(item as DailyTransaction)} 
-                                                className="text-blue-600 hover:bg-blue-100 p-1 rounded transition-colors"
-                                                title="Editar / Completar Cadastro"
-                                            >
-                                                <Edit size={16} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDelete(item.id)} 
-                                                className="text-red-500 hover:bg-red-100 p-1 rounded transition-colors"
-                                                title="Excluir"
-                                            >
-                                                <Trash2 size={16}/>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {item.origin === 'pedido' ? (
+                                                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold">Cadastro</span>
+                                            ) : item.type === 'Transferência' ? (
+                                                <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold">Transf.</span>
+                                            ) : (
+                                                <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs font-bold">Manual</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {item.type === 'Transferência' ? (
+                                                <div className="flex items-center gap-1 font-bold">
+                                                    {isIncoming ? (
+                                                        <div className="flex items-center gap-1 text-green-700">
+                                                            <ArrowLeft size={12}/> Recebido de {item.store}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-1 text-purple-700">
+                                                            <ArrowRight size={12}/> Enviado para {item.destinationStore}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="font-bold text-gray-700">{item.description || item.category || item.supplier}</div>
+                                                    <div className="text-xs text-gray-500">{item.product}</div>
+                                                </>
+                                            )}
+                                            {item.origin === 'pedido' && <span className="inline-block mt-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-bold border border-blue-200">PEDIDO</span>}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {item.accountId ? getAccountName(item.accountId) : <span className="text-red-400 text-xs italic font-bold">Definir Conta</span>}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {item.classification && (
+                                                <span className="text-[10px] bg-gray-100 px-1 rounded border border-gray-300 text-gray-600">{item.classification}</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3">{item.paymentMethod}</td>
+                                        <td className={`px-4 py-3 text-right font-bold ${item.type === 'Receita' || isIncoming ? 'text-green-600' : item.type === 'Transferência' ? 'text-purple-600' : 'text-red-600'}`}>
+                                            {item.type === 'Receita' || isIncoming ? '+' : '-'}{formatCurrency(item.value)}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {item.status === 'Pago' ? (
+                                                <span className="text-green-600 font-bold text-xs flex items-center justify-center gap-1"><CheckCircle size={12}/> PAGO</span>
+                                            ) : (
+                                                <span className="text-yellow-600 font-bold text-xs bg-yellow-100 px-2 py-1 rounded">PENDENTE</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <div className="flex justify-center gap-2">
+                                                {item.status === 'Pendente' && (
+                                                    <button 
+                                                        onClick={() => handlePay(item as DailyTransaction)} 
+                                                        className="text-green-600 hover:bg-green-100 p-1 rounded transition-colors" 
+                                                        title={!item.accountId ? "Preencha a conta para pagar" : "Confirmar Pagamento"}
+                                                    >
+                                                        <DollarSign size={16}/>
+                                                    </button>
+                                                )}
+                                                <button 
+                                                    onClick={() => handleEditClick(item as DailyTransaction)} 
+                                                    className="text-blue-600 hover:bg-blue-100 p-1 rounded transition-colors"
+                                                    title="Editar / Completar Cadastro"
+                                                >
+                                                    <Edit size={16} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDelete(item.id)} 
+                                                    className="text-red-500 hover:bg-red-100 p-1 rounded transition-colors"
+                                                    title="Excluir"
+                                                >
+                                                    <Trash2 size={16}/>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                              {filteredList.length === 0 && (
                                 <tr><td colSpan={10} className="p-6 text-center text-gray-500">Nenhum lançamento encontrado.</td></tr>
                             )}
