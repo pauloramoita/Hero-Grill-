@@ -11,7 +11,7 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
     <!-- Tailwind CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -40,8 +40,29 @@
                         }
                     },
                     boxShadow: {
-                        'soft': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
                         'card': '0 0 0 1px rgba(0,0,0,0.03), 0 2px 8px rgba(0,0,0,0.04)',
+                        'card-hover': '0 0 0 1px rgba(0,0,0,0.03), 0 8px 16px rgba(0,0,0,0.08)',
+                        'floating': '0 20px 40px -10px rgba(0,0,0,0.15)',
+                    },
+                    animation: {
+                        'fadeIn': 'fadeIn 0.4s ease-out forwards',
+                        'scaleIn': 'scaleIn 0.3s ease-out forwards',
+                        'slideUp': 'slideUp 0.4s ease-out forwards',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        scaleIn: {
+                            '0%': { opacity: '0', transform: 'scale(0.95)' },
+                            '100%': { opacity: '1', transform: 'scale(1)' },
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
                     }
                 }
             }
@@ -52,7 +73,10 @@
             font-family: 'Inter', sans-serif;
             background-color: #F8FAFC;
             color: #1E293B;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
+        
         /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
@@ -74,12 +98,13 @@
         input:-webkit-autofill:hover, 
         input:-webkit-autofill:focus, 
         input:-webkit-autofill:active{
-            -webkit-box-shadow: 0 0 0 30px #F8FAFC inset !important;
+            -webkit-box-shadow: 0 0 0 30px #ffffff inset !important;
+            transition: background-color 5000s ease-in-out 0s;
         }
         
         /* Print Styles */
         @media print {
-            @page { margin: 1cm; size: landscape; }
+            @page { margin: 0.5cm; size: landscape; }
             body { 
                 background-color: white !important; 
                 -webkit-print-color-adjust: exact !important;
@@ -93,15 +118,18 @@
                 box-shadow: none !important;
                 border: none !important;
             }
+            .bg-slate-50, .bg-gray-50, .bg-gray-100 {
+                background-color: white !important;
+            }
             table {
                 width: 100% !important;
                 border-collapse: collapse !important;
-                border: 1px solid #ccc !important;
-                font-size: 10pt;
+                border: 1px solid #e2e8f0 !important;
+                font-size: 9pt;
             }
             th, td {
-                border: 1px solid #ccc !important;
-                padding: 4px !important;
+                border: 1px solid #e2e8f0 !important;
+                padding: 4px 8px !important;
                 color: black !important;
             }
             .break-inside-avoid { page-break-inside: avoid; }
@@ -123,7 +151,7 @@
 }
 </script>
 </head>
-<body class="text-slate-800 antialiased">
+<body class="text-slate-800 antialiased bg-slate-50 h-full">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>

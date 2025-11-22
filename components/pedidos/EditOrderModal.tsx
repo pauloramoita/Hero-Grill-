@@ -65,110 +65,116 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, onClose, 
         onSave(updatedOrder);
     };
 
+    const labelClass = "block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1";
+    const inputClass = "w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-700 text-sm focus:outline-none focus:border-heroRed focus:ring-4 focus:ring-heroRed/10 transition-all";
+
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center p-6 border-b border-gray-200">
-                    <h3 className="text-xl font-bold text-heroBlack">Editar Cadastro</h3>
-                    <button type="button" onClick={onClose} className="text-gray-500 hover:text-red-600">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fadeIn">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col">
+                <div className="flex justify-between items-center px-8 py-6 border-b border-slate-100 bg-white sticky top-0 z-10">
+                    <div>
+                        <h3 className="text-xl font-black text-slate-800">Editar Cadastro</h3>
+                        <p className="text-sm text-slate-400 font-medium">Atualize as informações do pedido.</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="p-2 rounded-full bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">
                         <X size={24} />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <form onSubmit={handleSubmit} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Data</label>
-                        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-2 border rounded"/>
+                        <label className={labelClass}>Data</label>
+                        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass}/>
                     </div>
                     
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Loja</label>
-                        <select value={store} onChange={(e) => setStore(e.target.value)} className="w-full p-2 border rounded">
+                        <label className={labelClass}>Loja</label>
+                        <select value={store} onChange={(e) => setStore(e.target.value)} className={inputClass}>
                             {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Tipo</label>
-                        <select value={type} onChange={(e) => setType(e.target.value)} className="w-full p-2 border rounded">
+                        <label className={labelClass}>Tipo</label>
+                        <select value={type} onChange={(e) => setType(e.target.value)} className={inputClass}>
                             {appData.types.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
 
                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Categoria</label>
-                        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full p-2 border rounded">
+                        <label className={labelClass}>Categoria</label>
+                        <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
                             <option value="">Selecione...</option>
                             {appData.categories.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Produto</label>
-                        <select value={product} onChange={(e) => setProduct(e.target.value)} className="w-full p-2 border rounded">
+                        <label className={labelClass}>Produto</label>
+                        <select value={product} onChange={(e) => setProduct(e.target.value)} className={inputClass}>
                             {appData.products.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Marca</label>
-                        <select value={brand} onChange={(e) => setBrand(e.target.value)} className="w-full p-2 border rounded">
+                        <label className={labelClass}>Marca</label>
+                        <select value={brand} onChange={(e) => setBrand(e.target.value)} className={inputClass}>
                             {appData.brands.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Fornecedor</label>
-                        <select value={supplier} onChange={(e) => setSupplier(e.target.value)} className="w-full p-2 border rounded">
+                        <label className={labelClass}>Fornecedor</label>
+                        <select value={supplier} onChange={(e) => setSupplier(e.target.value)} className={inputClass}>
                             {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Unidade</label>
-                        <select value={unitMeasure} onChange={(e) => setUnitMeasure(e.target.value)} className="w-full p-2 border rounded">
+                        <label className={labelClass}>Unidade</label>
+                        <select value={unitMeasure} onChange={(e) => setUnitMeasure(e.target.value)} className={inputClass}>
                             {appData.units.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Valor Unitário (R$)</label>
+                        <label className={labelClass}>Valor Unitário (R$)</label>
                         <input 
                             type="text" 
                             value={formatCurrency(unitValue)} 
                             onChange={handleCurrencyChange}
-                            className="w-full p-2 border rounded text-right font-mono"
+                            className={`${inputClass} text-right font-mono font-bold`}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Quantidade</label>
+                        <label className={labelClass}>Quantidade</label>
                         <input 
                             type="number" step="0.001" 
                             value={quantity} onChange={(e) => setQuantity(e.target.value)} 
-                            className="w-full p-2 border rounded text-right"
+                            className={`${inputClass} text-right font-bold`}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Total</label>
-                        <div className="w-full p-2 border rounded bg-gray-100 text-right font-bold">
+                        <label className={labelClass}>Total</label>
+                        <div className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-right font-black text-slate-800">
                             {formatCurrency(unitValue * parseFloat(quantity || '0'))}
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Data Vencimento</label>
-                        <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="w-full p-2 border rounded"/>
-                    </div>
-
-                    <div className="md:col-span-2 flex justify-end pt-4 border-t mt-4">
-                        <button type="button" onClick={onClose} className="mr-4 px-4 py-2 text-gray-600 hover:text-gray-800">Cancelar</button>
-                        <button type="submit" className="bg-heroRed text-white px-6 py-2 rounded hover:bg-red-800 flex items-center gap-2">
-                            <Save size={18} /> Salvar Alterações
-                        </button>
+                        <label className={labelClass}>Data Vencimento</label>
+                        <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className={inputClass}/>
                     </div>
                 </form>
+
+                <div className="md:col-span-2 flex justify-end gap-4 p-6 border-t border-slate-100 bg-slate-50 rounded-b-2xl mt-auto">
+                    <button type="button" onClick={onClose} className="px-6 py-3 text-slate-600 font-bold hover:bg-white hover:shadow-sm rounded-lg transition-all">Cancelar</button>
+                    <button onClick={handleSubmit} type="submit" className="bg-heroRed text-white px-8 py-3 rounded-lg hover:bg-red-700 font-bold shadow-md flex items-center gap-2 transition-all active:scale-95">
+                        <Save size={20} /> Salvar Alterações
+                    </button>
+                </div>
             </div>
         </div>
     );

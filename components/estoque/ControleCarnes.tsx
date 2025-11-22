@@ -20,7 +20,6 @@ interface ControleCarnesProps {
     user?: User;
 }
 
-// Hook para persistência de estado
 function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
     const [state, setState] = useState<T>(() => {
         const storageValue = localStorage.getItem(key);
@@ -43,10 +42,8 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
     
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     
-    // Persistindo a loja selecionada
     const [selectedStore, setSelectedStore] = usePersistedState('hero_state_stock_store', '');
 
-    // Dados de Estoque (Cálculo)
     const [inventoryData, setInventoryData] = useState<{
         name: string;
         totalBought: number;
@@ -58,7 +55,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
         finalStock: number;
     }[]>([]);
 
-    // Modal State (Ajustes)
     const [showModal, setShowModal] = useState(false);
     const [adjProduct, setAdjProduct] = useState('');
     const [adjType, setAdjType] = useState<'entrada' | 'saida'>('entrada');
@@ -66,14 +62,12 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
     const [adjValueNum, setAdjValueNum] = useState(0);
     const [adjReason, setAdjReason] = useState('');
 
-    // Report State (Relatório Administrativo)
     const [rawLogs, setRawLogs] = useState<MeatInventoryLog[]>([]);
     const [rawAdjustments, setRawAdjustments] = useState<MeatStockAdjustment[]>([]);
     const [reportStartDate, setReportStartDate] = useState(getTodayLocalISO());
     const [reportEndDate, setReportEndDate] = useState(getTodayLocalISO());
     const [editingLog, setEditingLog] = useState<{id: string, valStr: string, valNum: number} | null>(null);
 
-    // Lista Atualizada conforme solicitação
     const MEAT_LIST = [
         'Alcatra', 
         'Capa do Filé', 
@@ -109,7 +103,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
             setRawLogs(logs); 
             setRawAdjustments(adjustments);
             
-            // Only process if a store is selected (might be restored from storage)
             if (selectedStore) {
                 processData(orders, logs, adjustments, selectedStore);
             }
@@ -120,7 +113,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
         }
     };
 
-    // Determine available stores based on user permissions
     const availableStores = useMemo(() => {
         if (!user) return appData.stores;
         if (user.isMaster) return appData.stores;
@@ -130,14 +122,12 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
         return appData.stores;
     }, [appData.stores, user]);
 
-    // Auto-select store logic (only if not already set by persistence)
     useEffect(() => {
         if (availableStores.length === 1 && !selectedStore) {
             setSelectedStore(availableStores[0]);
         }
     }, [availableStores, selectedStore]);
 
-    // Fetch/Process data when store changes
     useEffect(() => {
         if (selectedStore) {
            setLoading(true);
@@ -152,11 +142,10 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
     const formatWeight = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
-    // --- MATCHING LOGIC (Robust) ---
     const normalize = (s: string) => {
         if (!s) return '';
         return s.toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
             .trim();
     };
 
@@ -166,38 +155,21 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
         const db = normalize(dbProduct);
         const target = normalize(targetMeat);
 
-        // Correspondência exata
         if (db === target) return true;
-
-        // Regras Específicas (Tolerantes)
         
-        // Maminha
         if (target.includes('maminha')) return db.includes('maminha');
-
-        // Costela (Refinado para separar Bovina de Suína)
         if (target.includes('costela')) {
             if (target.includes('bovina')) {
-                // Se o alvo é Costela Bovina, aceita "Costela" genérico ou "Bovina", mas REJEITA "Suina"
                 return db.includes('costela') && !db.includes('suina');
             }
             return db.includes('costela');
         }
-
-        // Capa do Filé -> Aceita "Capa de File", "Capa File"
         if (target.includes('capa') && target.includes('file')) return db.includes('capa') && db.includes('file');
-
-        // Contra Filé -> Aceita "Contra File", "Chorizo"
         if (target.includes('contra') && target.includes('file')) {
             return (db.includes('contra') && db.includes('file')) || db.includes('chorizo') || db === 'contra';
         }
-
-        // Coxão Mole -> Aceita "Coxao", "Coxão", "Mole" se tiver contexto, mas 'coxao' é mais seguro
-        if (target.includes('coxao') && target.includes('mole')) return db.includes('coxao') || (db.includes('mole') && !db.includes('capa')); // Evita conflito com capa se houver algo bizarro
-
-        // Coração
+        if (target.includes('coxao') && target.includes('mole')) return db.includes('coxao') || (db.includes('mole') && !db.includes('capa'));
         if (target.includes('coracao')) return db.includes('coracao');
-
-        // Correspondências Genéricas
         if (target.includes('picanha')) return db.includes('picanha');
         if (target.includes('alcatra')) return db.includes('alcatra');
         if (target.includes('cupim')) return db.includes('cupim');
@@ -211,27 +183,22 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
         if (!store) return;
 
         const data = MEAT_LIST.map(meat => {
-            // 1. Total Comprado (Use Smart Match)
             const totalBought = orders
                 .filter(o => o.store === store && isProductMatch(o.product, meat))
                 .reduce((acc, o) => acc + (Number(o.quantity) || 0), 0);
 
-            // 2. Total Consumido (Histórico ANTES de hoje)
             const totalConsumedPrev = logs
                 .filter(l => l.store === store && isProductMatch(l.product, meat) && l.date < today)
                 .reduce((acc, l) => acc + (Number(l.quantity_consumed) || 0), 0);
             
-            // 3. Total Ajustes
             const totalAdjustments = adjustments
                 .filter(a => a.store === store && isProductMatch(a.product, meat))
                 .reduce((acc, a) => acc + (Number(a.quantity) || 0), 0);
 
-            // 4. Consumo de Hoje (Somatório do banco)
             const todayConsumptionVal = logs
                 .filter(l => l.store === store && isProductMatch(l.product, meat) && l.date === today)
                 .reduce((acc, l) => acc + Number(l.quantity_consumed), 0);
 
-            // 5. Estoque Inicial do Dia
             const initialStock = totalBought - totalConsumedPrev + totalAdjustments;
 
             return {
@@ -354,8 +321,6 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
         }
     };
 
-    // --- REPORT LOGIC ---
-    
     const getFilteredReportData = () => {
         const logs = rawLogs
             .filter(log => log.store === selectedStore && log.date >= reportStartDate && log.date <= reportEndDate)
@@ -425,7 +390,7 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
         .filter(i => i.type === 'consumption')
         .reduce((acc, l) => acc + l.value, 0);
 
-    if (loading && appData.stores.length === 0) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" size={40}/></div>;
+    if (loading && appData.stores.length === 0) return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-heroRed" size={40}/></div>;
 
     const totalInitial = inventoryData.reduce((acc, i) => acc + i.initialStock, 0);
     const totalConsumption = inventoryData.reduce((acc, i) => acc + i.todayConsumptionVal, 0);
@@ -433,34 +398,34 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
     return (
         <div className="max-w-6xl mx-auto animate-fadeIn pb-32">
-             <div className="bg-white rounded-lg shadow-card border border-slate-200 mb-8">
+             <div className="bg-white rounded-2xl shadow-card border border-slate-100 mb-8 overflow-hidden">
                 
-                <div className="p-4 md:p-6 border-b border-slate-100 bg-slate-50 flex flex-col gap-4 sticky top-16 z-30 shadow-sm rounded-t-lg">
+                <div className="p-6 border-b border-slate-100 bg-white flex flex-col gap-4 sticky top-16 z-30 shadow-sm">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
                             <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
                                 <History size={24} className="text-heroRed"/>
                                 CONTROLE DE CARNES
                             </h2>
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">
                                 {new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                             </p>
                         </div>
                         
                         <div className="flex gap-2 w-full md:w-auto">
-                            <button onClick={loadData} className="p-3 bg-white border border-slate-300 rounded-lg text-slate-500 hover:bg-slate-50 transition-colors" title="Atualizar Dados">
-                                <RefreshCw size={16}/>
+                            <button onClick={loadData} className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors" title="Atualizar Dados">
+                                <RefreshCw size={18}/>
                             </button>
                             <button 
                                 onClick={() => setShowModal(true)}
-                                className="flex-1 md:flex-none bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 shadow-sm transition-colors text-xs uppercase"
+                                className="flex-1 md:flex-none bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-5 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm transition-colors text-xs uppercase"
                             >
                                 <PenTool size={16} className="text-blue-600"/> Ajuste
                             </button>
                             <button 
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="flex-1 md:flex-none bg-heroBlack hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all disabled:opacity-70 text-xs uppercase"
+                                className="flex-1 md:flex-none bg-heroBlack hover:bg-slate-800 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all disabled:opacity-70 text-xs uppercase active:scale-95"
                             >
                                 {saving ? <Loader2 className="animate-spin" size={18}/> : <Save size={18}/>}
                                 Salvar
@@ -472,7 +437,7 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                          <select 
                             value={selectedStore} 
                             onChange={(e) => setSelectedStore(e.target.value)}
-                            className={`w-full p-3 border border-slate-300 rounded-lg font-black text-slate-800 bg-white focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed text-lg ${availableStores.length === 1 ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                            className={`w-full p-3.5 border border-slate-200 rounded-xl font-black text-slate-800 bg-slate-50 focus:ring-2 focus:ring-heroRed/10 focus:border-heroRed text-lg outline-none ${availableStores.length === 1 ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                             disabled={availableStores.length === 1}
                         >
                             {availableStores.length !== 1 && <option value="">Selecione a Loja...</option>}
@@ -483,48 +448,48 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
                 {/* --- DESKTOP VIEW (Tabela) --- */}
                 <div className="hidden md:block overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200">
-                        <thead className="bg-slate-800 text-white">
+                    <table className="min-w-full divide-y divide-slate-100">
+                        <thead className="bg-slate-50">
                             <tr>
-                                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider w-1/3">Corte / Carne</th>
-                                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-wider bg-slate-700 border-r border-slate-600">Estoque Inicial (Kg)</th>
-                                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-wider bg-white text-slate-800 border-x border-slate-200 w-1/4">Consumo Dia (Kg)</th>
-                                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-wider bg-slate-700">Estoque Final (Kg)</th>
+                                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider text-slate-500 w-1/3">Corte / Carne</th>
+                                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-wider bg-slate-100 text-slate-600 border-r border-slate-200">Estoque Inicial (Kg)</th>
+                                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-wider bg-yellow-50 text-yellow-800 border-x border-slate-200 w-1/4">Consumo Dia (Kg)</th>
+                                <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-wider bg-slate-100 text-slate-600">Estoque Final (Kg)</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-slate-200">
+                        <tbody className="bg-white divide-y divide-slate-100">
                             {inventoryData.map((item, idx) => (
                                 <tr key={item.name} className="hover:bg-slate-50 transition-colors group">
-                                    <td className="px-6 py-3 text-sm font-bold text-slate-800 border-r border-slate-100">
+                                    <td className="px-6 py-4 text-sm font-bold text-slate-800 border-r border-slate-100">
                                         {item.name}
                                     </td>
-                                    <td className="px-6 py-3 text-sm text-center font-mono font-bold text-slate-600 bg-slate-50/50">
+                                    <td className="px-6 py-4 text-sm text-center font-mono font-bold text-slate-500 bg-slate-50/30">
                                         {formatWeight(item.initialStock)}
                                     </td>
-                                    <td className="px-4 py-2 text-center border-x border-slate-200 bg-yellow-50/30 p-0">
+                                    <td className="px-4 py-2 text-center border-x border-slate-100 bg-yellow-50/10 p-0">
                                         <input 
                                             type="text" 
                                             value={item.todayConsumptionStr}
                                             onChange={(e) => handleConsumptionChange(idx, e.target.value)}
-                                            className="w-full h-full text-center p-2 bg-transparent font-black text-slate-800 focus:bg-white focus:ring-2 focus:ring-heroRed/50 outline-none font-mono text-lg"
+                                            className="w-full h-full text-center p-2 bg-transparent font-black text-slate-800 focus:bg-white focus:ring-2 focus:ring-yellow-400/50 outline-none font-mono text-lg rounded transition-all"
                                             placeholder="0,000"
                                             inputMode="decimal"
                                         />
                                     </td>
-                                    <td className={`px-6 py-3 text-center text-sm font-black font-mono bg-slate-50/50 ${item.finalStock < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                                    <td className={`px-6 py-4 text-center text-sm font-black font-mono bg-slate-50/30 ${item.finalStock < 0 ? 'text-red-600' : 'text-green-600'}`}>
                                         {formatWeight(item.finalStock)}
                                     </td>
                                 </tr>
                             ))}
-                            <tr className="bg-slate-900 text-white font-bold border-t-4 border-slate-800">
-                                <td className="px-6 py-4 text-right uppercase text-xs tracking-widest">TOTAIS GERAIS</td>
-                                <td className="px-6 py-4 text-center font-mono text-sm text-slate-300">
+                            <tr className="bg-slate-900 text-white font-bold">
+                                <td className="px-6 py-5 text-right uppercase text-xs tracking-widest opacity-70">TOTAIS GERAIS</td>
+                                <td className="px-6 py-5 text-center font-mono text-sm opacity-80">
                                     {formatWeight(totalInitial)}
                                 </td>
-                                <td className="px-6 py-4 text-center font-mono text-lg text-yellow-400 bg-slate-800 border-x border-slate-700">
+                                <td className="px-6 py-5 text-center font-mono text-xl text-yellow-400 bg-slate-800 border-x border-slate-700">
                                     {formatWeight(totalConsumption)}
                                 </td>
-                                <td className="px-6 py-4 text-center font-mono text-sm text-green-400">
+                                <td className="px-6 py-5 text-center font-mono text-sm text-green-400">
                                     {formatWeight(totalFinal)}
                                 </td>
                             </tr>
@@ -533,61 +498,61 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                 </div>
 
                 {/* --- MOBILE VIEW (Cards) --- */}
-                <div className="md:hidden bg-slate-100 p-4 space-y-4 relative z-0">
+                <div className="md:hidden bg-slate-50 p-4 space-y-4 relative z-0">
                     {inventoryData.map((item, idx) => (
-                        <div key={item.name} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="bg-gray-100 p-3 border-b border-gray-200 flex justify-between items-center">
-                                <span className="font-black text-slate-900 text-lg uppercase">{item.name}</span>
+                        <div key={item.name} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
+                                <span className="font-black text-slate-800 text-lg uppercase">{item.name}</span>
                                 <div className="text-right">
-                                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Início</span>
-                                    <span className="font-mono font-bold text-slate-700">{formatWeight(item.initialStock)}</span>
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Início</span>
+                                    <span className="font-mono font-bold text-slate-600">{formatWeight(item.initialStock)}</span>
                                 </div>
                             </div>
-                            <div className="p-4 flex flex-col gap-3">
+                            <div className="p-5 flex flex-col gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-yellow-600 uppercase mb-1 text-center">Consumo Hoje (Kg)</label>
+                                    <label className="block text-xs font-bold text-yellow-600 uppercase mb-2 text-center tracking-wide">Consumo Hoje (Kg)</label>
                                     <div className="relative">
                                         <input 
                                             type="text" 
                                             value={item.todayConsumptionStr}
                                             onChange={(e) => handleConsumptionChange(idx, e.target.value)}
-                                            className="w-full text-center p-4 bg-yellow-50 border-2 border-yellow-100 rounded-xl font-black text-slate-900 focus:bg-white focus:ring-4 focus:ring-yellow-200 focus:border-yellow-400 outline-none font-mono text-3xl shadow-inner"
+                                            className="w-full text-center p-4 bg-yellow-50 border-2 border-yellow-100 rounded-2xl font-black text-slate-900 focus:bg-white focus:ring-4 focus:ring-yellow-200 focus:border-yellow-400 outline-none font-mono text-3xl shadow-inner transition-all"
                                             placeholder="0,000"
                                             inputMode="decimal"
                                         />
                                         {item.todayConsumptionVal > 0 && (
                                             <button 
                                                 onClick={() => handleConsumptionChange(idx, '')} 
-                                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-300 p-2"
+                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 p-2 hover:text-red-500 transition-colors"
                                             >
-                                                <X size={16} />
+                                                <X size={20} />
                                             </button>
                                         )}
                                     </div>
                                 </div>
-                                <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                                <div className="flex justify-between items-center pt-3 border-t border-slate-100">
                                     <span className="text-xs font-bold text-slate-400 uppercase">Estoque Final:</span>
                                     <span className={`font-mono font-black text-xl ${item.finalStock < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                        {formatWeight(item.finalStock)} <span className="text-xs text-gray-400 font-normal">Kg</span>
+                                        {formatWeight(item.finalStock)} <span className="text-xs text-slate-400 font-normal">Kg</span>
                                     </span>
                                 </div>
                             </div>
                         </div>
                     ))}
 
-                    <div className="bg-slate-800 text-white rounded-xl shadow-lg p-4 mt-6 mb-8">
-                        <h3 className="text-center font-bold text-gray-400 text-xs uppercase tracking-widest mb-4">RESUMO DO DIA</h3>
-                        <div className="grid grid-cols-3 gap-2 text-center divide-x divide-gray-600">
+                    <div className="bg-slate-900 text-white rounded-2xl shadow-lg p-5 mt-6 mb-8">
+                        <h3 className="text-center font-bold text-slate-500 text-xs uppercase tracking-widest mb-4">RESUMO DO DIA</h3>
+                        <div className="grid grid-cols-3 gap-2 text-center divide-x divide-slate-700">
                             <div>
-                                <span className="block text-[10px] text-gray-400 uppercase">Inicial</span>
-                                <span className="font-mono font-bold text-sm">{formatWeight(totalInitial)}</span>
+                                <span className="block text-[10px] text-slate-400 uppercase font-bold">Inicial</span>
+                                <span className="font-mono font-bold text-sm text-slate-300">{formatWeight(totalInitial)}</span>
                             </div>
                             <div>
-                                <span className="block text-[10px] text-yellow-400 uppercase font-bold">Consumo</span>
+                                <span className="block text-[10px] text-yellow-500 uppercase font-black">Consumo</span>
                                 <span className="font-mono font-black text-lg text-yellow-400">{formatWeight(totalConsumption)}</span>
                             </div>
                             <div>
-                                <span className="block text-[10px] text-gray-400 uppercase">Final</span>
+                                <span className="block text-[10px] text-slate-400 uppercase font-bold">Final</span>
                                 <span className="font-mono font-bold text-sm text-green-400">{formatWeight(totalFinal)}</span>
                             </div>
                         </div>
@@ -595,155 +560,57 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                 </div>
             </div>
             
-            <div className="mt-6 mx-4 md:mx-0 bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-4 items-center shadow-sm">
-                <div className="bg-blue-100 p-2 rounded-full text-blue-600 hidden md:block">
+            <div className="mt-6 mx-4 md:mx-0 bg-blue-50 border border-blue-100 rounded-2xl p-5 flex gap-4 items-center shadow-sm">
+                <div className="bg-blue-100 p-3 rounded-full text-blue-600 hidden md:block">
                     <AlertCircle size={24} />
                 </div>
                 <div className="text-sm text-blue-800 flex-1">
-                    <strong>Como funciona o cálculo?</strong>
-                    <p className="mt-1 text-blue-700 opacity-90 text-xs md:text-sm">
+                    <strong className="block mb-1">Como funciona o cálculo?</strong>
+                    <p className="text-blue-700 opacity-90 text-xs md:text-sm leading-relaxed">
                         Estoque Inicial = (Total Comprado) - (Consumo Histórico) + (Ajustes Manuais).
                         <br/>O valor digitado em "Consumo Hoje" é subtraído do Estoque Inicial.
                     </p>
                 </div>
             </div>
 
-            {/* RELATÓRIO ADMINISTRATIVO */}
-            {isAdmin && (
-                <div className="mt-8 mx-4 md:mx-0 bg-white rounded-lg shadow border border-gray-200 animate-fadeIn">
-                    <div className="bg-gray-800 text-white p-4 rounded-t-lg flex justify-between items-center">
-                        <h3 className="font-bold uppercase flex items-center gap-2 text-sm">
-                            <Filter size={16}/> Relatório de Retiradas (Consumo)
-                        </h3>
-                    </div>
-                    <div className="p-6">
-                        <div className="flex flex-wrap gap-4 mb-6 items-end">
-                            <div className="w-full md:w-auto">
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Início</label>
-                                <input type="date" value={reportStartDate} onChange={e => setReportStartDate(e.target.value)} className="border p-2 rounded text-sm w-full md:w-40"/>
-                            </div>
-                            <div className="w-full md:w-auto">
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Fim</label>
-                                <input type="date" value={reportEndDate} onChange={e => setReportEndDate(e.target.value)} className="border p-2 rounded text-sm w-full md:w-40"/>
-                            </div>
-                            <div className="w-full md:flex-1 text-right self-center">
-                                <span className="text-xs text-gray-400 uppercase font-bold mr-2">Total Consumido:</span>
-                                <span className="text-xl font-black text-gray-800">{formatWeight(totalReportWeight)} Kg</span>
-                            </div>
-                        </div>
-                        <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Data</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Carne / Produto</th>
-                                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">Qtd (Kg)</th>
-                                        <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {reportData.map(item => (
-                                        <tr key={item.id} className={`hover:bg-gray-50 transition-colors ${item.type === 'adjustment' ? 'bg-amber-50' : ''}`}>
-                                            <td className="px-4 py-3 text-sm text-gray-900">{formatDateBr(item.date)}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-700">
-                                                {item.type === 'adjustment' ? (
-                                                    <div className="flex items-start gap-2">
-                                                        <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-                                                        <div>
-                                                            <span className="font-black text-amber-800 block">AJUSTE</span>
-                                                            <span className="text-amber-700 text-xs font-bold">{item.product}</span>
-                                                            <span className="text-amber-600 text-xs block italic mt-0.5">"{item.reason}"</span>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <span className="font-bold">{item.product}</span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-right font-mono">
-                                                {item.type === 'consumption' && editingLog?.id === item.id ? (
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <input 
-                                                            type="text" 
-                                                            value={editingLog.valStr} 
-                                                            onChange={e => handleEditLogChange(e.target.value)}
-                                                            className="w-20 p-1 text-right border border-blue-300 rounded text-sm font-bold outline-none focus:ring-1 focus:ring-blue-500"
-                                                            autoFocus
-                                                        />
-                                                        <button onClick={handleEditLogSave} className="text-green-600 hover:bg-green-100 p-1 rounded"><CheckCircle size={16}/></button>
-                                                        <button onClick={() => setEditingLog(null)} className="text-red-400 hover:bg-red-100 p-1 rounded"><X size={16}/></button>
-                                                    </div>
-                                                ) : (
-                                                    item.type === 'adjustment' ? (
-                                                        <span className={`font-bold ${item.value >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                            {item.value > 0 ? '+' : ''}{formatWeight(item.value)}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-red-600 font-bold">-{formatWeight(item.value)}</span>
-                                                    )
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                {editingLog?.id !== item.id && (
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        {item.type === 'consumption' && (
-                                                            <button onClick={() => handleEditLogStart(item)} className="text-blue-500 hover:bg-blue-100 p-1.5 rounded transition-colors" title="Editar">
-                                                                <Edit size={16}/>
-                                                            </button>
-                                                        )}
-                                                        <button onClick={() => handleDeleteItem(item)} className="text-red-500 hover:bg-red-100 p-1.5 rounded transition-colors" title="Excluir">
-                                                            <Trash2 size={16}/>
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {reportData.length === 0 && (
-                                        <tr><td colSpan={4} className="p-6 text-center text-gray-400 text-sm">Nenhum lançamento encontrado no período.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {showModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md animate-fadeIn overflow-hidden border border-slate-200">
-                        <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
-                            <h3 className="font-black text-lg text-slate-800 flex items-center gap-2 uppercase">
-                                <PenTool size={18} className="text-heroRed"/> Ajuste Manual
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fadeIn">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="bg-white p-5 border-b border-slate-100 flex justify-between items-center">
+                            <h3 className="font-black text-lg text-slate-800 flex items-center gap-2 uppercase tracking-tight">
+                                <PenTool size={20} className="text-heroRed"/> Ajuste Manual
                             </h3>
-                            <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-700 transition-colors"><X size={24}/></button>
+                            <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-700 transition-colors p-2 rounded-full hover:bg-slate-50"><X size={24}/></button>
                         </div>
                         
                         <div className="p-6 space-y-5">
-                            <div className="bg-yellow-50 text-yellow-800 text-xs p-3 rounded border border-yellow-200 font-medium">
+                            <div className="bg-amber-50 text-amber-900 text-xs p-4 rounded-xl border border-amber-100 font-medium leading-relaxed">
                                 Use esta função para corrigir divergências de contagem ou perdas (validade, quebra).
-                                <br/><span className="font-bold">Loja: {selectedStore}</span>
+                                <div className="mt-1 pt-1 border-t border-amber-200/50">
+                                    <span className="font-bold">Loja: {selectedStore}</span>
+                                </div>
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Produto</label>
-                                <select value={adjProduct} onChange={e => setAdjProduct(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-heroRed/20 outline-none">
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Produto</label>
+                                <select value={adjProduct} onChange={e => setAdjProduct(e.target.value)} className="w-full p-3.5 border border-slate-200 rounded-xl bg-white focus:ring-4 focus:ring-heroRed/10 focus:border-heroRed outline-none transition-all text-sm font-medium">
                                     <option value="">Selecione o Corte...</option>
                                     {MEAT_LIST.map(m => <option key={m} value={m}>{m}</option>)}
                                 </select>
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Tipo de Ajuste</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Tipo de Ajuste</label>
                                 <div className="flex gap-3">
                                     <button 
                                         onClick={() => setAdjType('entrada')}
-                                        className={`flex-1 py-3 rounded-lg font-bold text-sm border transition-all ${adjType === 'entrada' ? 'bg-green-600 text-white border-green-600 shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                                        className={`flex-1 py-3 rounded-xl font-bold text-sm border transition-all ${adjType === 'entrada' ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-100' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
                                     >
                                         ENTRADA (+)
                                     </button>
                                     <button 
                                         onClick={() => setAdjType('saida')}
-                                        className={`flex-1 py-3 rounded-lg font-bold text-sm border transition-all ${adjType === 'saida' ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                                        className={`flex-1 py-3 rounded-xl font-bold text-sm border transition-all ${adjType === 'saida' ? 'bg-red-600 text-white border-red-600 shadow-md shadow-red-100' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
                                     >
                                         SAÍDA/PERDA (-)
                                     </button>
@@ -751,33 +618,33 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Quantidade (Kg)</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Quantidade (Kg)</label>
                                 <div className="relative">
                                     <input 
                                         type="text" 
                                         value={adjValueStr} 
                                         onChange={handleAdjValueChange}
-                                        className="w-full p-3 border border-slate-300 rounded-lg text-right font-mono text-2xl font-black text-slate-800 focus:ring-2 focus:ring-heroRed/20 outline-none"
+                                        className="w-full p-3.5 border border-slate-200 rounded-xl text-right font-mono text-2xl font-black text-slate-800 focus:ring-4 focus:ring-heroRed/10 focus:border-heroRed outline-none transition-all"
                                         inputMode="decimal"
                                     />
-                                    <span className="absolute left-3 top-4 text-xs font-bold text-slate-400">KG</span>
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-black text-slate-300">KG</span>
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Motivo do Ajuste</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Motivo do Ajuste</label>
                                 <input 
                                     type="text" 
                                     value={adjReason} 
                                     onChange={e => setAdjReason(e.target.value)} 
                                     placeholder="Ex: Contagem incorreta, Perda, Bonificação"
-                                    className="w-full p-3 border border-slate-300 rounded-lg text-sm"
+                                    className="w-full p-3.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-slate-400 transition-colors"
                                 />
                             </div>
 
                             <button 
                                 onClick={handleSaveAdjustment}
-                                className="w-full bg-heroBlack text-white py-4 rounded-lg font-bold hover:bg-slate-800 transition-all shadow-lg mt-2 flex justify-center items-center gap-2"
+                                className="w-full bg-heroBlack text-white py-4 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 mt-2 flex justify-center items-center gap-2 active:scale-95"
                             >
                                 <RotateCcw size={18}/> CONFIRMAR AJUSTE
                             </button>

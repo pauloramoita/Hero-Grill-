@@ -13,7 +13,7 @@ import { AdminModule } from './components/admin/AdminModule';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { View, User } from './types';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard, ChevronRight, Beef } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard, ChevronRight, Beef, ArrowRight } from 'lucide-react';
 
 // Constantes para persistência e timeout
 const SESSION_KEY = 'hero_grill_user_session';
@@ -161,20 +161,20 @@ const App: React.FC = () => {
         return user.permissions.modules.includes(moduleId);
     };
 
-    const menuItems: { id: View, label: string, icon: React.ReactNode, color: string, description: string, requiredPerm: string }[] = [
-        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={24} />, color: 'text-slate-700 bg-slate-100', description: 'Visão geral e indicadores', requiredPerm: 'dashboard' },
-        { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={24} />, color: 'text-red-600 bg-red-50', description: 'Cadastro e gestão de compras', requiredPerm: 'pedidos' },
-        { id: 'estoque', label: 'Estoque Carnes', icon: <Beef size={24} />, color: 'text-orange-600 bg-orange-50', description: 'Controle de churrasco', requiredPerm: 'estoque' },
-        { id: 'novo_financeiro', label: 'Financeiro', icon: <Landmark size={24} />, color: 'text-blue-600 bg-blue-50', description: 'Fluxo de caixa e lançamentos', requiredPerm: 'novo_financeiro' },
-        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={24} />, color: 'text-emerald-600 bg-emerald-50', description: 'Gestão de conta 043', requiredPerm: 'controle043' },
-        { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={24} />, color: 'text-violet-600 bg-violet-50', description: 'Balanço mensal consolidado', requiredPerm: 'saldo' },
-        { id: 'financeiro', label: 'Entradas/Saídas', icon: <DollarSign size={24} />, color: 'text-amber-600 bg-amber-50', description: 'Registro consolidado (Legado)', requiredPerm: 'financeiro' },
-        { id: 'backup', label: 'Backup', icon: <Database size={24} />, color: 'text-cyan-600 bg-cyan-50', description: 'Segurança dos dados', requiredPerm: 'backup' },
-        { id: 'admin', label: 'Admin', icon: <Settings size={24} />, color: 'text-slate-800 bg-slate-200', description: 'Usuários e permissões', requiredPerm: 'admin' },
+    const menuItems: { id: View, label: string, icon: React.ReactNode, bgClass: string, textClass: string, description: string, requiredPerm: string }[] = [
+        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={28} />, bgClass: 'bg-slate-800', textClass: 'text-white', description: 'Visão geral e indicadores', requiredPerm: 'dashboard' },
+        { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={28} />, bgClass: 'bg-heroRed', textClass: 'text-white', description: 'Cadastro e gestão de compras', requiredPerm: 'pedidos' },
+        { id: 'estoque', label: 'Estoque Carnes', icon: <Beef size={28} />, bgClass: 'bg-orange-500', textClass: 'text-white', description: 'Controle de churrasco', requiredPerm: 'estoque' },
+        { id: 'novo_financeiro', label: 'Financeiro', icon: <Landmark size={28} />, bgClass: 'bg-blue-600', textClass: 'text-white', description: 'Fluxo de caixa e lançamentos', requiredPerm: 'novo_financeiro' },
+        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={28} />, bgClass: 'bg-emerald-600', textClass: 'text-white', description: 'Gestão de conta 043', requiredPerm: 'controle043' },
+        { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={28} />, bgClass: 'bg-violet-600', textClass: 'text-white', description: 'Balanço mensal consolidado', requiredPerm: 'saldo' },
+        { id: 'financeiro', label: 'Entradas/Saídas', icon: <DollarSign size={28} />, bgClass: 'bg-amber-500', textClass: 'text-white', description: 'Registro consolidado (Legado)', requiredPerm: 'financeiro' },
+        { id: 'backup', label: 'Backup', icon: <Database size={28} />, bgClass: 'bg-cyan-600', textClass: 'text-white', description: 'Segurança dos dados', requiredPerm: 'backup' },
+        { id: 'admin', label: 'Admin', icon: <Settings size={28} />, bgClass: 'bg-slate-200', textClass: 'text-slate-800', description: 'Usuários e permissões', requiredPerm: 'admin' },
     ];
 
     return (
-        <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 font-sans">
+        <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-800 font-sans">
             {/* Header */}
             <Header 
                 isHome={currentView === 'home'}
@@ -185,12 +185,14 @@ const App: React.FC = () => {
             />
 
             {/* Main Content */}
-            <main className="flex-grow w-full">
+            <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
                 {currentView === 'home' && !isDashboardOnly ? (
-                    <div className="max-w-5xl mx-auto p-6 sm:p-8 animate-fadeIn">
-                        <div className="mb-10 text-center">
-                            <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Painel Principal</h1>
-                            <p className="text-slate-500 text-sm max-w-md mx-auto">Selecione um módulo abaixo para acessar as funcionalidades do sistema.</p>
+                    <div className="py-12 animate-fadeIn">
+                        <div className="mb-10">
+                            <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Painel Principal</h1>
+                            <p className="text-slate-500 font-medium">
+                                Selecione um módulo abaixo para iniciar.
+                            </p>
                         </div>
                         
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -198,30 +200,29 @@ const App: React.FC = () => {
                                 <button
                                     key={item.id}
                                     onClick={() => setCurrentView(item.id)}
-                                    className="group relative bg-white rounded-xl p-6 shadow-card hover:shadow-lg transition-all duration-300 border border-slate-200 hover:border-slate-300 text-left flex flex-col h-full overflow-hidden"
+                                    className="group relative bg-white rounded-3xl p-6 shadow-card hover:shadow-card-hover transition-all duration-300 border border-slate-100 text-left flex flex-col h-full overflow-hidden active:scale-[0.98]"
                                 >
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className={`p-3 rounded-lg ${item.color} transition-transform group-hover:scale-110 duration-300`}>
+                                    <div className="flex items-start justify-between mb-6">
+                                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg ${item.bgClass} ${item.textClass} transform transition-transform group-hover:rotate-6`}>
                                             {item.icon}
                                         </div>
-                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-x-2 group-hover:translate-x-0">
-                                            <ChevronRight size={20} className="text-slate-300" />
+                                        <div className="bg-slate-50 p-2 rounded-full opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all">
+                                            <ArrowRight size={20} className="text-slate-400" />
                                         </div>
                                     </div>
                                     
                                     <div className="mt-auto">
-                                        <h3 className="text-lg font-bold text-slate-800 group-hover:text-heroRed transition-colors">{item.label}</h3>
-                                        <p className="text-sm text-slate-500 mt-1 leading-relaxed">{item.description}</p>
+                                        <h3 className="text-xl font-bold text-slate-800 group-hover:text-heroRed transition-colors">{item.label}</h3>
+                                        <p className="text-sm text-slate-500 mt-2 leading-relaxed font-medium">{item.description}</p>
                                     </div>
-                                    
-                                    <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-heroRed/0 to-heroRed/0 group-hover:via-heroRed/10 group-hover:to-heroRed/20 transition-all duration-500"></div>
                                 </button>
                             ))}
                             
                             {menuItems.filter(item => hasPermission(item.requiredPerm)).length === 0 && (
-                                <div className="col-span-full text-center p-12 bg-white rounded-xl border border-dashed border-slate-300">
-                                    <p className="text-slate-400 font-medium">Nenhum módulo liberado para seu perfil.</p>
-                                    <p className="text-xs text-slate-400 mt-1">Contate o administrador.</p>
+                                <div className="col-span-full text-center p-16 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                                    <ShieldCheck size={48} className="mx-auto text-slate-300 mb-4" />
+                                    <p className="text-slate-500 font-medium text-lg">Nenhum módulo liberado para seu perfil.</p>
+                                    <p className="text-sm text-slate-400 mt-2">Contate o administrador.</p>
                                 </div>
                             )}
                         </div>
@@ -229,14 +230,14 @@ const App: React.FC = () => {
                          <div className="mt-16 flex justify-center">
                             <button 
                                 onClick={() => setShowPasswordModal(true)}
-                                className="text-slate-400 hover:text-slate-600 flex items-center gap-2 text-xs font-semibold py-2 px-4 rounded-full hover:bg-slate-100 transition-colors"
+                                className="text-slate-400 hover:text-heroRed flex items-center gap-2 text-xs font-bold py-3 px-6 rounded-full bg-white border border-slate-100 hover:border-red-100 hover:bg-red-50 transition-all shadow-sm"
                             >
                                 <KeyRound size={14} /> Alterar Minha Senha
                             </button>
                         </div>
                     </div>
                 ) : (
-                    <div className="py-6 sm:py-8">
+                    <div className="py-8 animate-fadeIn">
                         {currentView === 'dashboard' && <DashboardModule user={user} />}
                         {currentView === 'pedidos' && <PedidosModule user={user} />}
                         {currentView === 'estoque' && <EstoqueModule user={user} />}
@@ -251,10 +252,12 @@ const App: React.FC = () => {
             </main>
 
             {/* Footer */}
-            <footer className="bg-white border-t border-slate-200 py-6 text-center no-print">
-                <p className="text-slate-400 text-xs font-medium">
-                    &copy; {new Date().getFullYear()} <span className="font-bold text-slate-600">Hero Grill Self-service</span>. Todos os direitos reservados.
-                </p>
+            <footer className="bg-white border-t border-slate-100 py-8 text-center no-print mt-auto">
+                <div className="max-w-7xl mx-auto px-4">
+                    <p className="text-slate-400 text-xs font-bold tracking-wide">
+                        &copy; {new Date().getFullYear()} HERO GRILL SELF-SERVICE
+                    </p>
+                </div>
             </footer>
 
             {showPasswordModal && <ChangePasswordModal user={user} onClose={() => setShowPasswordModal(false)} />}

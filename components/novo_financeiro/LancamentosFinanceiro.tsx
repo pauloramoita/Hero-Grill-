@@ -12,7 +12,7 @@ import {
     getOrders
 } from '../../services/storageService';
 import { AppData, FinancialAccount, DailyTransaction, Order, User } from '../../types';
-import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock, Building2, Wallet, TrendingUp, TrendingDown, ArrowLeft, Landmark, Plus, Wand2, Download, Printer } from 'lucide-react';
+import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock, Building2, Wallet, TrendingUp, TrendingDown, ArrowLeft, Landmark, Plus, Wand2, Download, Printer, X } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 import { AutoPixModal } from './AutoPixModal';
 
@@ -20,7 +20,6 @@ interface LancamentosFinanceiroProps {
     user: User;
 }
 
-// Hook para persistência de estado
 function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
     const [state, setState] = useState<T>(() => {
         const storageValue = localStorage.getItem(key);
@@ -47,7 +46,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [orders, setOrders] = useState<Order[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<DailyTransaction[]>([]);
 
-    // Estados do Formulário (Persistidos)
+    // Form
     const [date, setDate] = usePersistedState('hero_state_fin_date', getTodayLocalISO()); 
     const [paymentDate, setPaymentDate] = usePersistedState('hero_state_fin_paymentdate', getTodayLocalISO()); 
     const [store, setStore] = usePersistedState('hero_state_fin_store', '');
@@ -66,25 +65,14 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     const [status, setStatus] = usePersistedState<'Pago' | 'Pendente'>('hero_state_fin_status', 'Pendente');
     const [description, setDescription] = usePersistedState('hero_state_fin_description', ''); 
 
-    // Estados de Recorrência (Persistidos)
     const [recurrenceType, setRecurrenceType] = usePersistedState<'none' | 'installment' | 'fixed'>('hero_state_fin_recurrence', 'none');
     const [recurrenceCount, setRecurrenceCount] = usePersistedState<number>('hero_state_fin_rec_count', 2);
 
     const [editingItem, setEditingItem] = useState<DailyTransaction | null>(null);
     const [showAutoPixModal, setShowAutoPixModal] = useState(false);
 
-    // Filters (Full Set matching ConsultaFinanceiro)
-    const [dateType, setDateType] = usePersistedState<'due' | 'payment' | 'created'>('hero_state_fin_filter_dtype', 'due');
-    const [startDate, setStartDate] = usePersistedState('hero_state_fin_filter_start', getTodayLocalISO());
     const [endDate, setEndDate] = usePersistedState('hero_state_fin_filter_end', getTodayLocalISO());
     
-    const [filterStore, setFilterStore] = usePersistedState('hero_state_fin_filter_store', '');
-    const [filterAccount, setFilterAccount] = usePersistedState('hero_state_fin_filter_account', '');
-    const [filterCategory, setFilterCategory] = usePersistedState('hero_state_fin_filter_category', '');
-    const [filterSupplier, setFilterSupplier] = usePersistedState('hero_state_fin_filter_supplier', '');
-    const [filterStatus, setFilterStatus] = usePersistedState('hero_state_fin_filter_status', ''); 
-    const [filterClassification, setFilterClassification] = usePersistedState('hero_state_fin_filter_class', '');
-
     const canViewBalances = user.isMaster || (user.permissions?.modules && user.permissions.modules.includes('view_balances'));
 
     useEffect(() => {
@@ -111,7 +99,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         }
     };
 
-    // Determine available stores based on user permissions
     const availableStores = useMemo(() => {
         if (user.isMaster) return appData.stores;
         if (user.permissions.stores && user.permissions.stores.length > 0) {
@@ -120,18 +107,12 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         return appData.stores;
     }, [appData.stores, user]);
 
-    // Auto-select if only one store available
     useEffect(() => {
         if (availableStores.length === 1) {
             const singleStore = availableStores[0];
             if(!store) setStore(singleStore);
-            if(!filterStore) setFilterStore(singleStore);
         }
-    }, [availableStores, store, filterStore]);
-
-    useEffect(() => {
-        applyFilters();
-    }, [transactions, orders, startDate, endDate, filterStore, filterAccount, filterCategory, filterSupplier, filterStatus, dateType, filterClassification, user]);
+    }, [availableStores, store]);
 
     const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawValue = e.target.value.replace(/\D/g, '');
@@ -225,35 +206,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (window.confirm('Excluir lançamento?')) {
-            await deleteDailyTransaction(id);
-            loadData();
-        }
-    };
-
-    const handlePay = async (t: DailyTransaction) => {
-        if (!t.accountId || !t.paymentMethod || t.paymentMethod === '-' || !t.store) {
-            alert("Para realizar o pagamento, é necessário preencher 'Conta' e 'Método de Pagamento'.\n\nClique no botão Editar (lápis) para completar o cadastro.");
-            return;
-        }
-
-        if (window.confirm(`Confirmar pagamento de ${formatCurrency(t.value)}?`)) {
-            const updated: DailyTransaction = { 
-                ...t, 
-                status: 'Pago', 
-                paymentDate: getTodayLocalISO(),
-                origin: 'manual' // Converting to manual preserves it
-            };
-            await saveDailyTransaction(updated);
-            loadData();
-        }
-    };
-
-    const handleEditClick = (item: DailyTransaction) => {
-        setEditingItem(item);
-    }
-
     const handleModalSave = async (updated: DailyTransaction) => {
         try {
             await saveDailyTransaction(updated);
@@ -275,150 +227,11 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         }
     }
 
-    const getAccountName = (id: string | null | undefined) => {
-        if (!id) return '-';
-        return accounts.find(a => a.id === id)?.name || 'Conta Removida';
-    };
-
-    // --- FILTERS LOGIC ---
-    const applyFilters = () => {
-        // Merge Transactions and Orders (Orders are virtual pending expenses)
-        const existingIds = new Set(transactions.map(t => t.id));
-        
-        const mappedOrders = orders
-            .filter(order => !existingIds.has(order.id))
-            .map(order => ({
-                id: order.id,
-                date: order.deliveryDate || order.date, 
-                paymentDate: null,
-                store: order.store,
-                type: 'Despesa' as const, 
-                accountId: null,
-                destinationStore: undefined,
-                destinationAccountId: undefined,
-                paymentMethod: 'Boleto',
-                product: order.product,
-                category: order.category || '',
-                supplier: order.supplier,
-                classification: order.type || 'Variável',
-                value: order.totalValue,
-                status: 'Pendente' as const,
-                description: `Pedido ref. ${order.product}`,
-                origin: 'pedido' as const,
-                createdAt: order.createdAt || order.date 
-            } as DailyTransaction));
-
-        const allItems = [...transactions, ...mappedOrders];
-
-        const result = allItems.filter(t => {
-            let targetDate = t.date; 
-            
-            if (dateType === 'payment') {
-                targetDate = t.paymentDate || '';
-            } else if (dateType === 'created') {
-                targetDate = t.createdAt ? t.createdAt.split('T')[0] : '';
-            }
-            
-            if ((dateType === 'payment' || dateType === 'created') && !targetDate) return false;
-
-            const matchesDate = targetDate >= startDate && targetDate <= endDate;
-            
-            // Store Filter Logic (Enhanced for Transfers)
-            const matchesStore = !filterStore || 
-                                 t.store === filterStore || 
-                                 (t.type === 'Transferência' && t.destinationStore === filterStore);
-
-            const matchesCategory = !filterCategory || t.category === filterCategory;
-            const matchesSupplier = !filterSupplier || t.supplier === filterSupplier;
-            const matchesStatus = !filterStatus || t.status === filterStatus;
-            const matchesClassification = !filterClassification || t.classification === filterClassification;
-            
-            let matchesAccount = true;
-            if (filterAccount) {
-                if (t.type === 'Transferência') {
-                    matchesAccount = t.accountId === filterAccount || t.destinationAccountId === filterAccount;
-                } else {
-                    matchesAccount = t.accountId === filterAccount;
-                }
-            }
-
-            let allowed = true;
-            if (user && !user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
-                 allowed = user.permissions.stores.includes(t.store) || 
-                           (t.type === 'Transferência' && !!t.destinationStore && user.permissions.stores.includes(t.destinationStore));
-            }
-
-            return matchesDate && matchesStore && matchesCategory && matchesSupplier && matchesAccount && matchesStatus && matchesClassification && allowed;
-        });
-
-        // Sort
-        result.sort((a, b) => {
-            if (dateType === 'created') {
-                 const dateA = a.createdAt || '';
-                 const dateB = b.createdAt || '';
-                 return dateB.localeCompare(dateA);
-            }
-            if (dateType === 'payment') {
-                const dateA = a.paymentDate || '';
-                const dateB = b.paymentDate || '';
-                return dateB.localeCompare(dateA);
-            }
-            return a.date.localeCompare(b.date);
-        });
-
-        setFilteredTransactions(result);
-    };
-
-    const setDateRange = (type: 'hoje' | 'semana' | 'mes' | 'ano') => {
-        const today = new Date();
-        const formatDate = (d: Date) => d.toISOString().split('T')[0];
-
-        if (type === 'hoje') {
-            const str = formatDate(today);
-            setStartDate(str);
-            setEndDate(str);
-        } else if (type === 'semana') {
-            const day = today.getDay();
-            const diffToMon = today.getDate() - day + (day === 0 ? -6 : 1);
-            const monday = new Date(today.setDate(diffToMon));
-            const sunday = new Date(today.setDate(monday.getDate() + 6));
-            setStartDate(formatDate(monday));
-            setEndDate(formatDate(sunday));
-        } else if (type === 'mes') {
-            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-            setStartDate(formatDate(firstDay));
-            setEndDate(formatDate(lastDay));
-        } else if (type === 'ano') {
-            const firstDay = new Date(today.getFullYear(), 0, 1);
-            const lastDay = new Date(today.getFullYear(), 11, 31);
-            setStartDate(formatDate(firstDay));
-            setEndDate(formatDate(lastDay));
-        }
-    };
-
-    const clearFilters = () => {
-        if (availableStores.length !== 1) setFilterStore(''); 
-        setFilterAccount(''); 
-        setFilterCategory(''); 
-        setFilterSupplier(''); 
-        setFilterStatus('');
-        setFilterClassification('');
-        setDateRange('hoje');
-        setDateType('due');
-    };
-
-    // --- LÓGICA UNIFICADA DE SALDO (Calcula Saldo Real Ignorando Filtros Detalhados) ---
     const getBalanceForAccount = (acc: FinancialAccount, dateLimit: string) => {
         let balance = acc.initialBalance;
         
         transactions.forEach(t => {
             if (t.status !== 'Pago' || t.date > dateLimit) return;
-
-            // Saldo REAL não deve filtrar por categoria/fornecedor
-            // Mas deve respeitar o filtro de Loja se aplicável para cálculo de contexto
-            // No caso dos Cards, queremos o saldo TOTAL do banco.
-            
             const isDebit = t.accountId === acc.id;
             const isCredit = t.destinationAccountId === acc.id && t.type === 'Transferência';
 
@@ -426,187 +239,54 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 if (t.type === 'Despesa' || t.type === 'Transferência') balance -= t.value;
                 if (t.type === 'Receita') balance += t.value;
             }
-            
             if (isCredit) {
                 balance += t.value;
             }
         });
-        
         return balance;
     };
 
-    // Função para o Modal de AutoPix
     const getCurrentBalanceForModal = (accountId: string) => {
         const acc = accounts.find(a => a.id === accountId);
         if (!acc) return 0;
         return getBalanceForAccount(acc, getTodayLocalISO());
     };
 
-    // --- SALDOS EM TEMPO REAL (Cartões) ---
     const accountsByStore = useMemo(() => {
         const groups: Record<string, { accounts: FinancialAccount[], totalBalance: number }> = {};
-        
         accounts.forEach(acc => {
-            if (filterStore && acc.store !== filterStore) return; 
-            // Ignore filterAccount for the card list grouping unless specifically requested, 
-            // but typically we want to see all accounts for the selected store.
-            if (filterAccount && acc.id !== filterAccount) return; 
-            
-            if (!groups[acc.store]) {
-                groups[acc.store] = { accounts: [], totalBalance: 0 };
-            }
-            
-            // Use endDate from filters as cut-off
+            if (!groups[acc.store]) groups[acc.store] = { accounts: [], totalBalance: 0 };
             const currentBal = getBalanceForAccount(acc, endDate);
-            
             groups[acc.store].accounts.push(acc);
             groups[acc.store].totalBalance += currentBal;
         });
-
         Object.values(groups).forEach(group => {
             group.accounts.sort((a, b) => a.name.localeCompare(b.name));
         });
-
-        // Sort Stores Alphabetically
         return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
-    }, [accounts, transactions, filterStore, filterAccount, endDate]); 
-    // Dependencias reduzidas: filterSupplier/Category removidos para não afetar o saldo real visualizado
+    }, [accounts, transactions, endDate]);
 
     if (loading) return <Loader2 className="animate-spin mx-auto mt-10" />;
 
-    const filteredList = filteredTransactions;
-    
-    // --- RESUMO DA SELEÇÃO (Aqui sim filtramos tudo) ---
-    const calculateSummary = () => {
-        let totalReceitas = 0;
-        let totalDespesas = 0;
-
-        filteredList.forEach(t => {
-             if (t.type === 'Receita') totalReceitas += t.value;
-             else if (t.type === 'Despesa') totalDespesas += t.value;
-             else if (t.type === 'Transferência') {
-                 const isIncoming = (!filterStore && !filterAccount) || 
-                               (filterStore && t.destinationStore === filterStore) ||
-                               (filterAccount && t.destinationAccountId === filterAccount);
-                 const isOutgoing = (!filterStore && !filterAccount) || 
-                               (filterStore && t.store === filterStore) ||
-                               (filterAccount && t.accountId === filterAccount);
-                 
-                 if (isIncoming) totalReceitas += t.value;
-                 if (isOutgoing) totalDespesas += t.value;
-             }
-        });
-
-        // Calculate Previous Balance
-        // Merge Transactions and Orders for full history check
-        const existingIds = new Set(transactions.map(t => t.id));
-        const mappedOrders = orders
-            .filter(order => !existingIds.has(order.id))
-            .map(order => ({
-                id: order.id,
-                date: order.deliveryDate || order.date,
-                paymentDate: null,
-                store: order.store,
-                type: 'Despesa' as const,
-                accountId: null,
-                destinationStore: undefined,
-                destinationAccountId: undefined,
-                paymentMethod: 'Boleto',
-                product: order.product,
-                category: order.category || '',
-                supplier: order.supplier,
-                classification: order.type || 'Variável',
-                value: order.totalValue,
-                status: 'Pendente' as const,
-                description: `Pedido ref. ${order.product}`,
-                origin: 'pedido' as const,
-                createdAt: order.createdAt || order.date 
-            } as DailyTransaction));
-
-        const allMerged = [...transactions, ...mappedOrders];
-
-        let initialBalanceSum = 0;
-        const isAccountView = !filterCategory && !filterSupplier && !filterClassification;
-        
-        if (isAccountView) {
-            accounts.forEach(a => {
-                if (filterStore && a.store !== filterStore) return;
-                if (filterAccount && a.id !== filterAccount) return;
-                initialBalanceSum += a.initialBalance;
-            });
-        }
-
-        let previousVariation = 0;
-
-        allMerged.forEach(t => {
-            let targetDate = t.date; 
-            if (dateType === 'payment') targetDate = t.paymentDate || '';
-            else if (dateType === 'created') targetDate = t.createdAt ? t.createdAt.split('T')[0] : '';
-            
-            if (!targetDate || targetDate >= startDate) return; 
-
-            const matchesStore = !filterStore || t.store === filterStore || (t.type === 'Transferência' && t.destinationStore === filterStore);
-            const matchesCategory = !filterCategory || t.category === filterCategory;
-            const matchesSupplier = !filterSupplier || t.supplier === filterSupplier;
-            const matchesStatus = !filterStatus || t.status === filterStatus;
-            const matchesClassification = !filterClassification || t.classification === filterClassification;
-            
-            let matchesAccount = true;
-            if (filterAccount) {
-                if (t.type === 'Transferência') {
-                    matchesAccount = t.accountId === filterAccount || t.destinationAccountId === filterAccount;
-                } else {
-                    matchesAccount = t.accountId === filterAccount;
-                }
-            }
-
-            let allowed = true;
-            if (user && !user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
-                 allowed = user.permissions.stores.includes(t.store) || 
-                           (t.type === 'Transferência' && !!t.destinationStore && user.permissions.stores.includes(t.destinationStore));
-            }
-
-            if (matchesStore && matchesCategory && matchesSupplier && matchesAccount && matchesStatus && matchesClassification && allowed) {
-                if (t.type === 'Receita') previousVariation += t.value;
-                else if (t.type === 'Despesa') previousVariation -= t.value;
-                else if (t.type === 'Transferência') {
-                     const isIncoming = (!filterStore && !filterAccount) || 
-                                   (filterStore && t.destinationStore === filterStore) ||
-                                   (filterAccount && t.destinationAccountId === filterAccount);
-                     const isOutgoing = (!filterStore && !filterAccount) || 
-                                   (filterStore && t.store === filterStore) ||
-                                   (filterAccount && t.accountId === filterAccount);
-                     
-                     if (isIncoming) previousVariation += t.value;
-                     if (isOutgoing) previousVariation -= t.value;
-                }
-            }
-        });
-
-        const previousBalance = initialBalanceSum + previousVariation;
-        const finalBalance = previousBalance + totalReceitas - totalDespesas;
-
-        return { totalReceitas, totalDespesas, previousBalance, finalBalance };
-    };
-
-    const { totalReceitas, totalDespesas, previousBalance, finalBalance } = calculateSummary();
+    const labelClass = "block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1";
+    const inputClass = "w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-700 text-sm focus:outline-none focus:border-heroRed focus:ring-4 focus:ring-heroRed/10 transition-all";
     const isSingleStore = availableStores.length === 1;
 
     return (
-        <div className="space-y-8 pb-20">
+        <div className="space-y-8 pb-20 animate-fadeIn">
             {canViewBalances ? (
                 <div className="space-y-4">
                     <div className="flex items-center gap-2 mb-2">
-                        <div className="bg-heroRed p-1.5 rounded-md text-white">
-                            <Wallet size={18} />
+                        <div className="bg-emerald-100 p-1.5 rounded-lg text-emerald-700">
+                            <Wallet size={20} />
                         </div>
-                        <h3 className="font-bold text-lg text-slate-700">Saldos em Tempo Real (Até {formatDateBr(endDate)})</h3>
+                        <h3 className="font-bold text-lg text-slate-700">Saldos em Tempo Real</h3>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                         {accountsByStore.map(([storeName, data]) => (
-                            <div key={storeName} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow duration-300">
-                                <div className="bg-slate-50 px-5 py-4 border-b border-slate-100 flex justify-between items-center">
+                            <div key={storeName} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-all duration-300">
+                                <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
                                     <div className="flex items-center gap-2">
                                         <Building2 size={18} className="text-slate-400" />
                                         <span className="font-bold text-slate-700 truncate max-w-[150px]" title={storeName}>{storeName}</span>
@@ -622,7 +302,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                     {data.accounts.map(acc => {
                                         const bal = getBalanceForAccount(acc, endDate);
                                         return (
-                                            <div key={acc.id} className="flex justify-between items-center px-5 py-3 hover:bg-slate-50 transition-colors group">
+                                            <div key={acc.id} className="flex justify-between items-center px-6 py-3 hover:bg-slate-50 transition-colors group">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-2 h-2 rounded-full ${bal >= 0 ? 'bg-emerald-400' : 'bg-red-400'}`}></div>
                                                     <span className="text-sm font-medium text-slate-600 group-hover:text-slate-900 transition-colors">{acc.name}</span>
@@ -633,91 +313,81 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                             </div>
                                         );
                                     })}
-                                    {data.accounts.length === 0 && (
-                                        <div className="p-4 text-center text-xs text-slate-400 italic">Nenhuma conta encontrada.</div>
-                                    )}
                                 </div>
                             </div>
                         ))}
-                        {accountsByStore.length === 0 && (
-                            <div className="col-span-full text-center p-8 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-slate-400">
-                                <Wallet size={48} className="mx-auto mb-2 opacity-20"/>
-                                <p>Nenhuma conta encontrada para os filtros selecionados.</p>
-                            </div>
-                        )}
                     </div>
                 </div>
             ) : (
-                <div className="bg-gray-100 border border-gray-200 rounded p-4 flex items-center justify-center gap-2 text-gray-500">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 flex items-center justify-center gap-3 text-slate-500">
                     <EyeOff size={20} />
                     <span className="text-sm font-bold">Visualização de saldos restrita ao Gerente/Administrador.</span>
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-card border border-slate-200 animate-fadeIn relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-heroRed"></div>
+            <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl shadow-card border border-slate-100 animate-fadeIn relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-heroRed"></div>
                 
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-slate-100 pb-4 gap-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-slate-100 pb-6 gap-6">
                     <div>
-                        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                            <DollarSign className="text-heroRed" />
+                        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                            <div className="p-2 bg-heroRed/10 rounded-lg text-heroRed">
+                                <DollarSign size={24} />
+                            </div>
                             Novo Lançamento
                         </h2>
-                        <p className="text-slate-400 text-xs mt-1">Registre receitas, despesas ou transferências.</p>
+                        <p className="text-slate-400 text-sm mt-1 font-medium pl-1">Registre receitas, despesas ou transferências.</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                         {recurrenceType !== 'none' && (
-                            <span className="text-xs font-bold bg-purple-50 text-purple-700 px-3 py-1.5 rounded-full border border-purple-100 flex items-center gap-1.5 animate-pulse">
-                                <Repeat size={12} /> Modo Repetição Ativo
+                            <span className="text-xs font-bold bg-purple-50 text-purple-700 px-4 py-2 rounded-full border border-purple-100 flex items-center gap-2 animate-pulse">
+                                <Repeat size={14} /> Modo Repetição Ativo
                             </span>
                         )}
                         <button 
                             type="button" 
                             onClick={() => setShowAutoPixModal(true)}
-                            className="bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-black hover:bg-purple-700 flex items-center gap-2 shadow-md transform transition-all active:scale-95"
+                            className="bg-purple-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-purple-700 flex items-center gap-2 shadow-md shadow-purple-200 transform transition-all active:scale-95 hover:-translate-y-0.5"
                         >
-                            <Wand2 size={14} className="text-yellow-300"/>
-                            ✨ Pix Automático
+                            <Wand2 size={16} className="text-yellow-300"/>
+                            Pix Automático
                         </button>
                     </div>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                    {/* ... FORM FIELDS ... */}
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Tipo de Operação</label>
-                        <div className="relative">
-                            <select 
-                                value={type} 
-                                onChange={e => {
-                                    const newType = e.target.value as any;
-                                    setType(newType);
-                                    if (newType === 'Transferência') {
-                                        setPaymentMethod('Transferência bancária');
-                                    }
-                                }} 
-                                className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed"
-                            >
-                                <option value="Despesa">🔴 Despesa (Saída)</option>
-                                <option value="Receita">🟢 Receita (Entrada)</option>
-                                <option value="Transferência">🟣 Transferência</option>
-                            </select>
-                        </div>
+                        <label className={labelClass}>Tipo de Operação</label>
+                        <select 
+                            value={type} 
+                            onChange={e => {
+                                const newType = e.target.value as any;
+                                setType(newType);
+                                if (newType === 'Transferência') {
+                                    setPaymentMethod('Transferência bancária');
+                                }
+                            }} 
+                            className={inputClass}
+                        >
+                            <option value="Despesa">🔴 Despesa (Saída)</option>
+                            <option value="Receita">🟢 Receita (Entrada)</option>
+                            <option value="Transferência">🟣 Transferência</option>
+                        </select>
                     </div>
                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">
+                        <label className={labelClass}>
                             Valor {recurrenceType === 'installment' ? 'da Parcela' : ''} (R$)
                         </label>
                         <input 
                             type="text" 
                             value={formatCurrency(value)} 
                             onChange={handleCurrencyChange} 
-                            className="w-full p-2.5 border border-slate-300 rounded-lg text-right font-black text-lg text-slate-800 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none"
+                            className={`${inputClass} text-right font-black text-lg text-slate-800`}
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Método Pagamento</label>
-                        <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-700 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none text-sm font-medium">
+                        <label className={labelClass}>Método Pagamento</label>
+                        <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className={inputClass}>
                             <option value="Boleto">Boleto</option>
                             <option value="PiX">PiX</option>
                             <option value="Dinheiro">Dinheiro</option>
@@ -728,17 +398,17 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 </div>
 
                 {type === 'Transferência' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6 bg-slate-50 p-6 rounded-lg border border-slate-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6 bg-slate-50/80 p-6 rounded-xl border border-slate-200">
                         <div className="space-y-4">
-                            <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-2 flex items-center gap-2">
-                                <TrendingDown size={16} className="text-red-500"/> Origem (Sai de)
+                            <h4 className="font-bold text-slate-700 pb-2 flex items-center gap-2 border-b border-slate-200">
+                                <div className="bg-red-100 p-1 rounded text-red-600"><TrendingDown size={14}/></div> Origem (Sai de)
                             </h4>
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Loja Origem</label>
+                                <label className={labelClass}>Loja Origem</label>
                                 <select 
                                     value={store} 
                                     onChange={e => setStore(e.target.value)} 
-                                    className={`w-full p-2.5 border border-slate-300 rounded-lg ${isSingleStore ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
+                                    className={`${inputClass} ${isSingleStore ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
                                     disabled={isSingleStore}
                                 >
                                     <option value="">Selecione...</option>
@@ -746,8 +416,8 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Conta Origem</label>
-                                <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
+                                <label className={labelClass}>Conta Origem</label>
+                                <select value={accountId} onChange={e => setAccountId(e.target.value)} className={inputClass}>
                                     <option value="">Selecione...</option>
                                     {accounts.filter(a => !store || a.store === store).map(a => (
                                         <option key={a.id} value={a.id}>{a.name}</option>
@@ -756,19 +426,19 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                             </div>
                         </div>
                         <div className="space-y-4">
-                            <h4 className="font-bold text-slate-700 border-b border-slate-200 pb-2 flex items-center gap-2">
-                                <TrendingUp size={16} className="text-emerald-500"/> Destino (Vai para)
+                            <h4 className="font-bold text-slate-700 pb-2 flex items-center gap-2 border-b border-slate-200">
+                                <div className="bg-emerald-100 p-1 rounded text-emerald-600"><TrendingUp size={14}/></div> Destino (Vai para)
                             </h4>
                              <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Loja Destino</label>
-                                <select value={destinationStore} onChange={e => setDestinationStore(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
+                                <label className={labelClass}>Loja Destino</label>
+                                <select value={destinationStore} onChange={e => setDestinationStore(e.target.value)} className={inputClass}>
                                     <option value="">Selecione...</option>
                                     {appData.stores.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Conta Destino</label>
-                                <select value={destinationAccountId} onChange={e => setDestinationAccountId(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
+                                <label className={labelClass}>Conta Destino</label>
+                                <select value={destinationAccountId} onChange={e => setDestinationAccountId(e.target.value)} className={inputClass}>
                                     <option value="">Selecione...</option>
                                     {accounts.filter(a => !destinationStore || a.store === destinationStore).map(a => (
                                         <option key={a.id} value={a.id}>{a.name}</option>
@@ -780,11 +450,11 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Loja</label>
+                            <label className={labelClass}>Loja</label>
                             <select 
                                 value={store} 
                                 onChange={e => setStore(e.target.value)} 
-                                className={`w-full p-2.5 border border-slate-300 rounded-lg ${isSingleStore ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
+                                className={`${inputClass} ${isSingleStore ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
                                 disabled={isSingleStore}
                             >
                                 <option value="">Selecione...</option>
@@ -792,8 +462,8 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Conta {accountId === '' && <span className="text-red-500">*</span>}</label>
-                            <select value={accountId} onChange={e => setAccountId(e.target.value)} className={`w-full p-2.5 border rounded-lg bg-white ${!accountId ? 'border-red-300 bg-red-50' : 'border-slate-300'}`}>
+                            <label className={labelClass}>Conta {accountId === '' && <span className="text-heroRed">*</span>}</label>
+                            <select value={accountId} onChange={e => setAccountId(e.target.value)} className={inputClass}>
                                 <option value="">Selecione a Conta...</option>
                                 {accounts.filter(a => !store || a.store === store).map(a => (
                                     <option key={a.id} value={a.id}>{a.name}</option>
@@ -801,32 +471,32 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                             </select>
                         </div>
                          <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Categoria</label>
-                            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
+                            <label className={labelClass}>Categoria</label>
+                            <select value={category} onChange={e => setCategory(e.target.value)} className={inputClass}>
                                 <option value="">Selecione...</option>
                                 {appData.categories.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
                         
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Fornecedor (Opcional)</label>
-                            <select value={supplier} onChange={e => setSupplier(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
+                            <label className={labelClass}>Fornecedor (Opcional)</label>
+                            <select value={supplier} onChange={e => setSupplier(e.target.value)} className={inputClass}>
                                 <option value="">Selecione...</option>
                                 {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Produto (Opcional)</label>
-                            <select value={product} onChange={e => setProduct(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
+                            <label className={labelClass}>Produto (Opcional)</label>
+                            <select value={product} onChange={e => setProduct(e.target.value)} className={inputClass}>
                                 <option value="">Selecione...</option>
                                 {appData.products.map(p => <option key={p} value={p}>{p}</option>)}
                             </select>
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Classificação</label>
-                            <select value={classification} onChange={e => setClassification(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
+                            <label className={labelClass}>Classificação</label>
+                            <select value={classification} onChange={e => setClassification(e.target.value)} className={inputClass}>
                                 <option value="">Selecione...</option>
                                 {appData.types.map(t => <option key={t} value={t}>{t}</option>)}
                             </select>
@@ -836,20 +506,20 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Data Vencimento</label>
-                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-sm"/>
+                        <label className={labelClass}>Data Vencimento</label>
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputClass}/>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Data Pagamento</label>
-                        <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-sm"/>
+                        <label className={labelClass}>Data Pagamento</label>
+                        <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className={inputClass}/>
                     </div>
                     <div className="md:col-span-2">
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Descrição</label>
+                        <label className={labelClass}>Descrição</label>
                         <input 
                             type="text" 
                             value={description} 
                             onChange={e => setDescription(e.target.value)} 
-                            className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-sm placeholder-slate-400"
+                            className={inputClass}
                             placeholder="Ex: Aluguel referente a Janeiro"
                             maxLength={100}
                         />
@@ -857,320 +527,78 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 </div>
 
                 {/* Recurrence Panel */}
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
+                <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex flex-col md:flex-row md:items-center gap-4">
                         <div className="flex items-center gap-2 text-slate-700 font-bold min-w-fit">
-                            <Repeat size={18} />
+                            <Repeat size={20} className="text-slate-400"/>
                             <span className="text-sm">Repetição:</span>
                         </div>
-                        <div className="flex gap-2 flex-1">
+                        <div className="flex gap-2 flex-wrap">
                             <button 
                                 type="button"
                                 onClick={() => setRecurrenceType('none')}
-                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${recurrenceType === 'none' ? 'bg-slate-800 text-white shadow' : 'bg-white border border-slate-200 hover:bg-slate-100 text-slate-600'}`}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${recurrenceType === 'none' ? 'bg-slate-800 text-white shadow-md' : 'bg-white border border-slate-200 hover:bg-slate-100 text-slate-600'}`}
                             >
                                 Único
                             </button>
                             <button 
                                 type="button"
                                 onClick={() => { setRecurrenceType('installment'); setRecurrenceCount(2); }}
-                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${recurrenceType === 'installment' ? 'bg-blue-600 text-white shadow' : 'bg-white border border-slate-200 hover:bg-blue-50 text-blue-600'}`}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${recurrenceType === 'installment' ? 'bg-blue-600 text-white shadow-md' : 'bg-white border border-slate-200 hover:bg-blue-50 text-blue-600'}`}
                             >
                                 Parcelado (x)
                             </button>
                             <button 
                                 type="button"
                                 onClick={() => { setRecurrenceType('fixed'); setRecurrenceCount(12); }}
-                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${recurrenceType === 'fixed' ? 'bg-purple-600 text-white shadow' : 'bg-white border border-slate-200 hover:bg-purple-50 text-purple-600'}`}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${recurrenceType === 'fixed' ? 'bg-purple-600 text-white shadow-md' : 'bg-white border border-slate-200 hover:bg-purple-50 text-purple-600'}`}
                             >
                                 Fixo (Mensal)
                             </button>
                         </div>
-                        
-                        {recurrenceType !== 'none' && (
-                            <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm animate-fadeIn">
-                                <span className="text-xs font-bold px-2 text-slate-500">
-                                    {recurrenceType === 'installment' ? 'Qtd. Parcelas:' : 'Repetir por (Meses):'}
-                                </span>
-                                <input 
-                                    type="number" 
-                                    min="2" 
-                                    max="120" 
-                                    value={recurrenceCount} 
-                                    onChange={(e) => setRecurrenceCount(parseInt(e.target.value) || 2)}
-                                    className="w-16 p-1 border border-slate-200 rounded text-center font-bold text-slate-700 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none"
-                                />
-                            </div>
-                        )}
                     </div>
-                    {recurrenceType === 'installment' && (
-                        <p className="text-xs text-blue-600 mt-2 ml-1 flex items-center gap-1">
-                            <CalendarClock size={12}/> O sistema criará {recurrenceCount} lançamentos mensais. A descrição terá o sufixo (1/{recurrenceCount}), etc.
-                        </p>
-                    )}
-                    {recurrenceType === 'fixed' && (
-                        <p className="text-xs text-purple-600 mt-2 ml-1 flex items-center gap-1">
-                             <CalendarClock size={12}/> O sistema duplicará este lançamento pelos próximos {recurrenceCount - 1} meses automaticamente.
-                        </p>
+                    
+                    {recurrenceType !== 'none' && (
+                        <div className="flex items-center gap-3 animate-fadeIn">
+                            <span className="text-xs font-bold text-slate-500">
+                                {recurrenceType === 'installment' ? 'Qtd. Parcelas:' : 'Repetir por (Meses):'}
+                            </span>
+                            <input 
+                                type="number" 
+                                min="2" 
+                                max="120" 
+                                value={recurrenceCount} 
+                                onChange={(e) => setRecurrenceCount(parseInt(e.target.value) || 2)}
+                                className="w-20 px-2 py-1.5 border border-slate-200 rounded-lg text-center font-bold text-slate-700 focus:ring-2 focus:ring-heroRed/20 focus:border-heroRed outline-none"
+                            />
+                        </div>
                     )}
                 </div>
 
-                <div className="flex justify-between items-center">
-                    <div className="flex gap-2">
+                <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+                    <div className="flex gap-3">
                         <button 
                             type="button"
                             onClick={() => { setStatus('Pago'); if(!paymentDate) setPaymentDate(new Date().toISOString().split('T')[0]); }}
-                            className={`px-6 py-2.5 text-xs font-bold rounded-lg transition-all border ${status === 'Pago' ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'}`}
+                            className={`px-6 py-3 text-xs font-bold rounded-lg transition-all border shadow-sm ${status === 'Pago' ? 'bg-green-600 text-white border-green-600 shadow-green-100' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
                         >
                             PAGO
                         </button>
                         <button 
                             type="button"
                             onClick={() => { setStatus('Pendente'); setPaymentDate(''); }}
-                            className={`px-6 py-2.5 text-xs font-bold rounded-lg transition-all border ${status === 'Pendente' ? 'bg-amber-500 text-white border-amber-500 shadow-md' : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'}`}
+                            className={`px-6 py-3 text-xs font-bold rounded-lg transition-all border shadow-sm ${status === 'Pendente' ? 'bg-amber-500 text-white border-amber-500 shadow-amber-100' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
                         >
                             PENDENTE
                         </button>
                     </div>
 
-                    <button disabled={saving} className="bg-slate-800 hover:bg-slate-900 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">
-                        {saving ? <Loader2 className="animate-spin" /> : <CheckCircle />} 
+                    <button disabled={saving} className="bg-heroBlack hover:bg-slate-800 text-white px-10 py-3.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-slate-200 transition-all transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">
+                        {saving ? <Loader2 className="animate-spin" size={20} /> : <CheckCircle size={20} />} 
                         {saving ? 'Salvando...' : `LANÇAR ${recurrenceType !== 'none' ? 'MÚLTIPLOS' : ''}`}
                     </button>
                 </div>
             </form>
-
-            {/* Advanced Filter Bar (Identical to ConsultaFinanceiro) */}
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b pb-4">
-                    <div className="flex gap-2">
-                        <button onClick={() => setDateRange('hoje')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Hoje</button>
-                        <button onClick={() => setDateRange('semana')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Esta Semana</button>
-                        <button onClick={() => setDateRange('mes')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Este Mês</button>
-                        <button onClick={() => setDateRange('ano')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Este Ano</button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-gray-500 uppercase">Referência de Data:</span>
-                        <select 
-                            value={dateType} 
-                            onChange={e => setDateType(e.target.value as any)} 
-                            className={`border p-2 rounded text-sm font-bold uppercase cursor-pointer ${dateType === 'payment' ? 'bg-blue-50 border-blue-300 text-blue-800' : dateType === 'created' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-yellow-50 border-yellow-300 text-yellow-800'}`}
-                        >
-                            <option value="due">Data de Vencimento</option>
-                            <option value="payment">Data de Pagamento</option>
-                            <option value="created">Data de Cadastro</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Início</label>
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border p-2 rounded text-sm"/>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Fim</label>
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border p-2 rounded text-sm"/>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Status</label>
-                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full border p-2 rounded text-sm font-bold bg-gray-50">
-                            <option value="">Todos</option>
-                            <option value="Pago">Apenas Pagos</option>
-                            <option value="Pendente">Apenas Pendentes</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Loja (Origem/Destino)</label>
-                        <select 
-                            value={filterStore} 
-                            onChange={e => setFilterStore(e.target.value)} 
-                            className={`w-full border p-2 rounded text-sm ${availableStores.length === 1 ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                            disabled={availableStores.length === 1}
-                        >
-                            {availableStores.length !== 1 && <option value="">Todas</option>}
-                            {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Conta</label>
-                        <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)} className="w-full border p-2 rounded text-sm">
-                            <option value="">Todas</option>
-                            {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.store})</option>)}
-                        </select>
-                    </div>
-                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Fornecedor</label>
-                        <select value={filterSupplier} onChange={e => setFilterSupplier(e.target.value)} className="w-full border p-2 rounded text-sm">
-                            <option value="">Todos</option>
-                            {appData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Categoria</label>
-                        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full border p-2 rounded text-sm">
-                            <option value="">Todos</option>
-                            {appData.categories.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                    </div>
-                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Classificação</label>
-                        <select value={filterClassification} onChange={e => setFilterClassification(e.target.value)} className="w-full border p-2 rounded text-sm">
-                            <option value="">Todos</option>
-                            {appData.types.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                    </div>
-
-                    <div className="md:col-span-4 flex justify-end">
-                         <button 
-                            onClick={clearFilters}
-                            className="text-xs text-gray-500 hover:text-red-500 font-bold flex items-center gap-1"
-                        >
-                            <Filter size={12}/> Limpar Filtros
-                         </button>
-                    </div>
-                </div>
-            </div>
-
-             <div className="bg-blue-50 p-4 border-b border-blue-100 flex flex-wrap gap-6 justify-between items-center text-sm rounded-lg shadow-sm border">
-                <div className="flex items-center gap-2">
-                    <Calculator size={16} className="text-blue-600"/>
-                    <span className="font-bold text-gray-600">RESUMO DA SELEÇÃO:</span>
-                </div>
-                <div className="flex gap-6 md:gap-8 flex-wrap justify-end">
-                    <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase">Saldo Anterior</span>
-                        <span className="font-bold text-gray-600 font-mono text-lg">{formatCurrency(previousBalance)}</span>
-                    </div>
-                    <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-bold text-green-600 uppercase">Receitas</span>
-                        <span className="font-bold text-green-700 font-mono">{formatCurrency(totalReceitas)}</span>
-                    </div>
-                    <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-bold text-red-600 uppercase">Despesas</span>
-                        <span className="font-bold text-red-700 font-mono">{formatCurrency(totalDespesas)}</span>
-                    </div>
-                    <div className="flex flex-col items-end border-l pl-6 border-blue-200 bg-white/50 p-1 rounded">
-                        <span className="text-xs font-black text-blue-800 uppercase flex items-center gap-1"><Landmark size={12}/> Saldo Final</span>
-                        <span className={`font-black text-xl font-mono ${finalBalance >= 0 ? 'text-blue-800' : 'text-red-600'}`}>{formatCurrency(finalBalance)}</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-100 text-xs uppercase font-bold text-gray-500">
-                        <tr>
-                            <th className="px-4 py-3 text-left">Vencimento</th>
-                            <th className="px-4 py-3 text-left">Loja</th>
-                            <th className="px-4 py-3 text-left">Origem</th>
-                            <th className="px-4 py-3 text-left">Descrição / Destino</th>
-                            <th className="px-4 py-3 text-left">Conta</th>
-                            <th className="px-4 py-3 text-left">Tipo</th>
-                            <th className="px-4 py-3 text-left">Método</th>
-                            <th className="px-4 py-3 text-right">Valor</th>
-                            <th className="px-4 py-3 text-center">Status</th>
-                            <th className="px-4 py-3 text-center">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 text-sm">
-                        {filteredList.map((item, idx) => {
-                            const isIncoming = item.type === 'Transferência' && filterStore && item.destinationStore === filterStore;
-                            return (
-                                <tr key={item.id} className={`hover:bg-gray-50 ${item.origin === 'pedido' ? 'bg-blue-50/30' : ''}`}>
-                                    <td className="px-4 py-3 whitespace-nowrap">{formatDateBr(item.date)}</td>
-                                    <td className="px-4 py-3 text-gray-600">
-                                        {isIncoming ? (
-                                            <span className="font-bold text-green-700">{item.destinationStore}</span>
-                                        ) : (
-                                            item.store
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        {item.origin === 'pedido' ? (
-                                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold">Cadastro</span>
-                                        ) : item.type === 'Transferência' ? (
-                                            <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold">Transf.</span>
-                                        ) : (
-                                            <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs font-bold">Manual</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        {item.type === 'Transferência' ? (
-                                            <div className="flex items-center gap-1 font-bold">
-                                                {isIncoming ? (
-                                                    <div className="flex items-center gap-1 text-green-700">
-                                                        <ArrowLeft size={12}/> Recebido de {item.store}
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-1 text-purple-700">
-                                                        <ArrowRight size={12}/> Enviado para {item.destinationStore}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="font-bold text-gray-700">{item.description || item.category || item.supplier}</div>
-                                                <div className="text-xs text-gray-500">{item.product}</div>
-                                            </>
-                                        )}
-                                        {item.origin === 'pedido' && <span className="inline-block mt-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-bold border border-blue-200">PEDIDO</span>}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        {item.accountId ? getAccountName(item.accountId) : <span className="text-red-400 text-xs italic font-bold">Definir Conta</span>}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        {item.classification && (
-                                            <span className="text-[10px] bg-gray-100 px-1 rounded border border-gray-300 text-gray-600">{item.classification}</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3">{item.paymentMethod}</td>
-                                    <td className={`px-4 py-3 text-right font-bold ${item.type === 'Receita' || isIncoming ? 'text-green-600' : item.type === 'Transferência' ? 'text-purple-600' : 'text-red-600'}`}>
-                                        {item.type === 'Receita' || isIncoming ? '+' : '-'}{formatCurrency(item.value)}
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        {item.status === 'Pago' ? (
-                                            <span className="text-green-600 font-bold text-xs flex items-center justify-center gap-1"><CheckCircle size={12}/> PAGO</span>
-                                        ) : (
-                                            <span className="text-yellow-600 font-bold text-xs bg-yellow-100 px-2 py-1 rounded">PENDENTE</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <div className="flex justify-center gap-2">
-                                            {item.status === 'Pendente' && (
-                                                <button 
-                                                    onClick={() => handlePay(item as DailyTransaction)} 
-                                                    className="text-green-600 hover:bg-green-100 p-1 rounded transition-colors" 
-                                                    title={!item.accountId ? "Preencha a conta para pagar" : "Confirmar Pagamento"}
-                                                >
-                                                    <DollarSign size={16}/>
-                                                </button>
-                                            )}
-                                            <button 
-                                                onClick={() => handleEditClick(item as DailyTransaction)} 
-                                                className="text-blue-600 hover:bg-blue-100 p-1 rounded transition-colors"
-                                                title="Editar / Completar Cadastro"
-                                            >
-                                                <Edit size={16} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDelete(item.id)} 
-                                                className="text-red-500 hover:bg-red-100 p-1 rounded transition-colors"
-                                                title="Excluir"
-                                            >
-                                                <Trash2 size={16}/>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                         {filteredList.length === 0 && (
-                            <tr><td colSpan={10} className="p-6 text-center text-gray-500">Nenhum lançamento encontrado.</td></tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
 
             {editingItem && (
                 <EditLancamentoModal 
