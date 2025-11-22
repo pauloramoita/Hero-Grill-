@@ -156,8 +156,14 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
         // Maminha
         if (target.includes('maminha')) return db.includes('maminha');
 
-        // Costela de Boi -> Aceita "Costela", "Costela Bovina", "Costela Minga"
-        if (target.includes('costela')) return db.includes('costela');
+        // Costela (Refinado para separar Bovina de Suína)
+        if (target.includes('costela')) {
+            if (target.includes('bovina')) {
+                // Se o alvo é Costela Bovina, aceita "Costela" genérico ou "Bovina", mas REJEITA "Suina"
+                return db.includes('costela') && !db.includes('suina');
+            }
+            return db.includes('costela');
+        }
 
         // Capa do Filé -> Aceita "Capa de File", "Capa File"
         if (target.includes('capa') && target.includes('file')) return db.includes('capa') && db.includes('file');

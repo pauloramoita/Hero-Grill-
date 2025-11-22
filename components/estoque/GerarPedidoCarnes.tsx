@@ -102,8 +102,14 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
         // Maminha
         if (target.includes('maminha')) return db.includes('maminha');
 
-        // Costela
-        if (target.includes('costela')) return db.includes('costela');
+        // Costela (Refinado para separar Bovina de Suína)
+        if (target.includes('costela')) {
+            if (target.includes('bovina')) {
+                // Se o alvo é Costela Bovina, aceita "Costela" genérico ou "Bovina", mas REJEITA "Suina"
+                return db.includes('costela') && !db.includes('suina');
+            }
+            return db.includes('costela');
+        }
 
         // Capa do Filé
         if (target.includes('capa') && target.includes('file')) return db.includes('capa') && db.includes('file');

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
 import { Controle043Module } from './components/controle043/Controle043Module';
@@ -15,12 +15,40 @@ import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { View, User } from './types';
 import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard, ChevronRight, Beef } from 'lucide-react';
 
+// Constantes para persistência e timeout
+const SESSION_KEY = 'hero_grill_user_session';
+const ACTIVITY_KEY = 'hero_grill_last_activity';
+const INACTIVITY_TIMEOUT = 10 * 60 * 1000; // 10 minutos em milissegundos
+
 const App: React.FC = () => {
-    const [user, setUser] = useState<User | null>(null);
+    // Inicializa o estado do usuário verificando o localStorage
+    const [user, setUser] = useState<User | null>(() => {
+        const savedUser = localStorage.getItem(SESSION_KEY);
+        const lastActivity = localStorage.getItem(ACTIVITY_KEY);
+
+        if (savedUser && lastActivity) {
+            const now = Date.now();
+            const lastActivityTime = parseInt(lastActivity, 10);
+            
+            // Verifica se o tempo de inatividade já estourou antes mesmo de carregar
+            if (now - lastActivityTime < INACTIVITY_TIMEOUT) {
+                try {
+                    return JSON.parse(savedUser);
+                } catch (e) {
+                    return null;
+                }
+            }
+        }
+        // Limpa se estiver expirado ou inválido
+        localStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(ACTIVITY_KEY);
+        return null;
+    });
+
     const [currentView, setCurrentView] = useState<View>('home');
     const [showPasswordModal, setShowPasswordModal] = useState(false);
 
-    // Determine if user is restricted to Dashboard only
+    // Determina se o usuário é restrito ao Dashboard
     const isDashboardOnly = useMemo(() => {
         if (!user || user.isMaster) return false;
         const modules = user.permissions?.modules || [];
@@ -28,11 +56,70 @@ const App: React.FC = () => {
         return mainModules.length === 1 && mainModules.includes('dashboard');
     }, [user]);
 
+    // Efeito para roteamento inicial ao recarregar a página (Restaurar view correta)
+    useEffect(() => {
+        if (user && isDashboardOnly) {
+            setCurrentView('dashboard');
+        }
+        // Atualiza timestamp ao carregar
+        if (user) {
+            localStorage.setItem(ACTIVITY_KEY, Date.now().toString());
+        }
+    }, [user, isDashboardOnly]); // Dependências ajustadas
+
+    const handleLogout = useCallback(() => {
+        setUser(null);
+        setCurrentView('home');
+        localStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(ACTIVITY_KEY);
+    }, []);
+
+    // Monitor de Inatividade
+    useEffect(() => {
+        if (!user) return;
+
+        const updateActivity = () => {
+            localStorage.setItem(ACTIVITY_KEY, Date.now().toString());
+        };
+
+        const checkInactivity = () => {
+            const lastActivity = parseInt(localStorage.getItem(ACTIVITY_KEY) || '0', 10);
+            if (Date.now() - lastActivity > INACTIVITY_TIMEOUT) {
+                handleLogout();
+                alert("Sessão encerrada por inatividade (10 min).");
+            }
+        };
+
+        // Listeners para resetar o timer
+        window.addEventListener('mousemove', updateActivity);
+        window.addEventListener('keydown', updateActivity);
+        window.addEventListener('click', updateActivity);
+        window.addEventListener('touchstart', updateActivity);
+        window.addEventListener('scroll', updateActivity);
+
+        // Verifica a cada 1 minuto
+        const intervalId = setInterval(checkInactivity, 60000);
+
+        return () => {
+            window.removeEventListener('mousemove', updateActivity);
+            window.removeEventListener('keydown', updateActivity);
+            window.removeEventListener('click', updateActivity);
+            window.removeEventListener('touchstart', updateActivity);
+            window.removeEventListener('scroll', updateActivity);
+            clearInterval(intervalId);
+        };
+    }, [user, handleLogout]);
+
     const handleLogin = (loggedUser: User) => {
         const safeUser = {
             ...loggedUser,
             permissions: loggedUser.permissions || { modules: [], stores: [] }
         };
+        
+        // Salva na sessão
+        localStorage.setItem(SESSION_KEY, JSON.stringify(safeUser));
+        localStorage.setItem(ACTIVITY_KEY, Date.now().toString());
+        
         setUser(safeUser);
         
         const modules = safeUser.permissions.modules || [];
@@ -46,11 +133,6 @@ const App: React.FC = () => {
         }
     };
 
-    const handleLogout = () => {
-        setUser(null);
-        setCurrentView('home');
-    };
-
     if (!user) {
         return <LoginScreen onLogin={handleLogin} />;
     }
@@ -58,12 +140,11 @@ const App: React.FC = () => {
     const hasPermission = (moduleId: string) => {
         if (user.isMaster) return true;
         if (!user.permissions || !user.permissions.modules) return false;
-        // Auto-allow stock module if user has 'pedidos' permission (for simplicity, or add new perm key)
+        // Auto-allow stock module if user has 'pedidos' permission
         if (moduleId === 'estoque' && user.permissions.modules.includes('pedidos')) return true; 
         return user.permissions.modules.includes(moduleId);
     };
 
-    // Updated Menu Items with modern color palette classes
     const menuItems: { id: View, label: string, icon: React.ReactNode, color: string, description: string, requiredPerm: string }[] = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={24} />, color: 'text-slate-700 bg-slate-100', description: 'Visão geral e indicadores', requiredPerm: 'dashboard' },
         { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={24} />, color: 'text-red-600 bg-red-50', description: 'Cadastro e gestão de compras', requiredPerm: 'pedidos' },
