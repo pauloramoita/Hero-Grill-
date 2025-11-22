@@ -440,17 +440,41 @@ export const exportTransactionsToXML = (data: Transaction043[], filename: string
 };
 
 export const getAccountBalances = async (): Promise<AccountBalance[]> => {
-    const { data } = await supabase.from('account_balances').select('*');
-    return (data || []).map((b: any) => ({
-        ...b,
-        caixaEconomica: safeNumber(b.caixaEconomica ?? b.caixaeconomica),
-        cofre: safeNumber(b.cofre),
-        loteria: safeNumber(b.loteria),
-        pagbankH: safeNumber(b.pagbankH ?? b.pagbankh),
-        pagbankD: safeNumber(b.pagbankD ?? b.pagbankd),
-        investimentos: safeNumber(b.investimentos),
-        totalBalance: safeNumber(b.totalBalance ?? b.totalbalance)
-    }));
+    const { data, error } = await supabase.from('account_balances').select('*');
+    if (error) {
+        console.error("Error fetching balances:", error);
+        return [];
+    }
+    return (data || []).map((b: any) => {
+        // Mapeamento robusto cobrindo variações de caixa (camelCase, lowercase, PascalCase)
+        const caixaEconomica = safeNumber(b.caixaEconomica ?? b.caixaeconomica ?? b.CaixaEconomica);
+        const cofre = safeNumber(b.cofre ?? b.Cofre);
+        const loteria = safeNumber(b.loteria ?? b.Loteria);
+        const pagbankH = safeNumber(b.pagbankH ?? b.pagbankh ?? b.PagbankH ?? b.PagBankH);
+        const pagbankD = safeNumber(b.pagbankD ?? b.pagbankd ?? b.PagbankD ?? b.PagBankD);
+        const investimentos = safeNumber(b.investimentos ?? b.Investimentos);
+        
+        let totalBalance = safeNumber(b.totalBalance ?? b.totalbalance ?? b.TotalBalance);
+        
+        // Auto-repair: Se totalBalance vier 0 mas houver valores parciais, recalcula.
+        if (totalBalance === 0 && (caixaEconomica || cofre || loteria || pagbankH || pagbankD || investimentos)) {
+            totalBalance = caixaEconomica + cofre + loteria + pagbankH + pagbankD + investimentos;
+        }
+
+        return {
+            id: b.id,
+            store: b.store,
+            year: b.year,
+            month: b.month,
+            caixaEconomica,
+            cofre,
+            loteria,
+            pagbankH,
+            pagbankD,
+            investimentos,
+            totalBalance
+        };
+    });
 };
 export const saveAccountBalance = async (b: AccountBalance) => {
     const { id, ...rest } = b;
@@ -479,7 +503,12 @@ export const getPreviousMonthBalance = async (store: string, year: number, month
         .eq('month', prevMonth)
         .single();
         
-    return data ? { ...data, totalBalance: safeNumber(data.totalBalance ?? data.totalbalance) } : null;
+    if (!data) return null;
+
+    return { 
+        ...data, 
+        totalBalance: safeNumber(data.totalBalance ?? data.totalbalance ?? data.TotalBalance) 
+    };
 };
 export const exportBalancesToXML = (data: AccountBalance[], filename: string) => { 
     let csvContent = "data:text/csv;charset=utf-8,Ano,Mes,Loja,Caixa,Cofre,Loteria,PagBank H,PagBank D,Invest,Total\n";

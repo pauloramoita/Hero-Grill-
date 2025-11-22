@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getAccountBalances, getAppData, formatCurrency, deleteAccountBalance, updateAccountBalance, exportBalancesToXML } from '../../services/storageService';
 import { AppData, AccountBalance, User } from '../../types';
-import { Search, Trash2, Edit, TrendingUp, TrendingDown, Minus, Layers, FileSpreadsheet, Printer, Loader2 } from 'lucide-react';
+import { Search, Trash2, Edit, TrendingUp, TrendingDown, Minus, Layers, FileSpreadsheet, Printer, Loader2, RefreshCw } from 'lucide-react';
 import { EditSaldoModal } from './EditSaldoModal';
 
 interface BalanceWithVariation extends AccountBalance {
@@ -65,10 +65,15 @@ export const ConsultaSaldo: React.FC<ConsultaSaldoProps> = ({ user }) => {
 
     const loadData = async () => {
         setLoading(true);
-        const [d, loaded] = await Promise.all([getAppData(), getAccountBalances()]);
-        setAppData(d);
-        setRawBalances(loaded);
-        setLoading(false);
+        try {
+            const [d, loaded] = await Promise.all([getAppData(), getAccountBalances()]);
+            setAppData(d);
+            setRawBalances(loaded);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const availableStores = useMemo(() => {
@@ -207,6 +212,7 @@ export const ConsultaSaldo: React.FC<ConsultaSaldoProps> = ({ user }) => {
                              {availableStores.length !== 1 && <option value="">Todas as Lojas (Consolidado)</option>}
                             {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
+                        {storeFilter === '' && <p className="text-[10px] text-orange-500 mt-1 font-bold italic">Modo Consolidado: Edição indisponível.</p>}
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-gray-600 mb-1">Ano</label>
@@ -226,6 +232,9 @@ export const ConsultaSaldo: React.FC<ConsultaSaldoProps> = ({ user }) => {
                     </div>
                 </div>
                 <div className="flex justify-end gap-2 border-t pt-4 mt-2">
+                    <button onClick={loadData} className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded hover:bg-gray-200 shadow-sm mr-auto">
+                        <RefreshCw size={18}/> Atualizar
+                    </button>
                     <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">
                         <FileSpreadsheet size={18}/> Excel
                     </button>
@@ -272,7 +281,7 @@ export const ConsultaSaldo: React.FC<ConsultaSaldoProps> = ({ user }) => {
                                 </td>
                                 <td className="px-4 py-3 text-center whitespace-nowrap no-print">
                                     {b.isAggregated ? (
-                                        <span className="text-xs text-gray-400 italic">Consolidado</span>
+                                        <span className="text-xs text-gray-400 italic">Consolidado (Ver Detalhes)</span>
                                     ) : (
                                         <div className="flex items-center justify-center gap-2">
                                             <button 
