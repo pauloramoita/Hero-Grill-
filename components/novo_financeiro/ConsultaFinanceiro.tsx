@@ -25,7 +25,8 @@ import {
     ArrowLeft,
     Calendar,
     Plus,
-    ArrowLeftRight
+    ArrowLeftRight,
+    Landmark
 } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
 import { ConfirmPaymentModal } from './ConfirmPaymentModal';
@@ -330,31 +331,100 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         setDateType('due');
     };
 
-    // --- Calculation Logic ---
+    // --- CALCULATION LOGIC ---
+
+    // 1. Saldo do Período (Movimentação Líquida Visível)
     const totalReceitas = filteredTransactions.reduce((acc, t) => {
-        // Receita normal
         if (t.type === 'Receita') return acc + t.value;
-        // Transferência recebida (se estiver filtrando por loja de destino)
         if (t.type === 'Transferência' && filterStore && t.destinationStore === filterStore) return acc + t.value;
         return acc;
     }, 0);
 
     const totalDespesas = filteredTransactions.reduce((acc, t) => {
-        // Despesa normal
         if (t.type === 'Despesa') return acc + t.value;
-        // Transferência enviada (se estiver filtrando por loja de origem)
         if (t.type === 'Transferência' && filterStore && t.store === filterStore) return acc + t.value;
-        // Se não tiver filtro de loja (visão global), transferências não somam em despesas (apenas anulam saldo se contarmos in/out, mas aqui separamos)
         return acc;
     }, 0);
 
-    const saldo = totalReceitas - totalDespesas;
+    const saldoPeriodo = totalReceitas - totalDespesas;
+
+    // 2. Saldo Anterior (Acumulado Real antes da Data Início)
+    // Considera apenas transações "Pagas" (Saldo Bancário Real) e Saldos Iniciais
+    const calculatePreviousBalance = () => {
+        // Filter accounts based on Store/Account filters ONLY
+        const relevantAccounts = accounts.filter(a => {
+            if (filterAccount && a.id !== filterAccount) return false;
+            if (filterStore && a.store !== filterStore) return false;
+            // Permissions
+            if (availableStores.length > 0 && !user?.isMaster && !availableStores.includes(a.store)) return false;
+            return true;
+        });
+
+        const initialBalanceSum = relevantAccounts.reduce((acc, a) => acc + a.initialBalance, 0);
+
+        // Filter transactions strictly before startDate
+        const prevTransactions = transactions.filter(t => {
+            let tDate = t.date;
+            if (dateType === 'payment') tDate = t.paymentDate || '';
+            else if (dateType === 'created') tDate = t.createdAt ? t.createdAt.split('T')[0] : '';
+            
+            if (!tDate || tDate >= startDate) return false;
+            
+            // Para Saldo Bancário Anterior, consideramos o que foi REALIZADO (Pago)
+            if (t.status !== 'Pago') return false;
+
+            // Match Store (Same logic as filters)
+            const matchesStore = !filterStore || 
+                                 t.store === filterStore || 
+                                 (t.type === 'Transferência' && t.destinationStore === filterStore);
+
+            // Match Account
+            let matchesAccount = true;
+            if (filterAccount) {
+                if (t.type === 'Transferência') {
+                    matchesAccount = t.accountId === filterAccount || t.destinationAccountId === filterAccount;
+                } else {
+                    matchesAccount = t.accountId === filterAccount;
+                }
+            }
+            
+            // Permission
+            let allowed = true;
+            if (user && !user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
+                 allowed = user.permissions.stores.includes(t.store) || 
+                           (t.type === 'Transferência' && !!t.destinationStore && user.permissions.stores.includes(t.destinationStore));
+            }
+
+            return matchesStore && matchesAccount && allowed;
+        });
+
+        const prevMovement = prevTransactions.reduce((acc, t) => {
+            if (t.type === 'Receita') return acc + t.value;
+            if (t.type === 'Despesa') return acc - t.value;
+            if (t.type === 'Transferência') {
+                if (filterStore) {
+                    if (t.destinationStore === filterStore) return acc + t.value;
+                    if (t.store === filterStore) return acc - t.value;
+                } else {
+                    // Global view filtered by account
+                    if (filterAccount) {
+                        if (t.destinationAccountId === filterAccount) return acc + t.value;
+                        if (t.accountId === filterAccount) return acc - t.value;
+                    }
+                }
+            }
+            return acc;
+        }, 0);
+
+        return initialBalanceSum + prevMovement;
+    };
+
+    const previousBalance = calculatePreviousBalance();
+    const finalBalance = previousBalance + saldoPeriodo;
 
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" size={40}/></div>;
 
     const isSingleStore = availableStores.length === 1;
-
-    // Helper to check if row is an incoming transfer
     const isIncomingTransfer = (t: DailyTransaction) => t.type === 'Transferência' && filterStore && t.destinationStore === filterStore;
 
     return (
@@ -461,27 +531,27 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
             </div>
 
             {/* Totals Banner */}
-            <div className="bg-blue-50 p-4 border-b border-blue-100 flex flex-wrap gap-4 justify-between items-center text-sm rounded-lg shadow-sm border">
+            <div className="bg-blue-50 p-4 border-b border-blue-100 flex flex-wrap gap-6 justify-between items-center text-sm rounded-lg shadow-sm border">
                 <div className="flex items-center gap-2">
                     <Calculator size={20} className="text-blue-600"/>
                     <span className="font-bold text-gray-600">RESUMO DA SELEÇÃO:</span>
                 </div>
-                <div className="flex gap-8">
-                    <div className="flex flex-col">
-                        <span className="text-xs font-bold text-gray-500 uppercase">Qtd. Registros</span>
-                        <span className="font-bold text-gray-800 text-lg">{filteredTransactions.length}</span>
+                <div className="flex gap-6 md:gap-8 flex-wrap justify-end">
+                    <div className="flex flex-col items-end">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">Saldo Anterior</span>
+                        <span className="font-bold text-gray-600 font-mono text-lg">{formatCurrency(previousBalance)}</span>
                     </div>
                     <div className="flex flex-col items-end">
-                        <span className="text-xs font-bold text-green-600 uppercase">Receitas</span>
-                        <span className="font-bold text-green-700">{formatCurrency(totalReceitas)}</span>
+                        <span className="text-[10px] font-bold text-green-600 uppercase">Receitas</span>
+                        <span className="font-bold text-green-700 font-mono">{formatCurrency(totalReceitas)}</span>
                     </div>
                     <div className="flex flex-col items-end">
-                        <span className="text-xs font-bold text-red-600 uppercase">Despesas</span>
-                        <span className="font-bold text-red-700">{formatCurrency(totalDespesas)}</span>
+                        <span className="text-[10px] font-bold text-red-600 uppercase">Despesas</span>
+                        <span className="font-bold text-red-700 font-mono">{formatCurrency(totalDespesas)}</span>
                     </div>
-                    <div className="flex flex-col items-end border-l pl-6 border-blue-200">
-                        <span className="text-xs font-black text-blue-800 uppercase">Saldo (Total)</span>
-                        <span className={`font-black text-lg ${saldo >= 0 ? 'text-blue-800' : 'text-red-600'}`}>{formatCurrency(saldo)}</span>
+                    <div className="flex flex-col items-end border-l pl-6 border-blue-200 bg-white/50 p-1 rounded">
+                        <span className="text-xs font-black text-blue-800 uppercase flex items-center gap-1"><Landmark size={12}/> Saldo Final</span>
+                        <span className={`font-black text-xl font-mono ${finalBalance >= 0 ? 'text-blue-800' : 'text-red-600'}`}>{formatCurrency(finalBalance)}</span>
                     </div>
                 </div>
             </div>
