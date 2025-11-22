@@ -54,9 +54,19 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
     const [reportEndDate, setReportEndDate] = useState(getTodayLocalISO());
     const [editingLog, setEditingLog] = useState<{id: string, valStr: string, valNum: number} | null>(null);
 
+    // Lista Atualizada conforme solicitação
     const MEAT_LIST = [
-        'Alcatra', 'Capa do filé', 'Coxao mole', 'Contra filé', 'Coração', 
-        'Cupim', 'Fraldinha', 'Patinho', 'Picanha', 'Costela de Boi'
+        'Alcatra', 
+        'Capa do Filé', 
+        'Contra Filé', 
+        'Coração', 
+        'Coxão Mole', 
+        'Costela Bovina', 
+        'Cupim', 
+        'Fraldinha', 
+        'Maminha',
+        'Patinho', 
+        'Picanha'
     ];
 
     const today = getTodayLocalISO();
@@ -143,7 +153,10 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
 
         // Regras Específicas (Tolerantes)
         
-        // Costela de Boi -> Aceita "Costela", "Costela Bovinha", "Costela Minga"
+        // Maminha
+        if (target.includes('maminha')) return db.includes('maminha');
+
+        // Costela de Boi -> Aceita "Costela", "Costela Bovina", "Costela Minga"
         if (target.includes('costela')) return db.includes('costela');
 
         // Capa do Filé -> Aceita "Capa de File", "Capa File"
@@ -154,8 +167,8 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
             return (db.includes('contra') && db.includes('file')) || db.includes('chorizo') || db === 'contra';
         }
 
-        // Coxão Mole -> Aceita "Coxao", "Coxão"
-        if (target.includes('coxao')) return db.includes('coxao') || db.includes('mole');
+        // Coxão Mole -> Aceita "Coxao", "Coxão", "Mole" se tiver contexto, mas 'coxao' é mais seguro
+        if (target.includes('coxao') && target.includes('mole')) return db.includes('coxao') || (db.includes('mole') && !db.includes('capa')); // Evita conflito com capa se houver algo bizarro
 
         // Coração
         if (target.includes('coracao')) return db.includes('coracao');

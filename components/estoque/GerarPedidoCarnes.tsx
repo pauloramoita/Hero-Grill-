@@ -28,9 +28,19 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
         unit: string;
     }[]>([]);
 
+    // Lista Atualizada conforme solicitação
     const MEAT_LIST = [
-        'Alcatra', 'Capa do filé', 'Coxao mole', 'Contra filé', 'Coração', 
-        'Cupim', 'Fraldinha', 'Patinho', 'Picanha', 'Costela de Boi'
+        'Alcatra', 
+        'Capa do Filé', 
+        'Contra Filé', 
+        'Coração', 
+        'Coxão Mole', 
+        'Costela Bovina', 
+        'Cupim', 
+        'Fraldinha', 
+        'Maminha',
+        'Patinho', 
+        'Picanha'
     ];
 
     useEffect(() => {
@@ -89,13 +99,27 @@ export const GerarPedidoCarnes: React.FC<GerarPedidoCarnesProps> = ({ user }) =>
 
         if (db === target) return true;
 
+        // Maminha
+        if (target.includes('maminha')) return db.includes('maminha');
+
+        // Costela
         if (target.includes('costela')) return db.includes('costela');
+
+        // Capa do Filé
         if (target.includes('capa') && target.includes('file')) return db.includes('capa') && db.includes('file');
+
+        // Contra Filé
         if (target.includes('contra') && target.includes('file')) {
             return (db.includes('contra') && db.includes('file')) || db.includes('chorizo') || db === 'contra';
         }
-        if (target.includes('coxao')) return db.includes('coxao') || db.includes('mole');
+
+        // Coxão Mole
+        if (target.includes('coxao') && target.includes('mole')) return db.includes('coxao') || (db.includes('mole') && !db.includes('capa'));
+
+        // Coração
         if (target.includes('coracao')) return db.includes('coracao');
+
+        // Outros
         if (target.includes('picanha')) return db.includes('picanha');
         if (target.includes('alcatra')) return db.includes('alcatra');
         if (target.includes('cupim')) return db.includes('cupim');
