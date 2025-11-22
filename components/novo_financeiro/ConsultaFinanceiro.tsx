@@ -335,14 +335,34 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
 
     // 1. Saldo do Período (Movimentação Líquida Visível)
     const totalReceitas = filteredTransactions.reduce((acc, t) => {
+        // 1. Receita Normal
         if (t.type === 'Receita') return acc + t.value;
-        if (t.type === 'Transferência' && filterStore && t.destinationStore === filterStore) return acc + t.value;
+
+        // 2. Transferência Recebida (Entrada)
+        // Considera se a loja de DESTINO ou conta de DESTINO correspondem ao filtro
+        const isIncomingTransfer = t.type === 'Transferência' && (
+            (filterStore && t.destinationStore === filterStore) ||
+            (filterAccount && t.destinationAccountId === filterAccount)
+        );
+
+        if (isIncomingTransfer) return acc + t.value;
+
         return acc;
     }, 0);
 
     const totalDespesas = filteredTransactions.reduce((acc, t) => {
+        // 1. Despesa Normal
         if (t.type === 'Despesa') return acc + t.value;
-        if (t.type === 'Transferência' && filterStore && t.store === filterStore) return acc + t.value;
+
+        // 2. Transferência Realizada (Saída)
+        // Considera se a loja de ORIGEM ou conta de ORIGEM correspondem ao filtro
+        const isOutgoingTransfer = t.type === 'Transferência' && (
+            (filterStore && t.store === filterStore) ||
+            (filterAccount && t.accountId === filterAccount)
+        );
+
+        if (isOutgoingTransfer) return acc + t.value;
+
         return acc;
     }, 0);
 
@@ -399,21 +419,42 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         });
 
         const prevMovement = prevTransactions.reduce((acc, t) => {
-            if (t.type === 'Receita') return acc + t.value;
-            if (t.type === 'Despesa') return acc - t.value;
-            if (t.type === 'Transferência') {
-                if (filterStore) {
-                    if (t.destinationStore === filterStore) return acc + t.value;
-                    if (t.store === filterStore) return acc - t.value;
-                } else {
-                    // Global view filtered by account
-                    if (filterAccount) {
-                        if (t.destinationAccountId === filterAccount) return acc + t.value;
-                        if (t.accountId === filterAccount) return acc - t.value;
+            let change = 0;
+
+            // Visão Global (Sem Filtro de Loja/Conta)
+            if (!filterStore && !filterAccount) {
+                if (t.type === 'Receita') change += t.value;
+                if (t.type === 'Despesa') change -= t.value;
+                // Transferências globais se anulam, não afetam saldo total da empresa
+            } else {
+                // Visão Específica (Loja ou Conta)
+                
+                // Lógica de ENTRADA (Receita ou Transferência Recebida)
+                if (t.type === 'Receita') {
+                    // Receita pertence à loja/conta origem
+                    if ((!filterStore || t.store === filterStore) && (!filterAccount || t.accountId === filterAccount)) {
+                        change += t.value;
+                    }
+                } else if (t.type === 'Transferência') {
+                    // É Recebimento? (Destino == Filtro)
+                    if ((filterStore && t.destinationStore === filterStore) || (filterAccount && t.destinationAccountId === filterAccount)) {
+                        change += t.value;
+                    }
+                }
+
+                // Lógica de SAÍDA (Despesa ou Transferência Enviada)
+                if (t.type === 'Despesa') {
+                    if ((!filterStore || t.store === filterStore) && (!filterAccount || t.accountId === filterAccount)) {
+                        change -= t.value;
+                    }
+                } else if (t.type === 'Transferência') {
+                    // É Envio? (Origem == Filtro)
+                    if ((filterStore && t.store === filterStore) || (filterAccount && t.accountId === filterAccount)) {
+                        change -= t.value;
                     }
                 }
             }
-            return acc;
+            return acc + change;
         }, 0);
 
         return initialBalanceSum + prevMovement;

@@ -198,7 +198,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
             setDescription('');
             setRecurrenceType('none');
             setRecurrenceCount(2);
-            // Outros campos mantidos para facilitar lançamento sequencial
             
             alert(loopCount > 1 ? `${loopCount} Lançamentos Gerados com Sucesso!` : 'Lançamento Salvo!');
             loadData(); 
@@ -387,26 +386,45 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     if (loading) return <Loader2 className="animate-spin mx-auto mt-10" />;
 
     const filteredList = getFilteredList();
-    const totalQty = filteredList.length;
     
-    // Correct Totals Calculation accounting for Transfer Direction relative to Filter
+    // --- CÁLCULO DE TOTAIS DO PERÍODO (Considera Transferências corretamente) ---
     const totalReceitas = filteredList.reduce((acc, t) => {
+        // 1. Receita Normal
         if (t.type === 'Receita') return acc + t.value;
-        if (t.type === 'Transferência' && filterStore && t.destinationStore === filterStore) return acc + t.value;
+
+        // 2. Transferência Recebida (Entrada)
+        // Considera se a loja de DESTINO ou conta de DESTINO correspondem ao filtro
+        const isIncomingTransfer = t.type === 'Transferência' && (
+            (filterStore && t.destinationStore === filterStore) ||
+            (filterAccount && t.destinationAccountId === filterAccount)
+        );
+
+        if (isIncomingTransfer) return acc + t.value;
+
         return acc;
     }, 0);
 
     const totalDespesas = filteredList.reduce((acc, t) => {
+        // 1. Despesa Normal
         if (t.type === 'Despesa') return acc + t.value;
-        if (t.type === 'Transferência' && filterStore && t.store === filterStore) return acc + t.value;
+
+        // 2. Transferência Realizada (Saída)
+        // Considera se a loja de ORIGEM ou conta de ORIGEM correspondem ao filtro
+        const isOutgoingTransfer = t.type === 'Transferência' && (
+            (filterStore && t.store === filterStore) ||
+            (filterAccount && t.accountId === filterAccount)
+        );
+
+        if (isOutgoingTransfer) return acc + t.value;
+
         return acc;
     }, 0);
 
-    const totalSaldo = totalReceitas - totalDespesas;
+    const saldoPeriodo = totalReceitas - totalDespesas;
 
-    // --- LOGIC FOR ACCUMULATED BALANCE (Same as ConsultaFinanceiro) ---
+    // --- CÁLCULO DE SALDO ANTERIOR (Dia Anterior ao Início do Filtro) ---
     const calculatePreviousBalance = () => {
-        // 1. Filter relevant accounts based on Store/Account filters
+        // 1. Filtra contas relevantes
         const relevantAccounts = accounts.filter(a => {
             if (filterAccount && a.id !== filterAccount) return false;
             if (filterStore && a.store !== filterStore) return false;
@@ -417,66 +435,73 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
 
         const initialBalanceSum = relevantAccounts.reduce((acc, a) => acc + a.initialBalance, 0);
 
-        // 2. Filter transactions strictly before filterStart
-        // Using 'date' (due date) as the cut-off since that's the primary filter for this view,
-        // but only counting PAID transactions for the actual balance history.
+        // 2. Filtra transações PAGAS anteriores à data de início
         const prevTransactions = transactions.filter(t => {
             if (t.date >= filterStart) return false;
-            if (t.status !== 'Pago') return false; // Only realized payments count for history
+            if (t.status !== 'Pago') return false; // Apenas concretizado
 
-            // Match Store (Same logic as filters)
-            const matchesStore = !filterStore || 
-                                 t.store === filterStore || 
-                                 (t.type === 'Transferência' && t.destinationStore === filterStore);
+            // Verifica se a transação envolve o contexto filtrado (Origem ou Destino)
+            const involvesContext =
+                (!filterStore && !filterAccount) || // Global (sem filtro)
+                (filterStore && (t.store === filterStore || t.destinationStore === filterStore)) ||
+                (filterAccount && (t.accountId === filterAccount || t.destinationAccountId === filterAccount));
 
-            // Match Account
-            let matchesAccount = true;
-            if (filterAccount) {
-                if (t.type === 'Transferência') {
-                    matchesAccount = t.accountId === filterAccount || t.destinationAccountId === filterAccount;
-                } else {
-                    matchesAccount = t.accountId === filterAccount;
-                }
-            }
-            
-            // Permission
+            // Verifica Permissão
             let allowed = true;
             if (user && !user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
                  allowed = user.permissions.stores.includes(t.store) || 
                            (t.type === 'Transferência' && !!t.destinationStore && user.permissions.stores.includes(t.destinationStore));
             }
 
-            return matchesStore && matchesAccount && allowed;
+            return involvesContext && allowed;
         });
 
         const prevMovement = prevTransactions.reduce((acc, t) => {
-            if (t.type === 'Receita') return acc + t.value;
-            if (t.type === 'Despesa') return acc - t.value;
-            if (t.type === 'Transferência') {
-                if (filterStore) {
-                    if (t.destinationStore === filterStore) return acc + t.value;
-                    if (t.store === filterStore) return acc - t.value;
-                } else {
-                    // Global view filtered by account
-                    if (filterAccount) {
-                        if (t.destinationAccountId === filterAccount) return acc + t.value;
-                        if (t.accountId === filterAccount) return acc - t.value;
+            let change = 0;
+
+            // Visão Global (Sem Filtro de Loja/Conta)
+            if (!filterStore && !filterAccount) {
+                if (t.type === 'Receita') change += t.value;
+                if (t.type === 'Despesa') change -= t.value;
+                // Transferências globais se anulam, não afetam saldo total da empresa
+            } else {
+                // Visão Específica (Loja ou Conta)
+                
+                // Lógica de ENTRADA (Receita ou Transferência Recebida)
+                if (t.type === 'Receita') {
+                    // Receita pertence à loja/conta origem
+                    if ((!filterStore || t.store === filterStore) && (!filterAccount || t.accountId === filterAccount)) {
+                        change += t.value;
+                    }
+                } else if (t.type === 'Transferência') {
+                    // É Recebimento? (Destino == Filtro)
+                    if ((filterStore && t.destinationStore === filterStore) || (filterAccount && t.destinationAccountId === filterAccount)) {
+                        change += t.value;
+                    }
+                }
+
+                // Lógica de SAÍDA (Despesa ou Transferência Enviada)
+                if (t.type === 'Despesa') {
+                    if ((!filterStore || t.store === filterStore) && (!filterAccount || t.accountId === filterAccount)) {
+                        change -= t.value;
+                    }
+                } else if (t.type === 'Transferência') {
+                    // É Envio? (Origem == Filtro)
+                    if ((filterStore && t.store === filterStore) || (filterAccount && t.accountId === filterAccount)) {
+                        change -= t.value;
                     }
                 }
             }
-            return acc;
+            return acc + change;
         }, 0);
 
         return initialBalanceSum + prevMovement;
     };
 
     const previousBalance = calculatePreviousBalance();
-    const finalBalance = previousBalance + totalSaldo;
+    const finalBalance = previousBalance + saldoPeriodo;
 
     const isSingleStore = availableStores.length === 1;
-
-    // Helper
-    const isIncomingTransfer = (t: DailyTransaction) => t.type === 'Transferência' && filterStore && t.destinationStore === filterStore;
 
     return (
         <div className="space-y-8 pb-20">
