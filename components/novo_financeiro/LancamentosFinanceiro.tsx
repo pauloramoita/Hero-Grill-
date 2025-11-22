@@ -257,13 +257,13 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         return accounts.find(a => a.id === id)?.name || 'Conta Removida';
     };
 
+    // --- FILTERS ---
     const getFilteredList = () => {
         const filteredTrans = transactions.filter(t => {
             const matchesDate = t.date >= filterStart && t.date <= filterEnd;
             const matchesSupplier = !filterSupplier || t.supplier === filterSupplier;
             const matchesClassification = !filterClassification || t.classification === filterClassification;
             
-            // Store Filter: Matches if it is Source OR Destination
             const matchesStore = !filterStore || 
                                  t.store === filterStore || 
                                  (t.type === 'Transferência' && t.destinationStore === filterStore);
@@ -277,10 +277,8 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 }
             }
 
-            // Permission Check
             let allowed = true;
             if (availableStores.length > 0 && !user.isMaster) {
-                // Allows if user has permission for source store OR destination store
                 allowed = availableStores.includes(t.store) || 
                           (t.type === 'Transferência' && !!t.destinationStore && availableStores.includes(t.destinationStore));
             }
@@ -299,7 +297,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 const matchesAccount = !filterAccount;
                 const matchesClassification = !filterClassification || (o.type || 'Variável') === filterClassification;
 
-                 // Permission Check
                 let allowed = true;
                 if (availableStores.length > 0 && !user.isMaster) {
                     allowed = availableStores.includes(o.store);
@@ -330,41 +327,44 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         return merged;
     };
 
-    // --- CÁLCULO DE SALDO ROBUSTO (Real-time Balances for Cards) ---
-    const getAccountCurrentBalance = (acc: FinancialAccount, maxDate: string) => {
+    // --- LÓGICA UNIFICADA DE SALDO ---
+    // Esta função calcula o saldo de uma conta em uma data específica,
+    // aplicando os filtros GLOBAIS (Fornecedor, Classificação, etc.) se necessário.
+    // Isso garante que o "Saldo em Tempo Real" corresponda ao "Saldo Final" quando filtrado.
+    const getBalanceForAccount = (acc: FinancialAccount, dateLimit: string) => {
         let balance = acc.initialBalance;
+        
         transactions.forEach(t => {
-            if (t.status === 'Pago' && t.date <= maxDate) {
-                // Lógica de SAÍDA (Débito)
-                // Se a conta é a ORIGEM
-                if (t.accountId === acc.id) {
-                    if (t.type === 'Despesa' || t.type === 'Transferência') {
-                        balance -= t.value;
-                    }
-                    // Correção: Em alguns sistemas, Receita tem conta destino como accountId.
-                    // Assumimos que 'Receita' sempre soma na accountId.
-                    if (t.type === 'Receita') {
-                        balance += t.value;
-                    }
-                }
-                
-                // Lógica de ENTRADA (Crédito por Transferência)
-                // Se a conta é o DESTINO
-                if (t.type === 'Transferência' && t.destinationAccountId === acc.id) {
-                    balance += t.value;
-                }
+            // 1. Status e Data Limite
+            if (t.status !== 'Pago' || t.date > dateLimit) return;
+
+            // 2. Filtros Globais (Para igualar ao Resumo)
+            if (filterSupplier && t.supplier !== filterSupplier) return;
+            if (filterClassification && t.classification !== filterClassification) return;
+            
+            // 3. Lógica de Movimentação (Débito/Crédito)
+            const isDebit = t.accountId === acc.id;
+            const isCredit = t.destinationAccountId === acc.id && t.type === 'Transferência';
+
+            if (isDebit) {
+                if (t.type === 'Despesa' || t.type === 'Transferência') balance -= t.value;
+                if (t.type === 'Receita') balance += t.value;
+            }
+            
+            if (isCredit) {
+                balance += t.value;
             }
         });
+        
         return balance;
     };
 
-    // Group Accounts By Store Logic (Used for Top Cards)
-    // Updated to respect FILTERS (filterStore, filterAccount) and DATE (filterEnd)
+    // --- SALDOS EM TEMPO REAL (Cartões) ---
     const accountsByStore = useMemo(() => {
         const groups: Record<string, { accounts: FinancialAccount[], totalBalance: number }> = {};
         
         accounts.forEach(acc => {
-            // Use FILTER STATE instead of FORM STATE to match list view
+            // Apply filters to Account List
             if (filterStore && acc.store !== filterStore) return; 
             if (filterAccount && acc.id !== filterAccount) return;
             
@@ -372,8 +372,9 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                 groups[acc.store] = { accounts: [], totalBalance: 0 };
             }
             
-            // Pass filterEnd to match "Saldo Final" calculation
-            const currentBal = getAccountCurrentBalance(acc, filterEnd);
+            // Calcula saldo até a Data Fim do filtro, respeitando filtros globais
+            const currentBal = getBalanceForAccount(acc, filterEnd);
+            
             groups[acc.store].accounts.push(acc);
             groups[acc.store].totalBalance += currentBal;
         });
@@ -383,139 +384,73 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         });
 
         const customOrder = ['Hero Joquei', 'Hero Shopping', 'Hero Centro'];
-
         return Object.entries(groups).sort((a, b) => {
-            const storeA = a[0];
-            const storeB = b[0];
-            
-            const indexA = customOrder.indexOf(storeA);
-            const indexB = customOrder.indexOf(storeB);
-
+            const indexA = customOrder.indexOf(a[0]);
+            const indexB = customOrder.indexOf(b[0]);
             if (indexA !== -1 && indexB !== -1) return indexA - indexB;
             if (indexA !== -1) return -1;
             if (indexB !== -1) return 1;
-            return storeA.localeCompare(storeB);
+            return a[0].localeCompare(b[0]);
         });
-    }, [accounts, transactions, filterStore, filterAccount, filterEnd]);
+    }, [accounts, transactions, filterStore, filterAccount, filterEnd, filterSupplier, filterClassification]);
 
     if (loading) return <Loader2 className="animate-spin mx-auto mt-10" />;
 
     const filteredList = getFilteredList();
     
-    // --- CÁLCULO DE TOTAIS DO PERÍODO (Considera Transferências corretamente) ---
-    const totalReceitas = filteredList.reduce((acc, t) => {
-        // 1. Receita Normal
-        if (t.type === 'Receita') return acc + t.value;
+    // --- RESUMO DA SELEÇÃO (Cálculo Baseado em Snapshots para Precisão) ---
+    
+    // 1. Saldo Anterior (Até dia anterior ao inicio)
+    const accountsInContext = accounts.filter(a => {
+        if (filterAccount && a.id !== filterAccount) return false;
+        if (filterStore && a.store !== filterStore) return false;
+        if (availableStores.length > 0 && !user.isMaster && !availableStores.includes(a.store)) return false;
+        return true;
+    });
 
-        // 2. Transferência Recebida (Entrada)
-        // Se tem filtro de loja, conta apenas se o destino for a loja filtrada
+    const getYesterday = (d: string) => {
+        const date = new Date(d);
+        date.setDate(date.getDate() - 1);
+        return date.toISOString().split('T')[0];
+    };
+
+    const previousBalance = accountsInContext.reduce((acc, a) => {
+        return acc + getBalanceForAccount(a, getYesterday(filterStart));
+    }, 0);
+
+    // 2. Saldo Final (Até dia fim)
+    const finalBalance = accountsInContext.reduce((acc, a) => {
+        return acc + getBalanceForAccount(a, filterEnd);
+    }, 0);
+
+    // 3. Receitas e Despesas do Período (Meramente informativo, derivado da lista)
+    // Nota: Para bater com a matemática (Final = Anterior + Rec - Desp), precisamos somar apenas o filtrado.
+    // Mas transferências internas geram divergência visual (0 net change). 
+    // Vamos calcular baseado na lista filtrada visualmente.
+    
+    const totalReceitas = filteredList.reduce((acc, t) => {
+        if (t.type === 'Receita') return acc + t.value;
         if (t.type === 'Transferência') {
-            const isIncoming = (!filterStore && !filterAccount) || // Global (todas transferências contam como movimentação)
+            // Conta como entrada se o destino faz parte do contexto visualizado
+            const isIncoming = (!filterStore && !filterAccount) || 
                                (filterStore && t.destinationStore === filterStore) ||
                                (filterAccount && t.destinationAccountId === filterAccount);
-            
             if (isIncoming) return acc + t.value;
         }
-
         return acc;
     }, 0);
 
     const totalDespesas = filteredList.reduce((acc, t) => {
-        // 1. Despesa Normal
         if (t.type === 'Despesa') return acc + t.value;
-
-        // 2. Transferência Realizada (Saída)
-        // Se tem filtro de loja, conta apenas se a origem for a loja filtrada
         if (t.type === 'Transferência') {
-            const isOutgoing = (!filterStore && !filterAccount) || // Global
+            // Conta como saída se a origem faz parte do contexto visualizado
+            const isOutgoing = (!filterStore && !filterAccount) || 
                                (filterStore && t.store === filterStore) ||
                                (filterAccount && t.accountId === filterAccount);
-            
             if (isOutgoing) return acc + t.value;
         }
-
         return acc;
     }, 0);
-
-    const saldoPeriodo = totalReceitas - totalDespesas;
-
-    // --- CÁLCULO DE SALDO ANTERIOR (Dia Anterior ao Início do Filtro) ---
-    const calculatePreviousBalance = () => {
-        // 1. Soma Saldos Iniciais das Contas Filtradas
-        const relevantAccounts = accounts.filter(a => {
-            if (filterAccount && a.id !== filterAccount) return false;
-            if (filterStore && a.store !== filterStore) return false;
-            // Permissions check
-            if (availableStores.length > 0 && !user.isMaster && !availableStores.includes(a.store)) return false;
-            return true;
-        });
-
-        const initialBalanceSum = relevantAccounts.reduce((acc, a) => acc + a.initialBalance, 0);
-
-        // 2. Soma Movimentações Pagas ANTERIORES à data de início
-        const prevTransactions = transactions.filter(t => {
-            if (t.date >= filterStart) return false;
-            if (t.status !== 'Pago') return false; // Apenas concretizado
-
-            // Verifica se a transação é relevante para o filtro (Origem OU Destino)
-            const involvesContext =
-                (!filterStore && !filterAccount) || // Global
-                (filterStore && (t.store === filterStore || t.destinationStore === filterStore)) ||
-                (filterAccount && (t.accountId === filterAccount || t.destinationAccountId === filterAccount));
-
-            // Verifica Permissão
-            let allowed = true;
-            if (user && !user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
-                 allowed = user.permissions.stores.includes(t.store) || 
-                           (t.type === 'Transferência' && !!t.destinationStore && user.permissions.stores.includes(t.destinationStore));
-            }
-
-            return involvesContext && allowed;
-        });
-
-        const prevMovement = prevTransactions.reduce((acc, t) => {
-            let change = 0;
-
-            // A) RECEITA (Entrada)
-            if (t.type === 'Receita') {
-                // Se não tem filtro ou se pertence ao filtro
-                if ((!filterStore || t.store === filterStore) && (!filterAccount || t.accountId === filterAccount)) {
-                    change += t.value;
-                }
-            }
-
-            // B) DESPESA (Saída)
-            if (t.type === 'Despesa') {
-                if ((!filterStore || t.store === filterStore) && (!filterAccount || t.accountId === filterAccount)) {
-                    change -= t.value;
-                }
-            }
-
-            // C) TRANSFERÊNCIA (Entrada e Saída)
-            if (t.type === 'Transferência') {
-                // C.1 Entrada (Destino)
-                // Se estou vendo global ou se o filtro bate com o destino
-                if ((!filterStore && !filterAccount) || (filterStore && t.destinationStore === filterStore) || (filterAccount && t.destinationAccountId === filterAccount)) {
-                    change += t.value;
-                }
-
-                // C.2 Saída (Origem)
-                // Se estou vendo global ou se o filtro bate com a origem
-                if ((!filterStore && !filterAccount) || (filterStore && t.store === filterStore) || (filterAccount && t.accountId === filterAccount)) {
-                    change -= t.value;
-                }
-                
-                // Nota: Se for transferência interna (mesma loja/conta filtro), entra no C.1 (+val) e no C.2 (-val), resultando em 0. Correto.
-            }
-
-            return acc + change;
-        }, 0);
-
-        return initialBalanceSum + prevMovement;
-    };
-
-    const previousBalance = calculatePreviousBalance();
-    const finalBalance = previousBalance + saldoPeriodo;
 
     const isSingleStore = availableStores.length === 1;
 
@@ -533,7 +468,6 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                         {accountsByStore.map(([storeName, data]) => (
                             <div key={storeName} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow duration-300">
-                                {/* Store Header */}
                                 <div className="bg-slate-50 px-5 py-4 border-b border-slate-100 flex justify-between items-center">
                                     <div className="flex items-center gap-2">
                                         <Building2 size={18} className="text-slate-400" />
@@ -546,11 +480,9 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                         </span>
                                     </div>
                                 </div>
-                                
-                                {/* Accounts List */}
                                 <div className="divide-y divide-slate-50">
                                     {data.accounts.map(acc => {
-                                        const bal = getAccountCurrentBalance(acc, filterEnd);
+                                        const bal = getBalanceForAccount(acc, filterEnd);
                                         return (
                                             <div key={acc.id} className="flex justify-between items-center px-5 py-3 hover:bg-slate-50 transition-colors group">
                                                 <div className="flex items-center gap-3">
@@ -564,12 +496,11 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                                         );
                                     })}
                                     {data.accounts.length === 0 && (
-                                        <div className="p-4 text-center text-xs text-slate-400 italic">Nenhuma conta cadastrada.</div>
+                                        <div className="p-4 text-center text-xs text-slate-400 italic">Nenhuma conta encontrada.</div>
                                     )}
                                 </div>
                             </div>
                         ))}
-                        
                         {accountsByStore.length === 0 && (
                             <div className="col-span-full text-center p-8 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-slate-400">
                                 <Wallet size={48} className="mx-auto mb-2 opacity-20"/>
