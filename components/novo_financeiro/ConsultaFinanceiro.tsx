@@ -33,6 +33,23 @@ interface ConsultaFinanceiroProps {
     user?: User;
 }
 
+// Hook para persistência de estado
+function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [state, setState] = useState<T>(() => {
+        const storageValue = localStorage.getItem(key);
+        if (storageValue) {
+            try { return JSON.parse(storageValue); } catch {}
+        }
+        return initialState;
+    });
+
+    useEffect(() => {
+        localStorage.setItem(key, JSON.stringify(state));
+    }, [key, state]);
+
+    return [state, setState];
+}
+
 export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) => {
     const [transactions, setTransactions] = useState<DailyTransaction[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<DailyTransaction[]>([]);
@@ -44,16 +61,16 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
     const [editingItem, setEditingItem] = useState<DailyTransaction | null>(null);
     const [confirmingItem, setConfirmingItem] = useState<DailyTransaction | null>(null);
 
-    // Filters
-    const [dateType, setDateType] = useState<'due' | 'payment' | 'created'>('due'); // due = Vencimento, payment = Pagamento, created = Cadastro
-    const [startDate, setStartDate] = useState(getTodayLocalISO());
-    const [endDate, setEndDate] = useState(getTodayLocalISO());
+    // Filters with Persistence
+    const [dateType, setDateType] = usePersistedState<'due' | 'payment' | 'created'>('hero_state_fin_list_dtype', 'due'); 
+    const [startDate, setStartDate] = usePersistedState('hero_state_fin_list_start', getTodayLocalISO());
+    const [endDate, setEndDate] = usePersistedState('hero_state_fin_list_end', getTodayLocalISO());
     
-    const [filterStore, setFilterStore] = useState('');
-    const [filterAccount, setFilterAccount] = useState('');
-    const [filterCategory, setFilterCategory] = useState('');
-    const [filterSupplier, setFilterSupplier] = useState('');
-    const [filterStatus, setFilterStatus] = useState(''); // '' = Todos, 'Pago', 'Pendente'
+    const [filterStore, setFilterStore] = usePersistedState('hero_state_fin_list_store', '');
+    const [filterAccount, setFilterAccount] = usePersistedState('hero_state_fin_list_account', '');
+    const [filterCategory, setFilterCategory] = usePersistedState('hero_state_fin_list_category', '');
+    const [filterSupplier, setFilterSupplier] = usePersistedState('hero_state_fin_list_supplier', '');
+    const [filterStatus, setFilterStatus] = usePersistedState('hero_state_fin_list_status', ''); 
 
     useEffect(() => {
         loadData();
@@ -73,16 +90,15 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                 getOrders()
             ]);
 
-            // Mesclar Transações e Pedidos (Consistência com Lançamentos)
             const existingIds = new Set(t.map(item => item.id));
             const mappedOrders = o
                 .filter(order => !existingIds.has(order.id))
                 .map(order => ({
                     id: order.id,
-                    date: order.deliveryDate || order.date, // Vencimento
+                    date: order.deliveryDate || order.date, 
                     paymentDate: null,
                     store: order.store,
-                    type: 'Despesa' as const, // Pedidos são Despesas
+                    type: 'Despesa' as const, 
                     accountId: null,
                     destinationStore: undefined,
                     destinationAccountId: undefined,
@@ -95,7 +111,7 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                     status: 'Pendente' as const,
                     description: `Pedido ref. ${order.product}`,
                     origin: 'pedido' as const,
-                    createdAt: order.createdAt || order.date // Data de Cadastro
+                    createdAt: order.createdAt || order.date 
                 } as DailyTransaction));
 
             const merged = [...t, ...mappedOrders];
@@ -110,7 +126,6 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         }
     };
 
-    // Determine available stores based on user permissions
     const availableStores = useMemo(() => {
         if (!user) return appData.stores;
         if (user.isMaster) return appData.stores;
@@ -120,7 +135,6 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         return appData.stores;
     }, [appData.stores, user]);
 
-    // Auto-select if only one store available and lock it
     useEffect(() => {
         if (availableStores.length === 1) {
             setFilterStore(availableStores[0]);
@@ -129,8 +143,7 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
 
     const applyFilters = () => {
         const result = transactions.filter(t => {
-            // Filtro de Data
-            let targetDate = t.date; // Default to Due Date
+            let targetDate = t.date; 
             
             if (dateType === 'payment') {
                 targetDate = t.paymentDate || '';
@@ -138,11 +151,9 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                 targetDate = t.createdAt ? t.createdAt.split('T')[0] : '';
             }
             
-            // Se filtrar por Pagamento ou Cadastro e não tiver data, esconde
             if ((dateType === 'payment' || dateType === 'created') && !targetDate) return false;
 
             const matchesDate = targetDate >= startDate && targetDate <= endDate;
-            
             const matchesStore = !filterStore || t.store === filterStore;
             const matchesCategory = !filterCategory || t.category === filterCategory;
             const matchesSupplier = !filterSupplier || t.supplier === filterSupplier;
@@ -157,7 +168,6 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                 }
             }
 
-            // Permission Check
             let allowed = true;
             if (user && !user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
                  allowed = user.permissions.stores.includes(t.store);
@@ -166,7 +176,6 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
             return matchesDate && matchesStore && matchesCategory && matchesSupplier && matchesAccount && matchesStatus && allowed;
         });
 
-        // Ordenação
         result.sort((a, b) => {
             if (dateType === 'created') {
                  const dateA = a.createdAt || '';
@@ -178,7 +187,6 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                 const dateB = b.paymentDate || '';
                 return dateB.localeCompare(dateA);
             }
-            // Padrão: Pendentes primeiro, depois vencimento
             if (a.status === 'Pendente' && b.status === 'Pago') return -1;
             if (a.status === 'Pago' && b.status === 'Pendente') return 1;
             return a.date.localeCompare(b.date);
@@ -219,13 +227,11 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         const missingAccount = !t.accountId;
         const missingMethod = !t.paymentMethod || t.paymentMethod === '-';
 
-        // If information is missing, open the specific confirm modal
         if (missingAccount || missingMethod) {
             setConfirmingItem(t);
             return;
         }
 
-        // Standard fast confirmation if data is complete
         if (window.confirm(`Confirmar pagamento de ${formatCurrency(t.value)} na data de hoje?`)) {
             const updated: DailyTransaction = {
                 ...t,
@@ -233,7 +239,6 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                 paymentDate: getTodayLocalISO()
             };
             await saveDailyTransaction(updated);
-            // Update local state
             setTransactions(prev => prev.map(item => item.id === t.id ? updated : item));
         }
     };
@@ -315,7 +320,6 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
         setDateType('due');
     };
 
-    // Totais
     const totalReceitas = filteredTransactions.filter(t => t.type === 'Receita').reduce((acc, t) => acc + t.value, 0);
     const totalDespesas = filteredTransactions.filter(t => t.type === 'Despesa').reduce((acc, t) => acc + t.value, 0);
     const saldo = totalReceitas - totalDespesas;
@@ -326,10 +330,8 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
 
     return (
         <div className="space-y-6">
-            {/* Filters Panel */}
             <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
                 
-                {/* Header & Presets */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b pb-4">
                     <div className="flex gap-2">
                         <button onClick={() => setDateRange('hoje')} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-xs font-bold uppercase text-gray-700">Hoje</button>
@@ -353,17 +355,17 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
 
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Início ({dateType === 'due' ? 'Vencimento' : dateType === 'payment' ? 'Pagamento' : 'Cadastro'})</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Início</label>
                         <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border p-2 rounded text-sm"/>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Fim ({dateType === 'due' ? 'Vencimento' : dateType === 'payment' ? 'Pagamento' : 'Cadastro'})</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Data Fim</label>
                         <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border p-2 rounded text-sm"/>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">Status (Pagamento)</label>
+                        <label className="block text-xs font-bold text-gray-600 mb-1">Status</label>
                         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full border p-2 rounded text-sm font-bold bg-gray-50">
-                            <option value="">Todos (Pagos e Pendentes)</option>
+                            <option value="">Todos</option>
                             <option value="Pago">Apenas Pagos</option>
                             <option value="Pendente">Apenas Pendentes</option>
                         </select>
@@ -409,7 +411,6 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                 </div>
 
                 <div className="flex justify-between items-center border-t pt-4 mt-4">
-                    {/* BOTÃO DE NOVO LANÇAMENTO ADICIONADO AQUI */}
                     <div>
                         <button 
                             onClick={() => setShowNewModal(true)}

@@ -39,9 +39,16 @@ const App: React.FC = () => {
                 }
             }
         }
-        // Limpa se estiver expirado ou inválido
+        
+        // SE EXPIROU OU NÃO EXISTE: Limpeza TOTAL (Sessão + Filtros)
         localStorage.removeItem(SESSION_KEY);
         localStorage.removeItem(ACTIVITY_KEY);
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('hero_state_')) {
+                localStorage.removeItem(key);
+            }
+        });
+        
         return null;
     });
 
@@ -65,7 +72,7 @@ const App: React.FC = () => {
         if (user) {
             localStorage.setItem(ACTIVITY_KEY, Date.now().toString());
         }
-    }, [user, isDashboardOnly]); // Dependências ajustadas
+    }, [user, isDashboardOnly]);
 
     const handleLogout = useCallback(() => {
         setUser(null);

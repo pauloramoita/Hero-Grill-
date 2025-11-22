@@ -13,15 +13,33 @@ interface ConsultaFinanceiroProps {
     user: User;
 }
 
+// Hook para persistência de estado
+function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [state, setState] = useState<T>(() => {
+        const storageValue = localStorage.getItem(key);
+        if (storageValue) {
+            try { return JSON.parse(storageValue); } catch {}
+        }
+        return initialState;
+    });
+
+    useEffect(() => {
+        localStorage.setItem(key, JSON.stringify(state));
+    }, [key, state]);
+
+    return [state, setState];
+}
+
 export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) => {
     const [rawRecords, setRawRecords] = useState<FinancialRecord[]>([]);
     const [displayRecords, setDisplayRecords] = useState<FinancialRecordWithAgg[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loading, setLoading] = useState(true);
     
-    const [storeFilter, setStoreFilter] = useState('');
-    const [yearFilter, setYearFilter] = useState('');
-    const [monthFilter, setMonthFilter] = useState('');
+    // Persisted Filters
+    const [storeFilter, setStoreFilter] = usePersistedState('hero_state_old_fin_store', '');
+    const [yearFilter, setYearFilter] = usePersistedState('hero_state_old_fin_year', '');
+    const [monthFilter, setMonthFilter] = usePersistedState('hero_state_old_fin_month', '');
     
     const [editingRecord, setEditingRecord] = useState<FinancialRecord | null>(null);
 

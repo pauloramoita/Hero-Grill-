@@ -14,15 +14,33 @@ interface ConsultaSaldoProps {
     user: User;
 }
 
+// Hook para persistência de estado
+function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [state, setState] = useState<T>(() => {
+        const storageValue = localStorage.getItem(key);
+        if (storageValue) {
+            try { return JSON.parse(storageValue); } catch {}
+        }
+        return initialState;
+    });
+
+    useEffect(() => {
+        localStorage.setItem(key, JSON.stringify(state));
+    }, [key, state]);
+
+    return [state, setState];
+}
+
 export const ConsultaSaldo: React.FC<ConsultaSaldoProps> = ({ user }) => {
     const [rawBalances, setRawBalances] = useState<AccountBalance[]>([]);
     const [displayBalances, setDisplayBalances] = useState<BalanceWithVariation[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loading, setLoading] = useState(true);
     
-    const [storeFilter, setStoreFilter] = useState('');
-    const [yearFilter, setYearFilter] = useState('');
-    const [monthFilter, setMonthFilter] = useState('');
+    // Filters with Persistence
+    const [storeFilter, setStoreFilter] = usePersistedState('hero_state_saldo_store', '');
+    const [yearFilter, setYearFilter] = usePersistedState('hero_state_saldo_year', '');
+    const [monthFilter, setMonthFilter] = usePersistedState('hero_state_saldo_month', '');
     
     const [editingBalance, setEditingBalance] = useState<AccountBalance | null>(null);
 
@@ -53,7 +71,6 @@ export const ConsultaSaldo: React.FC<ConsultaSaldoProps> = ({ user }) => {
         setLoading(false);
     };
 
-    // Determine available stores based on user permissions
     const availableStores = useMemo(() => {
         if (user.isMaster) return appData.stores;
         if (user.permissions.stores && user.permissions.stores.length > 0) {
@@ -62,7 +79,6 @@ export const ConsultaSaldo: React.FC<ConsultaSaldoProps> = ({ user }) => {
         return appData.stores;
     }, [appData.stores, user]);
 
-    // Auto-select if only one store available
     useEffect(() => {
         if (availableStores.length === 1) {
             setStoreFilter(availableStores[0]);
@@ -76,14 +92,12 @@ export const ConsultaSaldo: React.FC<ConsultaSaldoProps> = ({ user }) => {
     const processData = () => {
         let processed: BalanceWithVariation[] = [];
 
-        // Force filter if user has store restriction
         let effectiveStoreFilter = storeFilter;
         if (availableStores.length === 1) {
             effectiveStoreFilter = availableStores[0];
         }
 
         if (effectiveStoreFilter === '') {
-            // Ensure we only aggregate stores the user has permission for
             const allowedStores = user.isMaster ? null : user.permissions.stores;
             
             const grouped: Record<string, AccountBalance> = {};
@@ -180,7 +194,6 @@ export const ConsultaSaldo: React.FC<ConsultaSaldoProps> = ({ user }) => {
 
     return (
         <div className="space-y-6">
-            {/* Filters Panel - Style match Controle 043 */}
             <div className="bg-white p-6 rounded-lg shadow border border-gray-200 no-print">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
@@ -212,7 +225,6 @@ export const ConsultaSaldo: React.FC<ConsultaSaldoProps> = ({ user }) => {
                         </select>
                     </div>
                 </div>
-                {/* Actions Inside Panel */}
                 <div className="flex justify-end gap-2 border-t pt-4 mt-2">
                     <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm">
                         <FileSpreadsheet size={18}/> Excel
@@ -223,7 +235,6 @@ export const ConsultaSaldo: React.FC<ConsultaSaldoProps> = ({ user }) => {
                 </div>
             </div>
 
-            {/* Table */}
             <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">

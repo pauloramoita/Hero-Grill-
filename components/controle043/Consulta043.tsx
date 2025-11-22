@@ -9,15 +9,33 @@ interface Consulta043Props {
     user: User;
 }
 
+// Hook para persistência de estado
+function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [state, setState] = useState<T>(() => {
+        const storageValue = localStorage.getItem(key);
+        if (storageValue) {
+            try { return JSON.parse(storageValue); } catch {}
+        }
+        return initialState;
+    });
+
+    useEffect(() => {
+        localStorage.setItem(key, JSON.stringify(state));
+    }, [key, state]);
+
+    return [state, setState];
+}
+
 export const Consulta043: React.FC<Consulta043Props> = ({ user }) => {
     const [transactions, setTransactions] = useState<Transaction043[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<Transaction043[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [loading, setLoading] = useState(true);
     const [editingTransaction, setEditingTransaction] = useState<Transaction043 | null>(null);
-    const [storeFilter, setStoreFilter] = useState('');
     
-    const [dateValue, setDateValue] = useState(new Date().toISOString().slice(0, 7)); 
+    // Persistência nos filtros
+    const [storeFilter, setStoreFilter] = usePersistedState('hero_state_043_store', '');
+    const [dateValue, setDateValue] = usePersistedState('hero_state_043_date', new Date().toISOString().slice(0, 7)); 
 
     useEffect(() => {
         const load = async () => {

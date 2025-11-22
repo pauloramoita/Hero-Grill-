@@ -6,6 +6,23 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 import { FileText, Edit, Trash2, FileSpreadsheet, Printer, Loader2 } from 'lucide-react';
 import { EditOrderModal } from './EditOrderModal';
 
+// Hook para persistência de estado
+function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [state, setState] = useState<T>(() => {
+        const storageValue = localStorage.getItem(key);
+        if (storageValue) {
+            try { return JSON.parse(storageValue); } catch {}
+        }
+        return initialState;
+    });
+
+    useEffect(() => {
+        localStorage.setItem(key, JSON.stringify(state));
+    }, [key, state]);
+
+    return [state, setState];
+}
+
 export const RelatorioPedidos: React.FC = () => {
     const [allOrders, setAllOrders] = useState<Order[]>([]);
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
@@ -19,7 +36,8 @@ export const RelatorioPedidos: React.FC = () => {
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
     const todayStr = today.toISOString().split('T')[0];
 
-    const [filters, setFilters] = useState({
+    // Persistência nos filtros
+    const [filters, setFilters] = usePersistedState('hero_state_rel_ped_filters', {
         dateStart: firstDay,
         dateEnd: todayStr,
         store: '',
@@ -52,8 +70,9 @@ export const RelatorioPedidos: React.FC = () => {
     };
 
     useEffect(() => {
-        if (filteredData.length > 0 || allOrders.length > 0) {
-            // Optional: Auto-generate if needed, but manual trigger is better for performance
+        // Optionally auto-generate if data exists and was filtered previously
+        if (filteredData.length === 0 && allOrders.length > 0 && !loading) {
+             // don't auto generate to avoid lag on heavy data
         }
     }, [allOrders]);
 

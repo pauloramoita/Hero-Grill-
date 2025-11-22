@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { getAccountBalances, getAppData, formatCurrency, exportBalancesToXML } from '../../services/storageService';
 import { AppData, AccountBalance, User } from '../../types';
@@ -13,14 +14,32 @@ interface RelatorioSaldoProps {
     user: User;
 }
 
+// Hook para persistência de estado
+function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [state, setState] = useState<T>(() => {
+        const storageValue = localStorage.getItem(key);
+        if (storageValue) {
+            try { return JSON.parse(storageValue); } catch {}
+        }
+        return initialState;
+    });
+
+    useEffect(() => {
+        localStorage.setItem(key, JSON.stringify(state));
+    }, [key, state]);
+
+    return [state, setState];
+}
+
 export const RelatorioSaldo: React.FC<RelatorioSaldoProps> = ({ user }) => {
     const [appData, setAppData] = useState<AppData>({ stores: [], products: [], brands: [], suppliers: [], units: [], types: [], categories: [] });
     const [filteredData, setFilteredData] = useState<BalanceWithVariation[]>([]);
     const [loading, setLoading] = useState(true);
     
-    const [storeFilter, setStoreFilter] = useState('');
-    const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
-    const [monthFilter, setMonthFilter] = useState('');
+    // Persistência nos filtros
+    const [storeFilter, setStoreFilter] = usePersistedState('hero_state_rel_saldo_store', '');
+    const [yearFilter, setYearFilter] = usePersistedState('hero_state_rel_saldo_year', new Date().getFullYear().toString());
+    const [monthFilter, setMonthFilter] = usePersistedState('hero_state_rel_saldo_month', '');
 
     const [years, setYears] = useState<string[]>([]);
 

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { getTransactions043, getAppData, formatCurrency, formatDateBr, getTodayLocalISO, exportTransactionsToXML } from '../../services/storageService';
 import { AppData, Transaction043, User } from '../../types';
@@ -5,6 +6,23 @@ import { FileText, TrendingUp, TrendingDown, FileSpreadsheet, Printer, Loader2 }
 
 interface Relatorio043Props {
     user: User;
+}
+
+// Hook para persistência de estado
+function usePersistedState<T>(key: string, initialState: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [state, setState] = useState<T>(() => {
+        const storageValue = localStorage.getItem(key);
+        if (storageValue) {
+            try { return JSON.parse(storageValue); } catch {}
+        }
+        return initialState;
+    });
+
+    useEffect(() => {
+        localStorage.setItem(key, JSON.stringify(state));
+    }, [key, state]);
+
+    return [state, setState];
 }
 
 export const Relatorio043: React.FC<Relatorio043Props> = ({ user }) => {
@@ -17,9 +35,9 @@ export const Relatorio043: React.FC<Relatorio043Props> = ({ user }) => {
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
     
-    const [startDate, setStartDate] = useState(firstDay);
-    const [endDate, setEndDate] = useState(getTodayLocalISO());
-    const [storeFilter, setStoreFilter] = useState('');
+    const [startDate, setStartDate] = usePersistedState('hero_state_rel_043_start', firstDay);
+    const [endDate, setEndDate] = usePersistedState('hero_state_rel_043_end', getTodayLocalISO());
+    const [storeFilter, setStoreFilter] = usePersistedState('hero_state_rel_043_store', '');
 
     useEffect(() => {
         const load = async () => {
