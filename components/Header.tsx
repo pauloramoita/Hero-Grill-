@@ -1,6 +1,8 @@
-import React from 'react';
-import { LogOut, User as UserIcon, ChevronLeft, Menu } from 'lucide-react';
-import { User } from '../types';
+
+import React, { useState } from 'react';
+import { LogOut, ChevronLeft, Bell, X } from 'lucide-react';
+import { User, SystemMessage } from '../types';
+import { markMessageAsRead } from '../services/storageService';
 
 interface HeaderProps {
     onHomeClick: () => void;
@@ -8,9 +10,28 @@ interface HeaderProps {
     onLogout?: () => void;
     isHome: boolean;
     disableNavigation?: boolean;
+    notifications: SystemMessage[];
+    onNotificationRead: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onHomeClick, user, onLogout, isHome, disableNavigation }) => {
+export const Header: React.FC<HeaderProps> = ({ 
+    onHomeClick, 
+    user, 
+    onLogout, 
+    isHome, 
+    disableNavigation,
+    notifications,
+    onNotificationRead
+}) => {
+    const [showNotifications, setShowNotifications] = useState(false);
+
+    const handleRead = async (id: string) => {
+        if (user) {
+            await markMessageAsRead(id, user.id);
+            onNotificationRead();
+        }
+    };
+
     return (
         <header className="bg-white/95 border-b border-slate-100 sticky top-0 z-50 h-20 backdrop-blur-sm shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
             <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex justify-between items-center">
@@ -51,6 +72,50 @@ export const Header: React.FC<HeaderProps> = ({ onHomeClick, user, onLogout, isH
                 {/* User Area */}
                 {user && (
                     <div className="flex items-center gap-4 md:gap-6">
+                        
+                        {/* Notification Bell */}
+                        <div className="relative">
+                            <button 
+                                onClick={() => setShowNotifications(!showNotifications)}
+                                className="p-2 rounded-full hover:bg-slate-100 text-slate-500 relative transition-colors"
+                            >
+                                <Bell size={20} />
+                                {notifications.length > 0 && (
+                                    <span className="absolute top-1.5 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                                )}
+                            </button>
+
+                            {/* Dropdown */}
+                            {showNotifications && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)}></div>
+                                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 overflow-hidden animate-fadeIn">
+                                        <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50">
+                                            <span className="text-xs font-black uppercase text-slate-500 tracking-wider">Notificações</span>
+                                            <span className="text-xs font-bold bg-heroBlack text-white px-2 py-0.5 rounded-full">{notifications.length}</span>
+                                        </div>
+                                        <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                                            {notifications.length === 0 ? (
+                                                <div className="p-8 text-center text-slate-400 text-xs italic">
+                                                    Nenhuma nova notificação.
+                                                </div>
+                                            ) : (
+                                                notifications.map(msg => (
+                                                    <div key={msg.id} onClick={() => handleRead(msg.id)} className="p-4 hover:bg-slate-50 border-b border-slate-50 cursor-pointer transition-colors group relative">
+                                                        <h4 className={`text-sm font-bold mb-1 ${msg.severity === 'alert' ? 'text-red-600' : 'text-slate-800'}`}>{msg.title}</h4>
+                                                        <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">{msg.content}</p>
+                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <X size={14} className="text-slate-300 hover:text-red-500" />
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
                         <div className="hidden md:flex flex-col items-end">
                             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Operador</span>
                             <div className="flex items-center gap-2">

@@ -130,6 +130,18 @@ export interface MeatStockAdjustment {
     created_at?: string;
 }
 
+// === MENSAGENS ===
+export interface SystemMessage {
+    id: string;
+    type: 'popup' | 'notification' | 'tip';
+    title: string;
+    content: string;
+    severity: 'info' | 'warning' | 'alert';
+    active: boolean;
+    created_at: string;
+    readBy: string[]; // Array de UserIDs que já leram
+}
+
 export interface UserPermissions {
     modules: string[]; // 'dashboard', 'pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro', 'estoque', etc
     stores: string[]; // Lista de lojas permitidas

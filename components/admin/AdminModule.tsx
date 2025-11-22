@@ -1,21 +1,23 @@
 
+
 import React, { useState } from 'react';
 import { AdminSubView } from '../../types';
 import { UserManagement } from './UserManagement';
 import { BackupSection } from './BackupSection';
 import { SqlSection } from './SqlSection';
 import { DiagnosticSection } from './DiagnosticSection';
-import { Users, Database, MessageSquare, Activity, Terminal, Hammer, Lock } from 'lucide-react';
+import { MessageSection } from './MessageSection';
+import { Users, Database, MessageSquare, Activity, Terminal, Lock } from 'lucide-react';
 
 export const AdminModule: React.FC = () => {
     const [activeTab, setActiveTab] = useState<AdminSubView>('usuarios');
 
     const tabs: { id: AdminSubView, label: string, icon: React.ReactNode, disabled: boolean }[] = [
         { id: 'usuarios', label: 'GESTÃO DE USUÁRIOS', icon: <Users size={18}/>, disabled: false },
+        { id: 'mensagens', label: 'MENSAGENS', icon: <MessageSquare size={18}/>, disabled: false },
         { id: 'backup', label: 'BACKUP & DADOS', icon: <Database size={18}/>, disabled: false },
         { id: 'sql', label: 'SQL MANUTENÇÃO', icon: <Terminal size={18}/>, disabled: false },
         { id: 'diagnostico', label: 'DIAGNÓSTICO', icon: <Activity size={18}/>, disabled: false },
-        { id: 'mensagens', label: 'MENSAGENS', icon: <MessageSquare size={18}/>, disabled: true },
     ];
 
     return (
@@ -56,17 +58,10 @@ export const AdminModule: React.FC = () => {
             {/* Content Area */}
             <div className="min-h-[400px]">
                 {activeTab === 'usuarios' && <UserManagement />}
+                {activeTab === 'mensagens' && <MessageSection />}
                 {activeTab === 'backup' && <BackupSection />}
                 {activeTab === 'sql' && <SqlSection />}
                 {activeTab === 'diagnostico' && <DiagnosticSection />}
-                
-                {activeTab === 'mensagens' && (
-                    <div className="p-12 text-center text-gray-400 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center">
-                        <Hammer size={48} className="mb-4 opacity-20"/>
-                        <h3 className="text-lg font-bold text-gray-500">Módulo de Mensagens</h3>
-                        <p>Em desenvolvimento.</p>
-                    </div>
-                )}
             </div>
         </div>
     );

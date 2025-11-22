@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
@@ -11,8 +12,10 @@ import { DashboardModule } from './components/dashboard/DashboardModule';
 import { AdminModule } from './components/admin/AdminModule';
 import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
-import { View, User } from './types';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard, ChevronRight, Beef, ArrowRight } from 'lucide-react';
+import { SystemMessages } from './components/SystemMessages';
+import { View, User, SystemMessage } from './types';
+import { getSystemMessages } from './services/storageService';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard, Beef, ArrowRight } from 'lucide-react';
 
 // Constantes para persistência e timeout
 const SESSION_KEY = 'hero_grill_user_session';
@@ -53,6 +56,9 @@ const App: React.FC = () => {
 
     const [currentView, setCurrentView] = useState<View>('home');
     const [showPasswordModal, setShowPasswordModal] = useState(false);
+    
+    // Messages State
+    const [systemMessages, setSystemMessages] = useState<SystemMessage[]>([]);
 
     // Determina se o usuário é restrito ao Dashboard
     const isDashboardOnly = useMemo(() => {
@@ -70,12 +76,23 @@ const App: React.FC = () => {
         // Atualiza timestamp ao carregar
         if (user) {
             localStorage.setItem(ACTIVITY_KEY, Date.now().toString());
+            fetchMessages(); // Load messages on init
         }
     }, [user, isDashboardOnly]);
+
+    const fetchMessages = async () => {
+        try {
+            const msgs = await getSystemMessages();
+            setSystemMessages(msgs);
+        } catch (error) {
+            console.error("Error fetching system messages", error);
+        }
+    };
 
     const handleLogout = useCallback(() => {
         setUser(null);
         setCurrentView('home');
+        setSystemMessages([]); // Clear messages on logout
         
         // Limpa Sessão
         localStorage.removeItem(SESSION_KEY);
@@ -114,6 +131,9 @@ const App: React.FC = () => {
 
         // Verifica a cada 1 minuto
         const intervalId = setInterval(checkInactivity, 60000);
+        
+        // Poll for new messages every 2 minutes
+        const msgIntervalId = setInterval(fetchMessages, 120000);
 
         return () => {
             window.removeEventListener('mousemove', updateActivity);
@@ -122,6 +142,7 @@ const App: React.FC = () => {
             window.removeEventListener('touchstart', updateActivity);
             window.removeEventListener('scroll', updateActivity);
             clearInterval(intervalId);
+            clearInterval(msgIntervalId);
         };
     }, [user, handleLogout]);
 
@@ -160,8 +181,6 @@ const App: React.FC = () => {
         return user.permissions.modules.includes(moduleId);
     };
 
-    // NEW RED & BLACK COLOR SCHEME
-    // Backup removed from main menu, now inside Admin
     const menuItems: { id: View, label: string, icon: React.ReactNode, bgClass: string, textClass: string, borderClass: string, description: string, requiredPerm: string }[] = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={28} />, bgClass: 'bg-[#1A1A1A]', textClass: 'text-white', borderClass: 'border-slate-800', description: 'Visão geral e indicadores', requiredPerm: 'dashboard' },
         { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={28} />, bgClass: 'bg-[#C0392B]', textClass: 'text-white', borderClass: 'border-red-800', description: 'Cadastro e gestão de compras', requiredPerm: 'pedidos' },
@@ -173,15 +192,29 @@ const App: React.FC = () => {
         { id: 'admin', label: 'Admin & Dados', icon: <Settings size={28} />, bgClass: 'bg-gray-200', textClass: 'text-slate-800', borderClass: 'border-gray-300', description: 'Usuários, Backup e SQL', requiredPerm: 'admin' },
     ];
 
+    // Filter for notifications intended for the user and not read
+    const notifications = systemMessages.filter(m => 
+        m.type === 'notification' && !m.readBy.includes(user.id)
+    );
+
     return (
         <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-800 font-sans">
-            {/* Header */}
+            {/* System Popups and Tips Layer */}
+            <SystemMessages 
+                messages={systemMessages} 
+                user={user} 
+                onMessageRead={fetchMessages} 
+            />
+
+            {/* Header with Notifications */}
             <Header 
                 isHome={currentView === 'home'}
                 onHomeClick={() => !isDashboardOnly && setCurrentView('home')} 
                 user={user} 
                 onLogout={handleLogout} 
                 disableNavigation={isDashboardOnly}
+                notifications={notifications}
+                onNotificationRead={fetchMessages}
             />
 
             {/* Main Content */}

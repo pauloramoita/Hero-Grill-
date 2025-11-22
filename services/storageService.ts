@@ -1,8 +1,9 @@
 
+
 import { createClient } from '@supabase/supabase-js';
 import { 
     AppData, Order, Transaction043, AccountBalance, FinancialRecord, 
-    DailyTransaction, FinancialAccount, MeatInventoryLog, MeatStockAdjustment, User 
+    DailyTransaction, FinancialAccount, MeatInventoryLog, MeatStockAdjustment, User, SystemMessage 
 } from '../types';
 
 // --- SAFE INITIALIZATION ---
@@ -748,6 +749,65 @@ export const deleteDailyTransaction = async (id: string) => {
     await supabase.from('daily_transactions').delete().eq('id', id);
 };
 
+// --- SYSTEM MESSAGES ---
+
+export const getSystemMessages = async (): Promise<SystemMessage[]> => {
+    const { data, error } = await supabase
+        .from('system_messages')
+        .select('*')
+        .eq('active', true)
+        .order('created_at', { ascending: false });
+    
+    if (error) {
+        // If table doesn't exist yet, return empty to avoid crash
+        console.warn("System messages fetch warning:", error.message);
+        return [];
+    }
+
+    return (data || []).map((m: any) => ({
+        id: m.id,
+        type: m.type,
+        title: m.title,
+        content: m.content,
+        severity: m.severity,
+        active: m.active,
+        created_at: m.created_at,
+        readBy: m.read_by || [] // JSONB column
+    }));
+};
+
+export const createSystemMessage = async (msg: Omit<SystemMessage, 'id' | 'created_at' | 'readBy'>) => {
+    const { error } = await supabase.from('system_messages').insert([{
+        type: msg.type,
+        title: msg.title,
+        content: msg.content,
+        severity: msg.severity,
+        active: msg.active,
+        read_by: []
+    }]);
+    if (error) throw new Error(error.message);
+};
+
+export const deleteSystemMessage = async (id: string) => {
+    // Soft delete or hard delete? Let's hard delete for simplicity or set active=false
+    const { error } = await supabase.from('system_messages').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+};
+
+export const markMessageAsRead = async (messageId: string, userId: string) => {
+    // Fetch current read_by array
+    const { data } = await supabase.from('system_messages').select('read_by').eq('id', messageId).single();
+    if (data) {
+        const currentReads = data.read_by || [];
+        if (!currentReads.includes(userId)) {
+            const newReads = [...currentReads, userId];
+            await supabase.from('system_messages').update({ read_by: newReads }).eq('id', messageId);
+        }
+    }
+};
+
+// --- USERS ---
+
 export const getUsers = async (): Promise<User[]> => {
     const { data } = await supabase.from('system_users').select('*');
     return data || [];
@@ -991,6 +1051,17 @@ create table if not exists daily_transactions (
   description text,
   classification text,
   origin text,
+  created_at timestamptz default now()
+);
+
+create table if not exists system_messages (
+  id uuid primary key default gen_random_uuid(),
+  type text check (type in ('popup', 'notification', 'tip')),
+  title text,
+  content text,
+  severity text check (severity in ('info', 'warning', 'alert')),
+  active boolean default true,
+  read_by jsonb default '[]'::jsonb,
   created_at timestamptz default now()
 );
 `;
