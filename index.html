@@ -24,31 +24,22 @@
                     },
                     colors: {
                         heroRed: '#C0392B', 
-                        heroRedDark: '#A93226',
+                        heroRedDark: '#922B21',
                         heroBlack: '#1A1A1A',
-                        slate: {
-                            50: '#F8FAFC',
-                            100: '#F1F5F9',
-                            200: '#E2E8F0',
-                            300: '#CBD5E1',
-                            400: '#94A3B8',
-                            500: '#64748B',
-                            600: '#475569',
-                            700: '#334155',
-                            800: '#1E293B',
-                            900: '#0F172A',
-                        }
+                        heroGray: '#F3F4F6',
                     },
                     boxShadow: {
-                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
-                        'card': '0 0 0 1px rgba(0,0,0,0.03), 0 2px 8px rgba(0,0,0,0.04)',
-                        'card-hover': '0 0 0 1px rgba(0,0,0,0.03), 0 8px 16px rgba(0,0,0,0.08)',
-                        'floating': '0 20px 40px -10px rgba(0,0,0,0.15)',
+                        'soft': '0 10px 40px -10px rgba(0,0,0,0.08)',
+                        'card': '0 0 0 1px rgba(0,0,0,0.03), 0 2px 12px rgba(0,0,0,0.04)',
+                        'card-hover': '0 0 0 1px rgba(0,0,0,0.03), 0 12px 24px rgba(0,0,0,0.08)',
+                        'floating': '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                        'glow-red': '0 0 20px rgba(192, 57, 43, 0.4)',
                     },
                     animation: {
                         'fadeIn': 'fadeIn 0.4s ease-out forwards',
                         'scaleIn': 'scaleIn 0.3s ease-out forwards',
-                        'slideUp': 'slideUp 0.4s ease-out forwards',
+                        'slideUp': 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                        'subtle-drift': 'subtleDrift 20s ease-in-out infinite alternate',
                     },
                     keyframes: {
                         fadeIn: {
@@ -56,12 +47,16 @@
                             '100%': { opacity: '1' },
                         },
                         scaleIn: {
-                            '0%': { opacity: '0', transform: 'scale(0.95)' },
+                            '0%': { opacity: '0', transform: 'scale(0.98)' },
                             '100%': { opacity: '1', transform: 'scale(1)' },
                         },
                         slideUp: {
-                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '0%': { opacity: '0', transform: 'translateY(30px)' },
                             '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        subtleDrift: {
+                            '0%': { transform: 'scale(1.1) translate(0, 0)' },
+                            '100%': { transform: 'scale(1.1) translate(-2%, 0)' },
                         }
                     }
                 }
@@ -72,22 +67,22 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: #F8FAFC;
-            color: #1E293B;
+            color: #1A1A1A;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
         
         /* Custom scrollbar */
         ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
         }
         ::-webkit-scrollbar-track {
-            background: #F1F5F9; 
+            background: transparent; 
         }
         ::-webkit-scrollbar-thumb {
             background: #CBD5E1; 
-            border-radius: 4px;
+            border-radius: 3px;
         }
         ::-webkit-scrollbar-thumb:hover {
             background: #94A3B8; 
@@ -98,7 +93,8 @@
         input:-webkit-autofill:hover, 
         input:-webkit-autofill:focus, 
         input:-webkit-autofill:active{
-            -webkit-box-shadow: 0 0 0 30px #ffffff inset !important;
+            -webkit-box-shadow: 0 0 0 30px #2d2d2d inset !important;
+            -webkit-text-fill-color: white !important;
             transition: background-color 5000s ease-in-out 0s;
         }
         

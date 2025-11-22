@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, User, ArrowRight, Loader2, ShieldAlert } from 'lucide-react';
+import { Lock, User, Flame, Loader2, ShieldAlert } from 'lucide-react';
 import { loginUser } from '../services/storageService';
 import { User as UserType } from '../types';
 
@@ -13,14 +13,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    // Use a high-quality Unsplash image that matches the description: 
+    // Dark, BBQ, close-up steak, bokeh, premium feel.
+    const BACKGROUND_IMAGE = "https://images.unsplash.com/photo-1594041680534-e8c8cdebd659?q=80&w=2500&auto=format&fit=crop";
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setLoading(true);
 
         try {
-            await new Promise(resolve => setTimeout(resolve, 800)); // Pequeno delay para UX
-            
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network for UX
             const result = await loginUser(username, password);
             if (result.success && result.user) {
                 onLogin(result.user);
@@ -35,66 +38,81 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     };
 
     return (
-        <div className="min-h-screen bg-white flex flex-col relative overflow-hidden font-sans">
-            {/* Background Vermelho Inclinado */}
-            <div className="absolute top-0 left-0 w-full h-[45vh] bg-heroRed transform -skew-y-3 origin-top-left z-0 shadow-lg"></div>
-            
-            <div className="relative z-10 flex-1 flex items-center justify-center px-4 py-12">
-                <div className="w-full max-w-[400px] bg-white rounded-[32px] shadow-floating p-8 md:p-10 animate-slideUp">
+        <div className="min-h-screen w-full relative overflow-hidden flex items-center justify-center bg-black">
+            {/* 1. Background with Parallax (Subtle Drift) */}
+            <div className="absolute inset-0 w-full h-full z-0">
+                <img 
+                    src={BACKGROUND_IMAGE} 
+                    alt="Premium BBQ Background" 
+                    className="w-full h-full object-cover animate-subtle-drift opacity-90"
+                />
+                {/* 2. Mask Overlay for Contrast */}
+                <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/70"></div>
+                <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"></div>
+            </div>
+
+            {/* 3. Glassmorphism Card */}
+            <div className="relative z-10 w-full max-w-[400px] mx-4">
+                <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-[32px] shadow-floating p-8 md:p-10 animate-slideUp flex flex-col items-center">
                     
-                    {/* Header do Card */}
-                    <div className="flex flex-col items-center text-center mb-8">
-                        <div className="w-20 h-20 bg-heroRed/10 rounded-2xl flex items-center justify-center mb-6 transform rotate-3 transition-transform hover:rotate-0">
-                            <div className="bg-heroRed text-white p-3.5 rounded-xl shadow-md">
-                                <Lock className="w-8 h-8" strokeWidth={2.5} />
-                            </div>
-                        </div>
-                        
-                        <h1 className="text-2xl font-extrabold text-slate-800 mb-2">Bem-vindo</h1>
-                        <p className="text-sm text-slate-500 font-medium">
-                            Faça login para gerenciar o<br/>
-                            <span className="text-heroRed font-bold">Hero Grill Self-service</span>
+                    {/* Logo Icon */}
+                    <div className="w-16 h-16 bg-heroRed rounded-2xl flex items-center justify-center mb-6 shadow-glow-red transform transition-transform hover:scale-105 duration-500">
+                        <Flame className="text-white w-8 h-8" strokeWidth={2.5} />
+                    </div>
+
+                    {/* Header Text */}
+                    <div className="text-center mb-8">
+                        <h1 className="text-3xl font-black text-white mb-1 tracking-tight flex items-center justify-center gap-1">
+                            <span>HERO</span>
+                            <span className="text-heroRed">GRILL</span>
+                        </h1>
+                        <p className="text-gray-300 text-[10px] font-bold tracking-[0.25em] uppercase opacity-80">
+                            Sistema de Gestão Premium
                         </p>
                     </div>
 
-                    {/* Formulário */}
-                    <form onSubmit={handleSubmit} className="space-y-5">
-                        <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Usuário</label>
+                    {/* Form */}
+                    <form onSubmit={handleSubmit} className="w-full space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 block">
+                                Usuário
+                            </label>
                             <div className="relative group">
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <User className="h-5 w-5 text-slate-400 group-focus-within:text-heroRed transition-colors" />
+                                    <User className="h-5 w-5 text-gray-500 group-focus-within:text-heroRed transition-colors duration-300" />
                                 </div>
                                 <input 
                                     type="text" 
                                     value={username} 
                                     onChange={(e) => setUsername(e.target.value)}
-                                    className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-heroRed focus:ring-1 focus:ring-heroRed transition-all font-medium text-sm"
-                                    placeholder="Seu usuário"
+                                    className="block w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/5 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-heroRed focus:ring-1 focus:ring-heroRed/50 focus:bg-black/60 transition-all duration-300 font-medium text-sm shadow-inner"
+                                    placeholder="Digite seu acesso"
                                     autoFocus
                                 />
                             </div>
                         </div>
 
-                        <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-1">Senha</label>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 block">
+                                Senha
+                            </label>
                             <div className="relative group">
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-heroRed transition-colors" />
+                                    <Lock className="h-5 w-5 text-gray-500 group-focus-within:text-heroRed transition-colors duration-300" />
                                 </div>
                                 <input 
                                     type="password" 
                                     value={password} 
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-heroRed focus:ring-1 focus:ring-heroRed transition-all font-medium text-sm"
+                                    className="block w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/5 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-heroRed focus:ring-1 focus:ring-heroRed/50 focus:bg-black/60 transition-all duration-300 font-medium text-sm shadow-inner tracking-widest"
                                     placeholder="••••••••"
                                 />
                             </div>
                         </div>
 
                         {error && (
-                            <div className="bg-red-50 text-red-600 p-3 rounded-xl flex items-center gap-3 text-sm font-medium animate-fadeIn border border-red-100">
-                                <ShieldAlert size={18} /> 
+                            <div className="bg-red-500/10 border border-red-500/30 text-red-200 p-3 rounded-lg flex items-center gap-3 text-xs font-bold animate-fadeIn backdrop-blur-sm">
+                                <ShieldAlert size={16} className="flex-shrink-0 text-red-400" /> 
                                 <span>{error}</span>
                             </div>
                         )}
@@ -102,23 +120,31 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                         <button 
                             type="submit" 
                             disabled={loading}
-                            className="w-full group bg-gradient-to-r from-heroRed to-red-700 hover:to-red-800 text-white font-bold py-4 rounded-xl shadow-lg shadow-red-200 hover:shadow-xl hover:shadow-red-200 transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.98] mt-4 flex items-center justify-center gap-2"
+                            className="group relative w-full bg-white text-black font-black py-4 rounded-xl overflow-hidden transition-all duration-300 hover:shadow-[0_0_30px_-5px_rgba(192,57,43,0.6)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
                         >
-                            {loading ? (
-                                <Loader2 className="animate-spin" size={20} />
-                            ) : (
-                                <>
-                                    Entrar no Sistema
-                                    <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                                </>
-                            )}
+                            {/* Center-out Fill Animation */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="w-0 h-0 rounded-full bg-heroRed opacity-0 group-hover:opacity-100 group-hover:w-[300%] group-hover:h-[300%] transition-all duration-500 ease-out"></span>
+                            </div>
+                            
+                            {/* Content */}
+                            <div className="relative z-10 flex items-center justify-center gap-2 group-hover:text-white transition-colors duration-300">
+                                {loading ? (
+                                    <Loader2 className="animate-spin" size={20} />
+                                ) : (
+                                    <>
+                                        <span className="tracking-wide text-sm">ENTRAR</span>
+                                        <Flame size={18} className="w-0 group-hover:w-5 opacity-0 group-hover:opacity-100 transition-all duration-300 -ml-2 group-hover:ml-0" fill="currentColor" />
+                                    </>
+                                )}
+                            </div>
                         </button>
                     </form>
 
-                    <div className="mt-8 text-center">
-                        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">
-                            Sistema de Gestão v2.0
-                        </p>
+                    <div className="mt-8">
+                        <span className="text-[9px] font-bold text-white/30 uppercase tracking-[0.2em]">
+                            Self-Service System v2.0
+                        </span>
                     </div>
                 </div>
             </div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
@@ -161,16 +160,17 @@ const App: React.FC = () => {
         return user.permissions.modules.includes(moduleId);
     };
 
-    const menuItems: { id: View, label: string, icon: React.ReactNode, bgClass: string, textClass: string, description: string, requiredPerm: string }[] = [
-        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={28} />, bgClass: 'bg-slate-800', textClass: 'text-white', description: 'Visão geral e indicadores', requiredPerm: 'dashboard' },
-        { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={28} />, bgClass: 'bg-heroRed', textClass: 'text-white', description: 'Cadastro e gestão de compras', requiredPerm: 'pedidos' },
-        { id: 'estoque', label: 'Estoque Carnes', icon: <Beef size={28} />, bgClass: 'bg-orange-500', textClass: 'text-white', description: 'Controle de churrasco', requiredPerm: 'estoque' },
-        { id: 'novo_financeiro', label: 'Financeiro', icon: <Landmark size={28} />, bgClass: 'bg-blue-600', textClass: 'text-white', description: 'Fluxo de caixa e lançamentos', requiredPerm: 'novo_financeiro' },
-        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={28} />, bgClass: 'bg-emerald-600', textClass: 'text-white', description: 'Gestão de conta 043', requiredPerm: 'controle043' },
-        { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={28} />, bgClass: 'bg-violet-600', textClass: 'text-white', description: 'Balanço mensal consolidado', requiredPerm: 'saldo' },
-        { id: 'financeiro', label: 'Entradas/Saídas', icon: <DollarSign size={28} />, bgClass: 'bg-amber-500', textClass: 'text-white', description: 'Registro consolidado (Legado)', requiredPerm: 'financeiro' },
-        { id: 'backup', label: 'Backup', icon: <Database size={28} />, bgClass: 'bg-cyan-600', textClass: 'text-white', description: 'Segurança dos dados', requiredPerm: 'backup' },
-        { id: 'admin', label: 'Admin', icon: <Settings size={28} />, bgClass: 'bg-slate-200', textClass: 'text-slate-800', description: 'Usuários e permissões', requiredPerm: 'admin' },
+    // NEW RED & BLACK COLOR SCHEME
+    const menuItems: { id: View, label: string, icon: React.ReactNode, bgClass: string, textClass: string, borderClass: string, description: string, requiredPerm: string }[] = [
+        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={28} />, bgClass: 'bg-[#1A1A1A]', textClass: 'text-white', borderClass: 'border-slate-800', description: 'Visão geral e indicadores', requiredPerm: 'dashboard' },
+        { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={28} />, bgClass: 'bg-[#C0392B]', textClass: 'text-white', borderClass: 'border-red-800', description: 'Cadastro e gestão de compras', requiredPerm: 'pedidos' },
+        { id: 'estoque', label: 'Estoque Carnes', icon: <Beef size={28} />, bgClass: 'bg-[#333333]', textClass: 'text-white', borderClass: 'border-slate-600', description: 'Controle de churrasco', requiredPerm: 'estoque' },
+        { id: 'novo_financeiro', label: 'Financeiro', icon: <Landmark size={28} />, bgClass: 'bg-[#A93226]', textClass: 'text-white', borderClass: 'border-red-900', description: 'Fluxo de caixa e lançamentos', requiredPerm: 'novo_financeiro' },
+        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={28} />, bgClass: 'bg-slate-700', textClass: 'text-white', borderClass: 'border-slate-600', description: 'Gestão de conta 043', requiredPerm: 'controle043' },
+        { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={28} />, bgClass: 'bg-[#E74C3C]', textClass: 'text-white', borderClass: 'border-red-400', description: 'Balanço mensal consolidado', requiredPerm: 'saldo' },
+        { id: 'financeiro', label: 'Entradas/Saídas', icon: <DollarSign size={28} />, bgClass: 'bg-gray-500', textClass: 'text-white', borderClass: 'border-gray-600', description: 'Registro consolidado (Legado)', requiredPerm: 'financeiro' },
+        { id: 'backup', label: 'Backup', icon: <Database size={28} />, bgClass: 'bg-slate-800', textClass: 'text-white', borderClass: 'border-slate-900', description: 'Segurança dos dados', requiredPerm: 'backup' },
+        { id: 'admin', label: 'Admin', icon: <Settings size={28} />, bgClass: 'bg-gray-200', textClass: 'text-slate-800', borderClass: 'border-gray-300', description: 'Usuários e permissões', requiredPerm: 'admin' },
     ];
 
     return (
@@ -187,8 +187,8 @@ const App: React.FC = () => {
             {/* Main Content */}
             <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
                 {currentView === 'home' && !isDashboardOnly ? (
-                    <div className="py-12 animate-fadeIn">
-                        <div className="mb-10">
+                    <div className="py-10 animate-fadeIn">
+                        <div className="mb-8">
                             <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Painel Principal</h1>
                             <p className="text-slate-500 font-medium">
                                 Selecione um módulo abaixo para iniciar.
@@ -200,19 +200,19 @@ const App: React.FC = () => {
                                 <button
                                     key={item.id}
                                     onClick={() => setCurrentView(item.id)}
-                                    className="group relative bg-white rounded-3xl p-6 shadow-card hover:shadow-card-hover transition-all duration-300 border border-slate-100 text-left flex flex-col h-full overflow-hidden active:scale-[0.98]"
+                                    className="group relative bg-white rounded-3xl p-6 shadow-card hover:shadow-card-hover transition-all duration-300 border border-slate-100 text-left flex flex-col h-full overflow-hidden active:scale-[0.99]"
                                 >
                                     <div className="flex items-start justify-between mb-6">
-                                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg ${item.bgClass} ${item.textClass} transform transition-transform group-hover:rotate-6`}>
+                                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg ${item.bgClass} ${item.textClass} border-b-4 ${item.borderClass} transform transition-transform group-hover:rotate-3`}>
                                             {item.icon}
                                         </div>
                                         <div className="bg-slate-50 p-2 rounded-full opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all">
-                                            <ArrowRight size={20} className="text-slate-400" />
+                                            <ArrowRight size={20} className="text-heroRed" />
                                         </div>
                                     </div>
                                     
                                     <div className="mt-auto">
-                                        <h3 className="text-xl font-bold text-slate-800 group-hover:text-heroRed transition-colors">{item.label}</h3>
+                                        <h3 className="text-xl font-black text-slate-800 group-hover:text-heroRed transition-colors">{item.label}</h3>
                                         <p className="text-sm text-slate-500 mt-2 leading-relaxed font-medium">{item.description}</p>
                                     </div>
                                 </button>
@@ -227,7 +227,7 @@ const App: React.FC = () => {
                             )}
                         </div>
 
-                         <div className="mt-16 flex justify-center">
+                         <div className="mt-12 flex justify-center">
                             <button 
                                 onClick={() => setShowPasswordModal(true)}
                                 className="text-slate-400 hover:text-heroRed flex items-center gap-2 text-xs font-bold py-3 px-6 rounded-full bg-white border border-slate-100 hover:border-red-100 hover:bg-red-50 transition-all shadow-sm"
@@ -254,8 +254,8 @@ const App: React.FC = () => {
             {/* Footer */}
             <footer className="bg-white border-t border-slate-100 py-8 text-center no-print mt-auto">
                 <div className="max-w-7xl mx-auto px-4">
-                    <p className="text-slate-400 text-xs font-bold tracking-wide">
-                        &copy; {new Date().getFullYear()} HERO GRILL SELF-SERVICE
+                    <p className="text-slate-300 text-[10px] font-black tracking-[0.2em] uppercase">
+                        Hero Grill Self-service &copy; {new Date().getFullYear()}
                     </p>
                 </div>
             </footer>
