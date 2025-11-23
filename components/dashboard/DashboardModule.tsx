@@ -7,19 +7,23 @@ import {
     getFinancialAccounts,
     getTransactions043,
     getAccountBalances,
+    getLoanTransactions,
     formatCurrency
 } from '../../services/storageService';
-import { AppData, Order, DailyTransaction, FinancialAccount, Transaction043, AccountBalance, User } from '../../types';
+import { AppData, Order, DailyTransaction, FinancialAccount, Transaction043, AccountBalance, LoanTransaction, User } from '../../types';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    Cell
+    Cell, ComposedChart, Line, Area
 } from 'recharts';
 import { 
     Loader2,
     Lock,
     Hammer,
     AlertCircle,
-    Layers
+    Layers,
+    TrendingUp,
+    TrendingDown,
+    Wallet
 } from 'lucide-react';
 
 interface DashboardModuleProps {
@@ -36,6 +40,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     const [transactions, setTransactions] = useState<DailyTransaction[]>([]);
     const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
     const [transactions043, setTransactions043] = useState<Transaction043[]>([]);
+    const [loans, setLoans] = useState<LoanTransaction[]>([]);
     const [accountBalances, setAccountBalances] = useState<AccountBalance[]>([]);
 
     const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -90,6 +95,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
             
             const t = await getDailyTransactions().catch(e => { console.error('Trans load error', e); return []; });
             const t043 = await getTransactions043().catch(e => { console.error('043 load error', e); return []; });
+            const loanData = await getLoanTransactions().catch(e => { console.error('Loans load error', e); return []; });
             const ab = await getAccountBalances().catch(e => { console.error('Balances load error', e); return []; });
 
             setAppData(d);
@@ -97,6 +103,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
             setTransactions(t);
             setAccounts(acc);
             setTransactions043(t043);
+            setLoans(loanData);
             setAccountBalances(ab);
         } catch (error: any) {
             console.error("Critical Dashboard Error", error);
@@ -357,12 +364,61 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
         });
     };
 
+    // New Chart Logic for Hero Centro Loans
+    const getLoansHistory = () => {
+        // All loans are implicitly for Hero Centro in the context of this module
+        const relevant = loans.filter(l => l.date.slice(0, 7) <= currentMonth);
+        
+        // Generate range of last 12 months
+        const dates = [];
+        const d = new Date(currentMonth + '-01');
+        for (let i = 0; i < 12; i++) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            dates.unshift(`${y}-${m}`); // Push to start to reverse order later? No, unshift makes it descending if loop goes back.
+            // Actually better loop backwards
+            d.setMonth(d.getMonth() - 1);
+        }
+        const rangeKeys = dates.reverse(); // Oldest to Newest
+
+        // Calculate Cumulative Balance up to Start of Range
+        const startDate = rangeKeys[0];
+        let cumulativeBalance = relevant
+            .filter(l => l.date.slice(0, 7) < startDate)
+            .reduce((acc, l) => {
+                // Credit (Entrada) increases Debt
+                // Debit (Saida) decreases Debt
+                if (l.type === 'CREDIT') return acc + l.value;
+                if (l.type === 'DEBIT') return acc - l.value;
+                return acc;
+            }, 0);
+
+        const data = rangeKeys.map(key => {
+            const monthLoans = relevant.filter(l => l.date.slice(0, 7) === key);
+            const monthlyCredit = monthLoans.filter(l => l.type === 'CREDIT').reduce((acc, l) => acc + l.value, 0);
+            const monthlyDebit = monthLoans.filter(l => l.type === 'DEBIT').reduce((acc, l) => acc + l.value, 0);
+            
+            cumulativeBalance = cumulativeBalance + monthlyCredit - monthlyDebit;
+
+            const [y, m] = key.split('-');
+            return {
+                name: `${m}/${y}`,
+                Entrada: monthlyCredit,
+                Saida: monthlyDebit,
+                SaldoDevedor: cumulativeBalance
+            };
+        });
+
+        return data;
+    };
+
     const metrics = calculateFinancialMetrics();
     const totalBalance = calculateTotalBalance();
     const storePerformance = getStorePerformance();
     const expenseLists = getExpenseLists();
     const data043 = get043History();
     const dataSaldos = getSaldosHistory();
+    const dataLoans = getLoansHistory();
 
     const tabs = [
         { id: 'geral', label: 'GERAL', disabled: false },
@@ -490,58 +546,92 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
                     </div>
 
                     {/* 3. Charts Section (Last 12 Months) */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                        
-                        {/* Controle 043 */}
-                        <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                            <h3 className="text-heroBlack font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">CONTROLE 043 (Últimos 12 Meses)</h3>
-                            <div className="h-64 w-full">
+                    {selectedStore === 'Hero Centro' ? (
+                        // Hero Centro Special Loan Chart
+                        <div className="bg-white p-6 rounded-lg shadow border border-indigo-100 mb-6">
+                            <h3 className="text-indigo-900 font-bold uppercase text-sm mb-4 border-b pb-2 border-indigo-50 flex items-center gap-2">
+                                <Wallet size={18} className="text-indigo-600"/> EVOLUÇÃO DE EMPRÉSTIMOS (Hero Centro)
+                            </h3>
+                            <div className="h-80 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={data043}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                        <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} />
+                                    <ComposedChart data={dataLoans} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
+                                        <XAxis dataKey="name" tick={{fontSize: 10}} />
                                         <YAxis 
+                                            yAxisId="left"
                                             tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)} 
                                             tick={{fontSize: 11}}
                                         />
-                                        <Tooltip 
-                                            formatter={(value: number) => formatCurrency(value)}
-                                            cursor={{fill: 'transparent'}} 
+                                        <YAxis 
+                                            yAxisId="right" 
+                                            orientation="right"
+                                            tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)}
+                                            tick={{fontSize: 11, fill: '#4f46e5'}}
                                         />
-                                        <Legend />
-                                        <Bar dataKey="Credito" name="Crédito" fill="#2ECC71" barSize={20} radius={[4, 4, 0, 0]} />
-                                        <Bar dataKey="Debito" name="Débito" fill="#C0392B" barSize={20} radius={[4, 4, 0, 0]} />
-                                    </BarChart>
+                                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                                        <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                                        
+                                        <Bar yAxisId="left" dataKey="Entrada" name="Novos Empréstimos" fill="#10B981" barSize={15} radius={[4, 4, 0, 0]} />
+                                        <Bar yAxisId="left" dataKey="Saida" name="Pagamentos" fill="#EF4444" barSize={15} radius={[4, 4, 0, 0]} />
+                                        <Line yAxisId="right" type="monotone" dataKey="SaldoDevedor" name="Saldo Devedor Total" stroke="#4f46e5" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
+                                    </ComposedChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
+                    ) : (
+                        // Standard Charts for Other Stores
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                            {/* Controle 043 */}
+                            <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+                                <h3 className="text-heroBlack font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">CONTROLE 043 (Últimos 12 Meses)</h3>
+                                <div className="h-64 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={data043}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} />
+                                            <YAxis 
+                                                tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)} 
+                                                tick={{fontSize: 11}}
+                                            />
+                                            <Tooltip 
+                                                formatter={(value: number) => formatCurrency(value)}
+                                                cursor={{fill: 'transparent'}} 
+                                            />
+                                            <Legend />
+                                            <Bar dataKey="Credito" name="Crédito" fill="#2ECC71" barSize={20} radius={[4, 4, 0, 0]} />
+                                            <Bar dataKey="Debito" name="Débito" fill="#C0392B" barSize={20} radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
 
-                        {/* Saldo de Contas */}
-                        <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                            <h3 className="text-heroBlack font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">SALDO DE CONTAS (Últimos 12 Meses)</h3>
-                            <div className="h-64 w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={dataSaldos}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                        <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} />
-                                        <YAxis 
-                                            tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)} 
-                                            tick={{fontSize: 11}}
-                                        />
-                                        <Tooltip 
-                                            formatter={(value: number) => formatCurrency(value)}
-                                            cursor={{fill: 'rgba(0,0,0,0.05)'}} 
-                                        />
-                                        <Bar dataKey="value" name="Saldo Total" barSize={40} radius={[4, 4, 0, 0]}>
-                                            {dataSaldos.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.value >= 0 ? '#1A1A1A' : '#C0392B'} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
+                            {/* Saldo de Contas */}
+                            <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+                                <h3 className="text-heroBlack font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">SALDO DE CONTAS (Últimos 12 Meses)</h3>
+                                <div className="h-64 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={dataSaldos}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} />
+                                            <YAxis 
+                                                tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)} 
+                                                tick={{fontSize: 11}}
+                                            />
+                                            <Tooltip 
+                                                formatter={(value: number) => formatCurrency(value)}
+                                                cursor={{fill: 'rgba(0,0,0,0.05)'}} 
+                                            />
+                                            <Bar dataKey="value" name="Saldo Total" barSize={40} radius={[4, 4, 0, 0]}>
+                                                {dataSaldos.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.value >= 0 ? '#1A1A1A' : '#C0392B'} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* 4. Detailed Tables */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
