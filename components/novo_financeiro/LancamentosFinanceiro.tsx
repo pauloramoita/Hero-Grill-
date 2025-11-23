@@ -7,13 +7,16 @@ import {
     saveDailyTransaction, 
     deleteDailyTransaction, 
     formatCurrency, 
-    getTodayLocalISO,
     formatDateBr,
-    getOrders
+    getOrders,
+    getTodayLocalISO
 } from '../../services/storageService';
 import { AppData, FinancialAccount, DailyTransaction, Order, User } from '../../types';
-import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock, Building2, Wallet, TrendingUp, TrendingDown, ArrowLeft, Landmark, Plus, Wand2, Download, Printer, X } from 'lucide-react';
+import { CheckCircle, Trash2, Loader2, Search, Edit, DollarSign, EyeOff, Filter, Calculator, ArrowRight, Repeat, CalendarClock, Building2, Wallet, TrendingUp, TrendingDown, ArrowLeft, Landmark, Plus, Wand2, Download, Printer, X, PieChart } from 'lucide-react';
 import { EditLancamentoModal } from './EditLancamentoModal';
+import { ConfirmPaymentModal } from './ConfirmPaymentModal';
+import { NovoLancamentoModal } from './NovoLancamentoModal';
+import { BatchPaymentModal } from './BatchPaymentModal';
 import { AutoPixModal } from './AutoPixModal';
 
 interface LancamentosFinanceiroProps {
@@ -252,18 +255,57 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
         return getBalanceForAccount(acc, getTodayLocalISO());
     };
 
-    const accountsByStore = useMemo(() => {
+    const dashboardData = useMemo(() => {
+        const SPECIAL_ACCOUNT_NAME = 'Aplicação PangBank';
+        const STORE_ORDER = ['Hero Joquei', 'Hero Shopping', 'Hero Centro'];
+
         const groups: Record<string, { accounts: FinancialAccount[], totalBalance: number }> = {};
+        let specialAccountData: { account: FinancialAccount, balance: number } | null = null;
+
         accounts.forEach(acc => {
-            if (!groups[acc.store]) groups[acc.store] = { accounts: [], totalBalance: 0 };
             const currentBal = getBalanceForAccount(acc, endDate);
+
+            // Check for Special Account to separate
+            if (acc.name.trim() === SPECIAL_ACCOUNT_NAME) {
+                specialAccountData = {
+                    account: acc,
+                    balance: currentBal
+                };
+                return; // Skip adding to groups (and store totals)
+            }
+
+            if (!groups[acc.store]) groups[acc.store] = { accounts: [], totalBalance: 0 };
             groups[acc.store].accounts.push(acc);
             groups[acc.store].totalBalance += currentBal;
         });
+
+        // Sort accounts alphabetically within stores
         Object.values(groups).forEach(group => {
             group.accounts.sort((a, b) => a.name.localeCompare(b.name));
         });
-        return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+
+        // Sort Stores according to specification
+        const sortedStoreEntries = Object.entries(groups).sort((a, b) => {
+            const storeA = a[0];
+            const storeB = b[0];
+            
+            const indexA = STORE_ORDER.indexOf(storeA);
+            const indexB = STORE_ORDER.indexOf(storeB);
+
+            // If both found in priority list, sort by index
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            
+            // If only A is found, A comes first
+            if (indexA !== -1) return -1;
+            
+            // If only B is found, B comes first
+            if (indexB !== -1) return 1;
+
+            // Default alphabetical
+            return storeA.localeCompare(storeB);
+        });
+
+        return { sortedStoreEntries, specialAccountData };
     }, [accounts, transactions, endDate]);
 
     if (loading) return <Loader2 className="animate-spin mx-auto mt-10" />;
@@ -275,7 +317,7 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
     return (
         <div className="space-y-8 pb-20 animate-fadeIn">
             {canViewBalances ? (
-                <div className="space-y-4">
+                <div className="space-y-6">
                     <div className="flex items-center gap-2 mb-2">
                         <div className="bg-emerald-100 p-1.5 rounded-lg text-emerald-700">
                             <Wallet size={20} />
@@ -283,8 +325,38 @@ export const LancamentosFinanceiro: React.FC<LancamentosFinanceiroProps> = ({ us
                         <h3 className="font-bold text-lg text-slate-700">Saldos em Tempo Real</h3>
                     </div>
                     
+                    {/* Highlighted Special Account */}
+                    {dashboardData.specialAccountData && (
+                        <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl shadow-lg border border-slate-700 overflow-hidden text-white relative">
+                            <div className="absolute top-0 right-0 p-4 opacity-10">
+                                <PieChart size={120} />
+                            </div>
+                            <div className="p-6 flex flex-col md:flex-row justify-between items-center gap-4 relative z-10">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-white/10 p-3 rounded-full">
+                                        <Landmark size={24} className="text-emerald-400" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-emerald-400 font-bold uppercase text-xs tracking-widest mb-1">Investimento / Aplicação</h4>
+                                        <span className="text-xl font-black">{dashboardData.specialAccountData.account.name}</span>
+                                        <div className="text-xs text-slate-400 mt-1 font-medium flex items-center gap-1">
+                                            <Building2 size={12}/> {dashboardData.specialAccountData.account.store}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-xs font-bold text-slate-400 uppercase block mb-1">Saldo Atual</span>
+                                    <span className="text-3xl font-black text-white tracking-tight">
+                                        {formatCurrency(dashboardData.specialAccountData.balance)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Store Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {accountsByStore.map(([storeName, data]) => (
+                        {dashboardData.sortedStoreEntries.map(([storeName, data]) => (
                             <div key={storeName} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-all duration-300">
                                 <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
                                     <div className="flex items-center gap-2">
