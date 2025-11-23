@@ -475,7 +475,10 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                         <label className={labelClass}>Loja (Origem/Destino)</label>
                         <select 
                             value={filterStore} 
-                            onChange={e => setFilterStore(e.target.value)} 
+                            onChange={e => {
+                                setFilterStore(e.target.value);
+                                setFilterAccount(''); // Reset account filter on store change
+                            }} 
                             className={`${filterInputClass} ${availableStores.length === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
                             disabled={availableStores.length === 1}
                         >
@@ -487,7 +490,10 @@ export const ConsultaFinanceiro: React.FC<ConsultaFinanceiroProps> = ({ user }) 
                         <label className={labelClass}>Conta</label>
                         <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)} className={filterInputClass}>
                             <option value="">Todas</option>
-                            {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.store})</option>)}
+                            {accounts
+                                .filter(a => !filterStore || a.store === filterStore)
+                                .map(a => <option key={a.id} value={a.id}>{a.name} ({a.store})</option>)
+                            }
                         </select>
                     </div>
                     <div>
