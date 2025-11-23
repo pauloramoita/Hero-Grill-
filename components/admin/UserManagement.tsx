@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { User, AppData } from '../../types';
 import { getUsers, saveUser, deleteUser, getAppData } from '../../services/storageService';
@@ -22,20 +20,34 @@ export const UserManagement: React.FC = () => {
     const [selectedModules, setSelectedModules] = useState<string[]>([]);
     const [selectedStores, setSelectedStores] = useState<string[]>([]);
 
+    // Lista Organizada por Grupos Lógicos
     const modulesList = [
+        // Visão Geral
         { id: 'dashboard', label: '📊 Dashboard (Visão Geral)' },
-        { id: 'pedidos', label: 'Pedidos (Cadastro)' },
+        
+        // Operacional (Loja)
+        { id: 'pedidos', label: '📝 Pedidos (Cadastro)' },
         { id: 'estoque', label: '🥩 Estoque de Carnes' },
-        { id: 'config_campos', label: '⚙️ Config. Produtos (Campos!)' },
-        { id: 'controle043', label: 'Controle 043' },
+        
+        // Financeiro Principal
+        { id: 'novo_financeiro', label: '💰 Financeiro (Caixa/Lançamentos)' },
+        { id: 'controle043', label: '🛡️ Controle 043' },
         { id: 'emprestimos', label: '💸 Controle Empréstimos' },
-        { id: 'saldo', label: 'Saldo Contas' },
-        { id: 'financeiro', label: 'Entradas e Saídas (Antigo)' },
-        { id: 'novo_financeiro', label: 'Financeiro (Caixa/Lançamentos)' },
+        { id: 'saldo', label: '⚖️ Saldo de Contas' },
+        
+        // Configurações
+        { id: 'config_campos', label: '⚙️ Config. Produtos (Campos)' },
         { id: 'config_financeiro_campos', label: '⚙️ Config. Contas (Financeiro)' },
-        { id: 'view_balances', label: '💰 Permissão: Visualizar Saldos' },
-        { id: 'backup', label: 'Backup' },
-        { id: 'admin', label: 'Administração (Admin)' },
+        
+        // Permissões Especiais
+        { id: 'view_balances', label: '👁️ Permissão: Visualizar Saldos' },
+        
+        // Administrativo e Sistema
+        { id: 'backup', label: '💾 Backup e Dados' },
+        { id: 'admin', label: '👑 Administração (Admin)' },
+        
+        // Legado
+        { id: 'financeiro', label: '📂 Entradas e Saídas (Antigo)' },
     ];
 
     useEffect(() => {
@@ -107,7 +119,6 @@ export const UserManagement: React.FC = () => {
             setSelectedStores([]); 
         } else if (type === 'observador') {
             // Observador (Investidor): Apenas Dashboard e Acesso a TODAS as lojas (array vazio)
-            // O App.tsx agora detecta isso e redireciona direto para o Dashboard
             setSelectedModules(['dashboard']);
             setSelectedStores([]); 
         }
