@@ -367,37 +367,46 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     // New Chart Logic for Hero Centro Loans
     const getLoansHistory = () => {
         // All loans are implicitly for Hero Centro in the context of this module
+        // Filter loans that happened ON or BEFORE the currentMonth
         const relevant = loans.filter(l => l.date.slice(0, 7) <= currentMonth);
         
-        // Generate range of last 12 months
+        // Generate range of last 12 months [Oldest ... Newest]
         const dates = [];
         const d = new Date(currentMonth + '-01');
+        // Adjust timezone to ensure we don't skip a month due to UTC conversion
+        d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
+        
         for (let i = 0; i < 12; i++) {
             const y = d.getFullYear();
             const m = String(d.getMonth() + 1).padStart(2, '0');
-            dates.unshift(`${y}-${m}`); // Push to start to reverse order later? No, unshift makes it descending if loop goes back.
-            // Actually better loop backwards
+            dates.unshift(`${y}-${m}`); 
             d.setMonth(d.getMonth() - 1);
         }
-        const rangeKeys = dates.reverse(); // Oldest to Newest
+        
+        // rangeKeys contains ["2024-12", "2025-01", ..., "2025-11"] (Oldest to Newest)
+        const rangeKeys = dates; 
+        const startDate = rangeKeys[0]; // The oldest month in our chart
 
-        // Calculate Cumulative Balance up to Start of Range
-        const startDate = rangeKeys[0];
+        // 1. Calculate Cumulative Balance EXISTING *BEFORE* the start date of the chart.
+        // CREDIT (Entrada/Recebimento) increases Debt (Money owed to Hero Centro increases)
+        // DEBIT (Saída/Pagamento) decreases Debt (Money paid back to Hero Centro)
+        // *Based on User feedback: "Saldo Devedor de Empréstimo"*
         let cumulativeBalance = relevant
             .filter(l => l.date.slice(0, 7) < startDate)
             .reduce((acc, l) => {
-                // Credit (Entrada) increases Debt
-                // Debit (Saida) decreases Debt
                 if (l.type === 'CREDIT') return acc + l.value;
                 if (l.type === 'DEBIT') return acc - l.value;
                 return acc;
             }, 0);
 
+        // 2. Iterate forward through the months to build the chart data
         const data = rangeKeys.map(key => {
             const monthLoans = relevant.filter(l => l.date.slice(0, 7) === key);
+            
             const monthlyCredit = monthLoans.filter(l => l.type === 'CREDIT').reduce((acc, l) => acc + l.value, 0);
             const monthlyDebit = monthLoans.filter(l => l.type === 'DEBIT').reduce((acc, l) => acc + l.value, 0);
             
+            // Update running balance
             cumulativeBalance = cumulativeBalance + monthlyCredit - monthlyDebit;
 
             const [y, m] = key.split('-');
@@ -550,7 +559,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
                         // Hero Centro Special Loan Chart
                         <div className="bg-white p-6 rounded-lg shadow border border-indigo-100 mb-6">
                             <h3 className="text-indigo-900 font-bold uppercase text-sm mb-4 border-b pb-2 border-indigo-50 flex items-center gap-2">
-                                <Wallet size={18} className="text-indigo-600"/> EVOLUÇÃO DE EMPRÉSTIMOS (Hero Centro)
+                                <Wallet size={18} className="text-indigo-600"/> EVOLUÇÃO DE EMPRÉSTIMOS (HERO CENTRO)
                             </h3>
                             <div className="h-80 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
