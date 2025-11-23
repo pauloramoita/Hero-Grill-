@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getAppData, saveAccountBalance, getPreviousMonthBalance, formatCurrency } from '../../services/storageService';
 import { AppData, User } from '../../types';
-import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, Loader2, Calendar, Building2, Wallet, Landmark, ArrowRight } from 'lucide-react';
 
 interface CadastroSaldoProps {
     user: User;
@@ -23,7 +23,6 @@ export const CadastroSaldo: React.FC<CadastroSaldoProps> = ({ user }) => {
     const [pagbankH, setPagbankH] = useState(0);
     const [pagbankD, setPagbankD] = useState(0);
     const [investimentos, setInvestimentos] = useState(0);
-    const [prevBalance, setPrevBalance] = useState<number | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -35,7 +34,6 @@ export const CadastroSaldo: React.FC<CadastroSaldoProps> = ({ user }) => {
         load();
     }, []);
 
-    // Determine available stores based on user permissions
     const availableStores = useMemo(() => {
         if (user.isMaster) return data.stores;
         if (user.permissions.stores && user.permissions.stores.length > 0) {
@@ -44,22 +42,11 @@ export const CadastroSaldo: React.FC<CadastroSaldoProps> = ({ user }) => {
         return data.stores;
     }, [data.stores, user]);
 
-    // Auto-select if only one store available
     useEffect(() => {
         if (availableStores.length === 1) {
             setStore(availableStores[0]);
         }
     }, [availableStores]);
-
-    useEffect(() => {
-        const fetchPrev = async () => {
-            if (store && year && month) {
-                const prev = await getPreviousMonthBalance(store, year, month);
-                setPrevBalance(prev ? prev.totalBalance : null);
-            }
-        };
-        fetchPrev();
-    }, [store, year, month]);
 
     const handleCurrencyInput = (setter: any, e: any) => {
         let raw = e.target.value.replace(/\D/g, '');
@@ -80,8 +67,8 @@ export const CadastroSaldo: React.FC<CadastroSaldoProps> = ({ user }) => {
                 id: '', store, year, month,
                 caixaEconomica, cofre, loteria, pagbankH, pagbankD, investimentos, totalBalance
             });
-            alert('Saldo Salvo!');
-            setCaixaEconomica(0); setCofre(0); setLoteria(0); setPagbankH(0); setPagbankD(0); setInvestimentos(0);
+            alert('Saldos atualizados com sucesso!');
+            // Optional: Reset or keep values. Keeping allows for corrections.
         } catch (err: any) {
             setSubmitError(err.message);
         } finally {
@@ -89,47 +76,116 @@ export const CadastroSaldo: React.FC<CadastroSaldoProps> = ({ user }) => {
         }
     };
 
-    if (loading) return <Loader2 className="animate-spin mx-auto"/>;
+    const totalCalculated = caixaEconomica + cofre + loteria + pagbankH + pagbankD + investimentos;
 
-    const inputClass = "w-full p-3 border rounded text-right font-mono text-lg";
+    if (loading) return <Loader2 className="animate-spin mx-auto text-cyan-600" size={40}/>;
+
+    const InputGroup = ({ label, value, setter, icon: Icon, colorClass = 'text-slate-600' }: any) => (
+        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 focus-within:bg-white focus-within:border-cyan-500 focus-within:shadow-input-focus transition-all">
+            <div className="flex items-center gap-2 mb-2">
+                <div className={`p-1.5 rounded-lg bg-white shadow-sm ${colorClass}`}>
+                    <Icon size={16} />
+                </div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{label}</label>
+            </div>
+            <input 
+                type="text" 
+                value={formatCurrency(value)} 
+                onChange={(e) => handleCurrencyInput(setter, e)} 
+                className="w-full bg-transparent border-none outline-none text-right font-black text-xl text-slate-800 placeholder-slate-300 p-0"
+                placeholder="R$ 0,00"
+            />
+        </div>
+    );
 
     return (
-        <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow max-w-5xl mx-auto">
-            <h2 className="text-2xl font-bold mb-6 border-b pb-2">Lançamento de Saldos</h2>
-            
-            <div className="grid md:grid-cols-3 gap-4 mb-6 bg-gray-50 p-4 rounded">
-                <select 
-                    value={store} 
-                    onChange={e => setStore(e.target.value)} 
-                    className={`w-full p-3 border rounded ${availableStores.length === 1 ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
-                    disabled={availableStores.length === 1}
-                >
-                    <option value="">Selecione a Loja</option>
-                    {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value))} className="w-full p-3 border rounded text-center"/>
-                <select value={month} onChange={e => setMonth(e.target.value)} className="w-full p-3 border rounded text-center">
-                    {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-6 mb-6">
-                {[{l:'Caixa',v:caixaEconomica,s:setCaixaEconomica}, {l:'Cofre',v:cofre,s:setCofre}, {l:'Loteria',v:loteria,s:setLoteria},
-                  {l:'PagBank H',v:pagbankH,s:setPagbankH}, {l:'PagBank D',v:pagbankD,s:setPagbankD}, {l:'Investimentos',v:investimentos,s:setInvestimentos}
-                ].map((f, i) => (
-                    <div key={i}>
-                        <label className="font-bold block mb-1">{f.l}</label>
-                        <input type="text" value={formatCurrency(f.v)} onChange={(e) => handleCurrencyInput(f.s, e)} className={inputClass} />
+        <div className="max-w-5xl mx-auto animate-fadeIn pb-24">
+            <form onSubmit={handleSubmit} className="bg-white rounded-[2.5rem] shadow-floating border border-slate-100 p-8 md:p-10 relative">
+                
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+                    <div>
+                        <h2 className="text-3xl font-black text-slate-800 tracking-tight">Lançamento de Saldos</h2>
+                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Fechamento Mensal Consolidado</p>
                     </div>
-                ))}
-            </div>
-            
-            <div className="flex justify-end gap-4 items-center border-t pt-4">
-                {submitError && <span className="text-red-600 font-bold">{submitError}</span>}
-                <button disabled={saving} type="submit" className="bg-heroBlack text-white px-8 py-3 rounded font-bold flex gap-2 disabled:opacity-50">
-                    {saving ? <Loader2 className="animate-spin"/> : <CheckCircle/>} SALVAR
-                </button>
-            </div>
-        </form>
+                    
+                    <div className="flex flex-wrap gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-100">
+                        <div className="relative group">
+                            <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-cyan-600 transition-colors" />
+                            <select 
+                                value={store} 
+                                onChange={e => setStore(e.target.value)} 
+                                className={`pl-9 pr-8 py-3 rounded-xl bg-white border border-slate-200 font-bold text-sm text-slate-700 focus:outline-none focus:border-cyan-500 appearance-none cursor-pointer shadow-sm ${availableStores.length === 1 ? 'opacity-70' : ''}`}
+                                disabled={availableStores.length === 1}
+                            >
+                                <option value="">Selecione a Loja...</option>
+                                {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2 shadow-sm">
+                            <input 
+                                type="number" 
+                                value={year} 
+                                onChange={e => setYear(parseInt(e.target.value))} 
+                                className="w-16 py-3 text-center font-bold text-sm text-slate-700 outline-none bg-transparent"
+                            />
+                            <span className="text-slate-300">/</span>
+                            <select 
+                                value={month} 
+                                onChange={e => setMonth(e.target.value)} 
+                                className="py-3 pl-1 pr-6 font-bold text-sm text-slate-700 outline-none bg-transparent cursor-pointer appearance-none"
+                            >
+                                {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                    {/* Physical Cash Section */}
+                    <div className="space-y-4">
+                        <h3 className="text-sm font-black text-slate-700 uppercase tracking-wide border-b border-slate-100 pb-2 flex items-center gap-2">
+                            <Wallet size={18} className="text-emerald-500"/> Dinheiro Físico
+                        </h3>
+                        <div className="grid grid-cols-1 gap-4">
+                            <InputGroup label="Caixa Econômica" value={caixaEconomica} setter={setCaixaEconomica} icon={Wallet} colorClass="text-emerald-600" />
+                            <InputGroup label="Cofre Loja" value={cofre} setter={setCofre} icon={Wallet} colorClass="text-emerald-600" />
+                            <InputGroup label="Loteria" value={loteria} setter={setLoteria} icon={Wallet} colorClass="text-emerald-600" />
+                        </div>
+                    </div>
+
+                    {/* Digital/Bank Section */}
+                    <div className="space-y-4">
+                        <h3 className="text-sm font-black text-slate-700 uppercase tracking-wide border-b border-slate-100 pb-2 flex items-center gap-2">
+                            <Landmark size={18} className="text-blue-500"/> Contas Digitais & Bancos
+                        </h3>
+                        <div className="grid grid-cols-1 gap-4">
+                            <InputGroup label="PagBank (H)" value={pagbankH} setter={setPagbankH} icon={Landmark} colorClass="text-blue-600" />
+                            <InputGroup label="PagBank (D)" value={pagbankD} setter={setPagbankD} icon={Landmark} colorClass="text-blue-600" />
+                            <InputGroup label="Investimentos" value={investimentos} setter={setInvestimentos} icon={Landmark} colorClass="text-purple-600" />
+                        </div>
+                    </div>
+                </div>
+                
+                {/* Footer Total Bar */}
+                <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-slate-100 gap-6">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Consolidado</span>
+                        <span className="text-4xl font-black text-slate-800 tracking-tight">{formatCurrency(totalCalculated)}</span>
+                    </div>
+
+                    <div className="flex items-center gap-4 w-full md:w-auto">
+                        {submitError && <span className="text-red-600 text-xs font-bold">{submitError}</span>}
+                        <button 
+                            disabled={saving} 
+                            type="submit" 
+                            className="flex-1 md:flex-none bg-cyan-600 text-white px-10 py-4 rounded-2xl font-bold shadow-lg shadow-cyan-200 hover:bg-cyan-700 hover:shadow-xl transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-70"
+                        >
+                            {saving ? <Loader2 className="animate-spin"/> : <CheckCircle size={20}/>} 
+                            SALVAR FECHAMENTO
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
     );
 };

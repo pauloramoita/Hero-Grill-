@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getAppData, saveFinancialRecord, formatCurrency } from '../../services/storageService';
 import { AppData, User } from '../../types';
-import { CheckCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, Loader2, ArrowUpCircle, ArrowDownCircle, Building2, Calendar } from 'lucide-react';
 
 interface CadastroFinanceiroProps {
     user: User;
@@ -39,7 +39,6 @@ export const CadastroFinanceiro: React.FC<CadastroFinanceiroProps> = ({ user }) 
         load();
     }, []);
 
-    // Determine available stores based on user permissions
     const availableStores = useMemo(() => {
         if (user.isMaster) return data.stores;
         if (user.permissions.stores && user.permissions.stores.length > 0) {
@@ -48,7 +47,6 @@ export const CadastroFinanceiro: React.FC<CadastroFinanceiroProps> = ({ user }) 
         return data.stores;
     }, [data.stores, user]);
 
-    // Auto-select if only one store available
     useEffect(() => {
         if (availableStores.length === 1) {
             setStore(availableStores[0]);
@@ -79,7 +77,6 @@ export const CadastroFinanceiro: React.FC<CadastroFinanceiroProps> = ({ user }) 
                 netResult: totalRevenues - totalExpenses
             });
             alert('Lançamento Financeiro Salvo!');
-            // Reset fields to zero if desired, or keep for reference. Here keeping for easy adjustment.
         } catch (err: any) {
             setSubmitError(err.message);
         } finally {
@@ -87,96 +84,122 @@ export const CadastroFinanceiro: React.FC<CadastroFinanceiroProps> = ({ user }) 
         }
     };
 
-    if (loading) return <Loader2 className="animate-spin mx-auto"/>;
+    const totalRevenues = creditCaixa + creditDelta + creditPagBankH + creditPagBankD + creditIfood;
+    const totalExpenses = debitCaixa + debitPagBankH + debitPagBankD + debitLoteria;
+    const netResult = totalRevenues - totalExpenses;
 
-    const inputClass = "w-full p-3 border rounded text-right font-mono text-lg text-gray-700 focus:ring-2 outline-none";
+    if (loading) return <Loader2 className="animate-spin mx-auto" />;
+
+    const LedgerInput = ({ label, value, setter }: any) => (
+        <div className="flex justify-between items-center py-3 border-b border-slate-100 last:border-0 group">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-slate-800 transition-colors">{label}</label>
+            <input 
+                type="text" 
+                value={formatCurrency(value)} 
+                onChange={e => handleCurrencyInput(setter, e)} 
+                className="w-32 text-right bg-transparent font-mono font-bold text-slate-800 focus:bg-slate-50 focus:ring-2 focus:ring-slate-200 rounded p-1 outline-none transition-all"
+            />
+        </div>
+    );
 
     return (
-        <form onSubmit={handleSubmit} className="bg-white p-8 rounded shadow max-w-6xl mx-auto animate-fadeIn">
-             <h2 className="text-2xl font-bold mb-6 border-b pb-2">Lançamento Financeiro</h2>
-             
-             <div className="grid md:grid-cols-3 gap-4 mb-6 bg-gray-50 p-4 rounded border border-gray-200">
+        <form onSubmit={handleSubmit} className="max-w-6xl mx-auto animate-fadeIn pb-24">
+             {/* Header & Context */}
+             <div className="bg-white p-6 rounded-3xl shadow-card border border-slate-100 mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
                 <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Selecione a Loja</label>
-                    <select 
-                        value={store} 
-                        onChange={e => setStore(e.target.value)} 
-                        className={`w-full p-3 border rounded font-bold ${availableStores.length === 1 ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
-                        disabled={availableStores.length === 1}
-                    >
-                        <option value="">Selecione...</option>
-                        {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Financeiro <span className="text-slate-400 font-bold text-sm">(Legado)</span></h2>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Registro Manual de Caixa</p>
                 </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Ano</label>
-                    <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value))} className="w-full p-3 border rounded text-center font-bold"/>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">Mês</label>
-                    <select value={month} onChange={e => setMonth(e.target.value)} className="w-full p-3 border rounded text-center font-bold">
-                        {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
+                
+                <div className="flex gap-4">
+                    <div className="relative">
+                        <Building2 size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"/>
+                        <select 
+                            value={store} 
+                            onChange={e => setStore(e.target.value)} 
+                            className={`pl-10 pr-8 py-3 rounded-xl bg-slate-50 font-bold text-sm text-slate-700 outline-none focus:ring-2 focus:ring-slate-200 appearance-none cursor-pointer ${availableStores.length === 1 ? 'opacity-70 cursor-not-allowed' : ''}`}
+                            disabled={availableStores.length === 1}
+                        >
+                            <option value="">Selecione a Loja...</option>
+                            {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-2 bg-slate-50 px-4 rounded-xl border border-slate-100">
+                        <Calendar size={16} className="text-slate-400"/>
+                        <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value))} className="w-12 bg-transparent font-bold text-sm text-slate-700 outline-none text-center"/>
+                        <span className="text-slate-300">/</span>
+                        <select value={month} onChange={e => setMonth(e.target.value)} className="bg-transparent font-bold text-sm text-slate-700 outline-none cursor-pointer">
+                            {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                    </div>
                 </div>
             </div>
 
             <div className="grid md:grid-cols-2 gap-8">
-                {/* Receitas */}
-                <div className="bg-green-50 p-6 rounded border border-green-100">
-                    <h3 className="font-black text-green-800 mb-6 text-xl flex items-center gap-2 border-b border-green-200 pb-2">RECEITAS (Entradas)</h3>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-bold text-green-700 mb-1">Caixa</label>
-                            <input type="text" value={formatCurrency(creditCaixa)} onChange={e => handleCurrencyInput(setCreditCaixa, e)} className={`${inputClass} border-green-200 focus:ring-green-500`}/>
+                {/* Receitas Card */}
+                <div className="bg-white rounded-[2rem] shadow-card border border-slate-100 overflow-hidden relative">
+                    <div className="absolute top-0 left-0 w-full h-1.5 bg-emerald-500"></div>
+                    <div className="p-8">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                                <ArrowUpCircle className="text-emerald-500" /> Receitas
+                            </h3>
+                            <span className="bg-emerald-50 text-emerald-700 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">Entradas</span>
                         </div>
-                        <div>
-                            <label className="block text-sm font-bold text-green-700 mb-1">Delta</label>
-                            <input type="text" value={formatCurrency(creditDelta)} onChange={e => handleCurrencyInput(setCreditDelta, e)} className={`${inputClass} border-green-200 focus:ring-green-500`}/>
+                        
+                        <div className="space-y-1">
+                            <LedgerInput label="Caixa" value={creditCaixa} setter={setCreditCaixa} />
+                            <LedgerInput label="Delta" value={creditDelta} setter={setCreditDelta} />
+                            <LedgerInput label="PagBank (H)" value={creditPagBankH} setter={setCreditPagBankH} />
+                            <LedgerInput label="PagBank (D)" value={creditPagBankD} setter={setCreditPagBankD} />
+                            <LedgerInput label="Ifood" value={creditIfood} setter={setCreditIfood} />
                         </div>
-                        <div>
-                            <label className="block text-sm font-bold text-green-700 mb-1">PagBank H</label>
-                            <input type="text" value={formatCurrency(creditPagBankH)} onChange={e => handleCurrencyInput(setCreditPagBankH, e)} className={`${inputClass} border-green-200 focus:ring-green-500`}/>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-green-700 mb-1">PagBank D</label>
-                            <input type="text" value={formatCurrency(creditPagBankD)} onChange={e => handleCurrencyInput(setCreditPagBankD, e)} className={`${inputClass} border-green-200 focus:ring-green-500`}/>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-green-700 mb-1">Ifood</label>
-                            <input type="text" value={formatCurrency(creditIfood)} onChange={e => handleCurrencyInput(setCreditIfood, e)} className={`${inputClass} border-green-200 focus:ring-green-500`}/>
+
+                        <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-end">
+                            <span className="text-xs font-bold text-slate-400 uppercase">Total Receitas</span>
+                            <span className="text-2xl font-black text-emerald-600">{formatCurrency(totalRevenues)}</span>
                         </div>
                     </div>
                 </div>
 
-                {/* Despesas */}
-                <div className="bg-red-50 p-6 rounded border border-red-100">
-                    <h3 className="font-black text-red-800 mb-6 text-xl flex items-center gap-2 border-b border-red-200 pb-2">DESPESAS (Saídas)</h3>
-                    <div className="space-y-4">
-                         <div>
-                            <label className="block text-sm font-bold text-red-700 mb-1">Caixa</label>
-                            <input type="text" value={formatCurrency(debitCaixa)} onChange={e => handleCurrencyInput(setDebitCaixa, e)} className={`${inputClass} border-red-200 focus:ring-red-500`}/>
+                {/* Despesas Card */}
+                <div className="bg-white rounded-[2rem] shadow-card border border-slate-100 overflow-hidden relative">
+                    <div className="absolute top-0 left-0 w-full h-1.5 bg-red-500"></div>
+                    <div className="p-8">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                                <ArrowDownCircle className="text-red-500" /> Despesas
+                            </h3>
+                            <span className="bg-red-50 text-red-700 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">Saídas</span>
                         </div>
-                         <div>
-                            <label className="block text-sm font-bold text-red-700 mb-1">PagBank H</label>
-                            <input type="text" value={formatCurrency(debitPagBankH)} onChange={e => handleCurrencyInput(setDebitPagBankH, e)} className={`${inputClass} border-red-200 focus:ring-red-500`}/>
+                        
+                        <div className="space-y-1">
+                            <LedgerInput label="Caixa" value={debitCaixa} setter={setDebitCaixa} />
+                            <LedgerInput label="PagBank (H)" value={debitPagBankH} setter={setDebitPagBankH} />
+                            <LedgerInput label="PagBank (D)" value={debitPagBankD} setter={setDebitPagBankD} />
+                            <LedgerInput label="Loteria" value={debitLoteria} setter={setDebitLoteria} />
                         </div>
-                         <div>
-                            <label className="block text-sm font-bold text-red-700 mb-1">PagBank D</label>
-                            <input type="text" value={formatCurrency(debitPagBankD)} onChange={e => handleCurrencyInput(setDebitPagBankD, e)} className={`${inputClass} border-red-200 focus:ring-red-500`}/>
-                        </div>
-                         <div>
-                            <label className="block text-sm font-bold text-red-700 mb-1">Loteria</label>
-                            <input type="text" value={formatCurrency(debitLoteria)} onChange={e => handleCurrencyInput(setDebitLoteria, e)} className={`${inputClass} border-red-200 focus:ring-red-500`}/>
+
+                        <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-end">
+                            <span className="text-xs font-bold text-slate-400 uppercase">Total Despesas</span>
+                            <span className="text-2xl font-black text-red-600">{formatCurrency(totalExpenses)}</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="mt-8 flex flex-col items-end gap-4 pt-6 border-t">
-                {submitError && <span className="text-red-600 font-bold bg-red-100 px-4 py-2 rounded border border-red-200">{submitError}</span>}
-                <button disabled={saving} type="submit" className="bg-heroBlack text-white px-12 py-4 rounded shadow-lg font-bold flex items-center gap-3 disabled:opacity-50 hover:bg-gray-800 transition-colors text-lg">
-                    {saving ? <Loader2 className="animate-spin"/> : <CheckCircle size={24}/>} SALVAR LANÇAMENTO
-                </button>
+            {/* Net Result Bar */}
+            <div className={`mt-8 rounded-3xl p-6 flex justify-between items-center shadow-lg transition-colors ${netResult >= 0 ? 'bg-slate-900 text-white' : 'bg-red-600 text-white'}`}>
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">Resultado Líquido</span>
+                    <span className="text-4xl font-black tracking-tighter">{formatCurrency(netResult)}</span>
+                </div>
+                <div className="flex items-center gap-4">
+                    {submitError && <span className="text-xs font-bold bg-white/10 px-3 py-1 rounded text-white">{submitError}</span>}
+                    <button disabled={saving} type="submit" className="bg-white text-black px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:scale-105 transition-transform active:scale-95 shadow-lg disabled:opacity-70">
+                        {saving ? <Loader2 className="animate-spin"/> : <span className="flex items-center gap-2"><CheckCircle size={16}/> Salvar</span>}
+                    </button>
+                </div>
             </div>
         </form>
     );

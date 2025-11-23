@@ -107,24 +107,17 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
             .filter(t => t.type === 'Despesa' && (t.classification === 'Fixa' || t.classification === 'Fixo'))
             .reduce((acc, t) => acc + (t.value || 0), 0);
 
-        // Variable Expenses: Transactions (not fixed) + Orders (assumed variable cost)
-        // Note: This might double count if orders are paid and logged in transactions. 
-        // For this dashboard, we will assume Orders are "Variable Costs" and Transactions are "Cash Flow".
-        // To avoid double counting in a simple way: We use Transactions for Variable if they exist, PLUS Orders that might not be in transactions.
-        // Simpler approach for this request: Sum Variable Transactions + Variable Orders.
-        
         const variableTrans = periodTransactions
             .filter(t => t.type === 'Despesa' && t.classification !== 'Fixa' && t.classification !== 'Fixo')
             .reduce((acc, t) => acc + (t.value || 0), 0);
             
         const variableOrders = periodOrders.reduce((acc, o) => acc + (o.totalValue || 0), 0);
 
-        // Total Variable is tricky. Let's display the Financial Variable + Orders as "Operational Costs"
+        // Total Variable
         const totalVariable = variableTrans + variableOrders;
         
-        // Net Result = Revenue - (Fixed + Variable Trans) 
-        // *Excluding Orders from Net Result cash calculation to rely on actual payments*
-        const netResult = totalRevenues - (totalFixed + variableTrans);
+        // Net Result
+        const netResult = totalRevenues - (totalFixed + variableTrans + variableOrders);
 
         return { totalRevenues, totalFixed, totalVariable, netResult };
     };
@@ -137,12 +130,10 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
             let bal = acc.initialBalance || 0;
             // Sum all history for current balance
             transactions.filter(t => t.status === 'Pago').forEach(t => {
-                // Debit from account
                 if (t.accountId === acc.id) {
                     if (t.type === 'Receita') bal += t.value;
                     else if (t.type === 'Despesa' || t.type === 'Transferência') bal -= t.value;
                 }
-                // Credit to account (Transfer)
                 if (t.type === 'Transferência' && t.destinationAccountId === acc.id) {
                     bal += t.value;
                 }
@@ -203,12 +194,43 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
             .sort((a, b) => b.value - a.value);
     };
 
+    const getTrendData = () => {
+        const months = [];
+        const d = new Date(currentMonth + '-01');
+        d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
+        
+        // Last 6 months
+        for(let i=0; i<6; i++){
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            months.unshift(`${y}-${m}`);
+            d.setMonth(d.getMonth() - 1);
+        }
+
+        return months.map(m => {
+            const tInMonth = transactions.filter(t => t.date.startsWith(m) && t.status === 'Pago' && filterStore(t.store));
+            const oInMonth = orders.filter(o => o.date.startsWith(m) && filterStore(o.store));
+
+            const revenues = tInMonth.filter(t => t.type === 'Receita').reduce((sum, t) => sum + t.value, 0);
+            const expenses = tInMonth.filter(t => t.type === 'Despesa').reduce((sum, t) => sum + t.value, 0) 
+                           + oInMonth.reduce((sum, o) => sum + o.totalValue, 0);
+
+            return {
+                name: m.split('-').reverse().join('/'), // MM/YYYY
+                Receitas: revenues,
+                Despesas: expenses,
+                Resultado: revenues - expenses
+            };
+        });
+    };
+
     // --- DATA PREP ---
     const metrics = calculateMetrics();
     const totalBalance = calculateTotalBalance();
     
     const fixedExpensesData = getGroupedData('fixed');
     const variableExpensesData = getGroupedData('variable');
+    const trendData = getTrendData();
 
     const dataLoans = useMemo(() => {
         const relevant = loans.filter(l => l.date.slice(0, 7) <= currentMonth);
@@ -247,11 +269,13 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
                 <Icon size={100} />
             </div>
             <div className="flex justify-between items-start relative z-10">
-                <div>
+                <div className="w-full">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{title}</p>
-                    <h3 className={`text-3xl font-black tracking-tight ${colorClass} break-all`}>{value}</h3>
+                    <div className="w-full overflow-hidden" title={value}>
+                        <h3 className={`text-2xl xl:text-3xl font-black tracking-tight ${colorClass} whitespace-nowrap text-ellipsis overflow-hidden`}>{value}</h3>
+                    </div>
                 </div>
-                <div className={`p-3 rounded-2xl shadow-sm ${colorClass.includes('emerald') ? 'bg-emerald-50 text-emerald-600' : colorClass.includes('red') ? 'bg-red-50 text-red-600' : colorClass.includes('blue') ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'}`}>
+                <div className={`p-3 rounded-2xl shadow-sm ml-2 shrink-0 ${colorClass.includes('emerald') ? 'bg-emerald-50 text-emerald-600' : colorClass.includes('red') ? 'bg-red-50 text-red-600' : colorClass.includes('blue') ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'}`}>
                     <Icon size={24} />
                 </div>
             </div>
@@ -332,7 +356,9 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
                     </div>
                     <div>
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Lucro Líquido</p>
-                        <h3 className="text-3xl font-black mt-2 tracking-tight">{formatCurrency(metrics.netResult)}</h3>
+                        <div className="w-full overflow-hidden" title={formatCurrency(metrics.netResult)}>
+                            <h3 className="text-2xl xl:text-3xl font-black mt-2 tracking-tight whitespace-nowrap text-ellipsis overflow-hidden">{formatCurrency(metrics.netResult)}</h3>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs font-bold bg-white/20 w-fit px-3 py-1 rounded-full backdrop-blur-sm mt-2">
                         {metrics.netResult >= 0 ? 'Lucro' : 'Prejuízo'} Operacional
@@ -340,11 +366,40 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
                 </div>
             </div>
 
+            {/* Main Chart Section */}
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-card border border-slate-100 relative overflow-hidden">
+                <div className="flex justify-between items-center mb-8 relative z-10">
+                    <div>
+                        <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                            <Activity className="text-heroRed"/> Evolução Financeira
+                        </h3>
+                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Entradas vs Saídas (Últimos 6 meses)</p>
+                    </div>
+                </div>
+                <div className="h-80 w-full relative z-10">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="name" tick={{fontSize: 10, fontWeight: 'bold', fill: '#94a3b8'}} axisLine={false} tickLine={false} dy={10} />
+                            <YAxis tickFormatter={(v) => `${v/1000}k`} tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
+                            <Tooltip 
+                                contentStyle={{backgroundColor: '#fff', borderRadius: '16px', border: 'none', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.1)'}}
+                                itemStyle={{fontWeight: 'bold', fontSize: '12px'}}
+                                formatter={(value: number) => formatCurrency(value)}
+                            />
+                            <Legend iconType="circle" />
+                            <Bar dataKey="Receitas" name="Receitas" fill="#10B981" radius={[6, 6, 0, 0]} barSize={20} />
+                            <Bar dataKey="Despesas" name="Despesas" fill="#EF4444" radius={[6, 6, 0, 0]} barSize={20} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
             {/* Expense Breakdown Tables */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 
                 {/* Fixed Expenses Table */}
-                <div className="bg-white rounded-[2.5rem] shadow-card border border-slate-100 overflow-hidden flex flex-col">
+                <div className="bg-white rounded-[2.5rem] shadow-card border border-slate-100 overflow-hidden flex flex-col h-full">
                     <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                         <h3 className="font-black text-slate-700 uppercase text-sm tracking-wider flex items-center gap-2">
                             <Lock size={18} className="text-slate-400"/> Despesas Fixas
@@ -353,7 +408,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
                             Total: {formatCurrency(metrics.totalFixed)}
                         </span>
                     </div>
-                    <div className="overflow-y-auto max-h-[400px] custom-scrollbar p-2">
+                    <div className="overflow-y-auto max-h-[300px] custom-scrollbar p-2">
                         <table className="w-full">
                             <tbody className="divide-y divide-slate-50">
                                 {fixedExpensesData.map((item, idx) => (
@@ -379,7 +434,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
                 </div>
 
                 {/* Variable Expenses Table */}
-                <div className="bg-white rounded-[2.5rem] shadow-card border border-slate-100 overflow-hidden flex flex-col">
+                <div className="bg-white rounded-[2.5rem] shadow-card border border-slate-100 overflow-hidden flex flex-col h-full">
                     <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                         <h3 className="font-black text-slate-700 uppercase text-sm tracking-wider flex items-center gap-2">
                             <Activity size={18} className="text-amber-500"/> Despesas Variáveis
@@ -388,7 +443,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
                             Total: {formatCurrency(metrics.totalVariable)}
                         </span>
                     </div>
-                    <div className="overflow-y-auto max-h-[400px] custom-scrollbar p-2">
+                    <div className="overflow-y-auto max-h-[300px] custom-scrollbar p-2">
                         <table className="w-full">
                             <tbody className="divide-y divide-slate-50">
                                 {variableExpensesData.map((item, idx) => (
