@@ -142,7 +142,7 @@ export const CadastroFinanceiro: React.FC<CadastroFinanceiroProps> = ({ user }) 
                     <div className="p-8">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                                <ArrowUpCircle className="text-emerald-500" /> Receitas
+                                <ArrowUpCircle className="text-emerald-500" size={20} /> Receitas
                             </h3>
                             <span className="bg-emerald-50 text-emerald-700 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">Entradas</span>
                         </div>
@@ -168,7 +168,7 @@ export const CadastroFinanceiro: React.FC<CadastroFinanceiroProps> = ({ user }) 
                     <div className="p-8">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                                <ArrowDownCircle className="text-red-500" /> Despesas
+                                <ArrowDownCircle className="text-red-500" size={20} /> Despesas
                             </h3>
                             <span className="bg-red-50 text-red-700 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">Saídas</span>
                         </div>
