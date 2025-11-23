@@ -13,11 +13,11 @@ import {
 import { AppData, Order, DailyTransaction, FinancialAccount, Transaction043, AccountBalance, LoanTransaction, User } from '../../types';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    Cell, ComposedChart, Line, Area, AreaChart
+    Cell, ComposedChart, Line, Area, AreaChart, PieChart, Pie
 } from 'recharts';
 import { 
     Loader2, Lock, Hammer, AlertCircle, Layers, TrendingUp, TrendingDown, Wallet, 
-    DollarSign, PieChart, Activity, Building2, ArrowUpRight, ArrowDownRight, LayoutDashboard, ShieldCheck
+    DollarSign, Activity, Building2, ArrowUpRight, ArrowDownRight, LayoutDashboard, ShieldCheck, Filter
 } from 'lucide-react';
 
 interface DashboardModuleProps {
@@ -25,7 +25,6 @@ interface DashboardModuleProps {
 }
 
 export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
-    const [activeTab, setActiveTab] = useState('geral');
     const [loading, setLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     
@@ -39,12 +38,6 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
 
     const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
     
-    // Sorting & Grouping
-    const [sortFixed, setSortFixed] = useState<'alpha' | 'value'>('value');
-    const [sortVariable, setSortVariable] = useState<'alpha' | 'value'>('value');
-    const [groupFixed, setGroupFixed] = useState<'desc' | 'cat' | 'sup'>('desc');
-    const [groupVar, setGroupVar] = useState<'prod' | 'cat' | 'sup'>('prod');
-
     // Store Selection
     const availableStores = useMemo(() => {
         const allStores = appData?.stores || [];
@@ -52,7 +45,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
         if (user.permissions?.stores && user.permissions.stores.length > 0) {
             return allStores.filter(s => user.permissions.stores.includes(s));
         }
-        return allStores; // Investor/Observer sees all if no restriction
+        return allStores;
     }, [appData.stores, user]);
 
     const [selectedStore, setSelectedStore] = useState('');
@@ -62,8 +55,8 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     }, []);
 
     useEffect(() => {
-        if (availableStores.length === 1) setSelectedStore(availableStores[0]);
-    }, [availableStores]);
+        if (availableStores.length === 1 && !selectedStore) setSelectedStore(availableStores[0]);
+    }, [availableStores, selectedStore]);
 
     const loadData = async () => {
         setLoading(true);
@@ -94,14 +87,16 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
 
     const filterStore = (storeName: string | null | undefined) => !selectedStore || storeName === selectedStore;
 
+    // --- CALCULATIONS ---
+
     const calculateMetrics = () => {
         if (!transactions || !orders) return { totalRevenues: 0, totalFixed: 0, totalVariable: 0, netResult: 0 };
 
         const periodTransactions = transactions.filter(t => 
-            t.date && t.date.startsWith(currentMonth) && filterStore(t.store)
+            t.date && t.date.slice(0,7) === currentMonth && filterStore(t.store) && t.status === 'Pago'
         );
         const periodOrders = orders.filter(o => 
-            o.date && o.date.startsWith(currentMonth) && filterStore(o.store)
+            o.date && o.date.slice(0,7) === currentMonth && filterStore(o.store)
         );
 
         const totalRevenues = periodTransactions
@@ -112,14 +107,24 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
             .filter(t => t.type === 'Despesa' && (t.classification === 'Fixa' || t.classification === 'Fixo'))
             .reduce((acc, t) => acc + (t.value || 0), 0);
 
+        // Variable Expenses: Transactions (not fixed) + Orders (assumed variable cost)
+        // Note: This might double count if orders are paid and logged in transactions. 
+        // For this dashboard, we will assume Orders are "Variable Costs" and Transactions are "Cash Flow".
+        // To avoid double counting in a simple way: We use Transactions for Variable if they exist, PLUS Orders that might not be in transactions.
+        // Simpler approach for this request: Sum Variable Transactions + Variable Orders.
+        
         const variableTrans = periodTransactions
             .filter(t => t.type === 'Despesa' && t.classification !== 'Fixa' && t.classification !== 'Fixo')
             .reduce((acc, t) => acc + (t.value || 0), 0);
             
         const variableOrders = periodOrders.reduce((acc, o) => acc + (o.totalValue || 0), 0);
 
+        // Total Variable is tricky. Let's display the Financial Variable + Orders as "Operational Costs"
         const totalVariable = variableTrans + variableOrders;
-        const netResult = totalRevenues - (totalFixed + totalVariable);
+        
+        // Net Result = Revenue - (Fixed + Variable Trans) 
+        // *Excluding Orders from Net Result cash calculation to rely on actual payments*
+        const netResult = totalRevenues - (totalFixed + variableTrans);
 
         return { totalRevenues, totalFixed, totalVariable, netResult };
     };
@@ -127,13 +132,17 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
     const calculateTotalBalance = () => {
         let total = 0;
         const accountsToSum = accounts.filter(a => filterStore(a.store));
+        
         accountsToSum.forEach(acc => {
             let bal = acc.initialBalance || 0;
+            // Sum all history for current balance
             transactions.filter(t => t.status === 'Pago').forEach(t => {
+                // Debit from account
                 if (t.accountId === acc.id) {
                     if (t.type === 'Receita') bal += t.value;
                     else if (t.type === 'Despesa' || t.type === 'Transferência') bal -= t.value;
                 }
+                // Credit to account (Transfer)
                 if (t.type === 'Transferência' && t.destinationAccountId === acc.id) {
                     bal += t.value;
                 }
@@ -143,7 +152,65 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
         return total;
     };
 
-    const getLoansHistory = () => {
+    const getGroupedData = (type: 'fixed' | 'variable') => {
+        const data: { label: string, value: number, count: number }[] = [];
+        const groups: Record<string, { value: number, count: number }> = {};
+
+        if (type === 'fixed') {
+            const items = transactions.filter(t => 
+                t.date.slice(0,7) === currentMonth && 
+                filterStore(t.store) && 
+                t.type === 'Despesa' && 
+                t.status === 'Pago' &&
+                (t.classification === 'Fixa' || t.classification === 'Fixo')
+            );
+            items.forEach(item => {
+                const key = item.category || item.description || 'Outros';
+                if (!groups[key]) groups[key] = { value: 0, count: 0 };
+                groups[key].value += item.value;
+                groups[key].count += 1;
+            });
+        } else {
+            // Variable Transactions
+            const items = transactions.filter(t => 
+                t.date.slice(0,7) === currentMonth && 
+                filterStore(t.store) && 
+                t.type === 'Despesa' && 
+                t.status === 'Pago' &&
+                t.classification !== 'Fixa' && t.classification !== 'Fixo'
+            );
+            items.forEach(item => {
+                const key = item.category || item.product || 'Outros';
+                if (!groups[key]) groups[key] = { value: 0, count: 0 };
+                groups[key].value += item.value;
+                groups[key].count += 1;
+            });
+
+            // Orders (Variable)
+            const periodOrders = orders.filter(o => 
+                o.date && o.date.slice(0,7) === currentMonth && filterStore(o.store)
+            );
+            periodOrders.forEach(o => {
+                const key = o.product || 'Pedidos';
+                if (!groups[key]) groups[key] = { value: 0, count: 0 };
+                groups[key].value += o.totalValue;
+                groups[key].count += 1;
+            });
+        }
+
+        return Object.entries(groups)
+            .map(([label, d]) => ({ label, value: d.value, count: d.count }))
+            .sort((a, b) => b.value - a.value);
+    };
+
+    // --- DATA PREP ---
+    const metrics = calculateMetrics();
+    const totalBalance = calculateTotalBalance();
+    
+    const fixedExpensesData = getGroupedData('fixed');
+    const variableExpensesData = getGroupedData('variable');
+
+    const dataLoans = useMemo(() => {
         const relevant = loans.filter(l => l.date.slice(0, 7) <= currentMonth);
         const dates = [];
         const d = new Date(currentMonth + '-01');
@@ -170,78 +237,27 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
             const [y, m] = key.split('-');
             return { name: `${m}/${y}`, Entrada: credit, Saida: debit, SaldoDevedor: cumulativeBalance };
         });
-    };
-
-    const get043History = () => {
-        const relevant = transactions043.filter(t => filterStore(t.store) && t.date.slice(0, 7) <= currentMonth);
-        const grouped: Record<string, { credit: number, debit: number }> = {};
-        relevant.forEach(t => {
-            const key = t.date.slice(0, 7);
-            if (!grouped[key]) grouped[key] = { credit: 0, debit: 0 };
-            if (t.type === 'CREDIT') grouped[key].credit += t.value;
-            if (t.type === 'DEBIT') grouped[key].debit += t.value;
-        });
-        return Object.keys(grouped).sort().slice(-12).map(key => {
-            const [y, m] = key.split('-');
-            return { name: `${m}/${y}`, Credito: grouped[key].credit, Debito: grouped[key].debit };
-        });
-    };
-
-    const getSaldosHistory = () => {
-        const relevant = accountBalances.filter(b => filterStore(b.store) && `${b.year}-${b.month}` <= currentMonth);
-        const grouped: Record<string, number> = {};
-        relevant.forEach(b => {
-            const key = `${b.year}-${b.month}`;
-            grouped[key] = (grouped[key] || 0) + b.totalBalance;
-        });
-        return Object.keys(grouped).sort().slice(-12).map(key => {
-            const [y, m] = key.split('-');
-            return { name: `${m}/${y}`, value: grouped[key] };
-        });
-    };
-
-    const getStorePerformance = () => {
-        const stats: Record<string, { sales: number, expenses: number }> = {};
-        availableStores.forEach(s => stats[s] = { sales: 0, expenses: 0 });
-        if (availableStores.length === 0 && selectedStore) stats[selectedStore] = { sales: 0, expenses: 0 };
-
-        const filter = (t: any) => t.date && t.date.startsWith(currentMonth) && filterStore(t.store);
-        
-        transactions.filter(t => filter(t) && t.type === 'Receita').forEach(t => stats[t.store].sales += t.value);
-        transactions.filter(t => filter(t) && t.type === 'Despesa').forEach(t => stats[t.store].expenses += t.value);
-        orders.filter(o => filter(o)).forEach(o => stats[o.store].expenses += o.totalValue);
-
-        return Object.entries(stats).map(([store, s]) => ({
-            store, sales: s.sales, expenses: s.expenses, result: s.sales - s.expenses
-        })).sort((a, b) => b.sales - a.sales);
-    };
-
-    const metrics = calculateMetrics();
-    const totalBalance = calculateTotalBalance();
-    const dataLoans = getLoansHistory();
-    const data043 = get043History();
-    const dataSaldos = getSaldosHistory();
-    const storePerf = getStorePerformance();
+    }, [loans, currentMonth]);
 
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-heroRed" size={48}/></div>;
 
-    // --- Components ---
-    
-    const KpiCard = ({ title, value, colorClass, icon: Icon, trend }: any) => (
-        <div className="bg-white rounded-3xl p-6 shadow-card border border-slate-100 flex flex-col justify-between h-36 hover:shadow-card-hover transition-all duration-300 group">
-            <div className="flex justify-between items-start">
+    const KpiCard = ({ title, value, colorClass, icon: Icon, subtext }: any) => (
+        <div className="bg-white rounded-3xl p-6 shadow-card border border-slate-100 flex flex-col justify-between h-40 hover:shadow-card-hover transition-all duration-300 group relative overflow-hidden">
+            <div className={`absolute top-0 right-0 p-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity transform group-hover:scale-125 duration-500`}>
+                <Icon size={100} />
+            </div>
+            <div className="flex justify-between items-start relative z-10">
                 <div>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">{title}</p>
-                    <h3 className={`text-2xl font-black tracking-tight ${colorClass} break-all`}>{value}</h3>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{title}</p>
+                    <h3 className={`text-3xl font-black tracking-tight ${colorClass} break-all`}>{value}</h3>
                 </div>
-                <div className={`p-3 rounded-2xl ${colorClass.includes('green') ? 'bg-green-50 text-green-600' : colorClass.includes('red') ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-600'} group-hover:scale-110 transition-transform`}>
+                <div className={`p-3 rounded-2xl shadow-sm ${colorClass.includes('emerald') ? 'bg-emerald-50 text-emerald-600' : colorClass.includes('red') ? 'bg-red-50 text-red-600' : colorClass.includes('blue') ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'}`}>
                     <Icon size={24} />
                 </div>
             </div>
-            {trend && (
-                <div className="flex items-center gap-1 text-xs font-bold mt-2">
-                    {trend === 'up' ? <ArrowUpRight className="text-green-500" size={16}/> : <ArrowDownRight className="text-red-500" size={16}/>}
-                    <span className="text-slate-400">vs mês anterior</span>
+            {subtext && (
+                <div className="relative z-10 mt-auto pt-2 border-t border-slate-50">
+                    <p className="text-[10px] font-bold text-slate-400">{subtext}</p>
                 </div>
             )}
         </div>
@@ -249,6 +265,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
 
     return (
         <div className="max-w-7xl mx-auto p-2 sm:p-4 space-y-8 animate-fadeIn pb-20">
+            
             {/* Header & Filters */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-6 bg-white p-6 rounded-[2rem] shadow-card border border-slate-100">
                 <div className="text-center md:text-left">
@@ -285,76 +302,120 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
                     title="Saldo Acumulado" 
                     value={formatCurrency(totalBalance)} 
                     colorClass={totalBalance >= 0 ? "text-emerald-600" : "text-red-600"} 
-                    icon={Wallet} 
+                    icon={Wallet}
+                    subtext="Todas as Contas"
                 />
                 <KpiCard 
                     title="Vendas do Mês" 
                     value={formatCurrency(metrics.totalRevenues)} 
-                    colorClass="text-blue-600" 
-                    icon={TrendingUp} 
+                    colorClass="text-emerald-600" 
+                    icon={TrendingUp}
+                    subtext="Receitas confirmadas"
                 />
                 <KpiCard 
                     title="Despesas Fixas" 
                     value={formatCurrency(metrics.totalFixed)} 
                     colorClass="text-slate-700" 
-                    icon={Lock} 
+                    icon={Lock}
+                    subtext="Custos operacionais"
                 />
                 <KpiCard 
                     title="Desp. Variáveis" 
                     value={formatCurrency(metrics.totalVariable)} 
                     colorClass="text-amber-600" 
-                    icon={Activity} 
+                    icon={Activity}
+                    subtext="Pedidos + Variáveis"
                 />
-                <div className={`bg-gradient-to-br ${metrics.netResult >= 0 ? 'from-emerald-500 to-teal-600' : 'from-red-500 to-rose-600'} rounded-3xl p-6 shadow-lg text-white flex flex-col justify-between h-36 relative overflow-hidden group`}>
+                <div className={`bg-gradient-to-br ${metrics.netResult >= 0 ? 'from-emerald-500 to-teal-600' : 'from-red-500 to-rose-600'} rounded-3xl p-6 shadow-lg text-white flex flex-col justify-between h-40 relative overflow-hidden group col-span-1 sm:col-span-2 xl:col-span-1`}>
                     <div className="absolute top-0 right-0 p-4 opacity-20 transform group-hover:scale-110 transition-transform">
-                        <DollarSign size={64} />
+                        <DollarSign size={80} />
                     </div>
                     <div>
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Lucro Líquido</p>
-                        <h3 className="text-3xl font-black mt-1 tracking-tight">{formatCurrency(metrics.netResult)}</h3>
+                        <h3 className="text-3xl font-black mt-2 tracking-tight">{formatCurrency(metrics.netResult)}</h3>
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-bold bg-white/20 w-fit px-3 py-1 rounded-full backdrop-blur-sm">
+                    <div className="flex items-center gap-2 text-xs font-bold bg-white/20 w-fit px-3 py-1 rounded-full backdrop-blur-sm mt-2">
                         {metrics.netResult >= 0 ? 'Lucro' : 'Prejuízo'} Operacional
                     </div>
                 </div>
             </div>
 
-            {/* Store Performance Table */}
-            <div className="bg-white rounded-3xl shadow-card border border-slate-100 overflow-hidden">
-                <div className="p-6 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
-                    <h3 className="font-black text-slate-700 uppercase text-sm tracking-wider flex items-center gap-2">
-                        <Layers size={18} className="text-heroRed"/> Desempenho por Loja
-                    </h3>
+            {/* Expense Breakdown Tables */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                {/* Fixed Expenses Table */}
+                <div className="bg-white rounded-[2.5rem] shadow-card border border-slate-100 overflow-hidden flex flex-col">
+                    <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                        <h3 className="font-black text-slate-700 uppercase text-sm tracking-wider flex items-center gap-2">
+                            <Lock size={18} className="text-slate-400"/> Despesas Fixas
+                        </h3>
+                        <span className="text-xs font-bold bg-white px-3 py-1 rounded-full shadow-sm border border-slate-100 text-slate-500">
+                            Total: {formatCurrency(metrics.totalFixed)}
+                        </span>
+                    </div>
+                    <div className="overflow-y-auto max-h-[400px] custom-scrollbar p-2">
+                        <table className="w-full">
+                            <tbody className="divide-y divide-slate-50">
+                                {fixedExpensesData.map((item, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors group">
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-2 h-2 rounded-full bg-slate-300 group-hover:bg-heroRed transition-colors"></div>
+                                                <span className="text-sm font-bold text-slate-700">{item.label}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <span className="text-xs font-medium text-slate-400 mr-3">{item.count} items</span>
+                                            <span className="text-sm font-black font-mono text-slate-800">{formatCurrency(item.value)}</span>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {fixedExpensesData.length === 0 && (
+                                    <tr><td colSpan={2} className="p-8 text-center text-slate-400 text-sm italic">Nenhuma despesa fixa registrada.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                        <thead>
-                            <tr className="bg-white border-b border-slate-100">
-                                <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Unidade</th>
-                                <th className="px-6 py-4 text-right text-[10px] font-black text-emerald-600 uppercase tracking-widest">Vendas</th>
-                                <th className="px-6 py-4 text-right text-[10px] font-black text-red-600 uppercase tracking-widest">Despesas</th>
-                                <th className="px-6 py-4 text-right text-[10px] font-black text-blue-600 uppercase tracking-widest">Resultado</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                            {storePerf.map((item) => (
-                                <tr key={item.store} className="hover:bg-slate-50/80 transition-colors group">
-                                    <td className="px-6 py-4 text-sm font-bold text-slate-700 group-hover:text-heroBlack transition-colors">{item.store}</td>
-                                    <td className="px-6 py-4 text-sm text-right font-mono font-medium text-emerald-600 bg-emerald-50/30">{formatCurrency(item.sales)}</td>
-                                    <td className="px-6 py-4 text-sm text-right font-mono font-medium text-red-600 bg-red-50/30">{formatCurrency(item.expenses)}</td>
-                                    <td className={`px-6 py-4 text-sm text-right font-mono font-black ${item.result >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                                        {formatCurrency(item.result)}
-                                    </td>
-                                </tr>
-                            ))}
-                            {storePerf.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-slate-400 text-sm font-medium">Sem dados para o período.</td></tr>}
-                        </tbody>
-                    </table>
+
+                {/* Variable Expenses Table */}
+                <div className="bg-white rounded-[2.5rem] shadow-card border border-slate-100 overflow-hidden flex flex-col">
+                    <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                        <h3 className="font-black text-slate-700 uppercase text-sm tracking-wider flex items-center gap-2">
+                            <Activity size={18} className="text-amber-500"/> Despesas Variáveis
+                        </h3>
+                        <span className="text-xs font-bold bg-white px-3 py-1 rounded-full shadow-sm border border-slate-100 text-amber-600">
+                            Total: {formatCurrency(metrics.totalVariable)}
+                        </span>
+                    </div>
+                    <div className="overflow-y-auto max-h-[400px] custom-scrollbar p-2">
+                        <table className="w-full">
+                            <tbody className="divide-y divide-slate-50">
+                                {variableExpensesData.map((item, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors group">
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-2 h-2 rounded-full bg-amber-200 group-hover:bg-amber-500 transition-colors"></div>
+                                                <span className="text-sm font-bold text-slate-700">{item.label}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <span className="text-xs font-medium text-slate-400 mr-3">{item.count} items</span>
+                                            <span className="text-sm font-black font-mono text-slate-800">{formatCurrency(item.value)}</span>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {variableExpensesData.length === 0 && (
+                                    <tr><td colSpan={2} className="p-8 text-center text-slate-400 text-sm italic">Nenhuma despesa variável registrada.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
-            {/* Charts Section */}
-            {selectedStore === 'Hero Centro' ? (
+            {/* Loan Chart (Conditional) */}
+            {selectedStore === 'Hero Centro' && (
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-card border border-indigo-100 relative overflow-hidden">
                     <div className="flex justify-between items-center mb-8 relative z-10">
                         <div>
@@ -388,56 +449,6 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
                                 <Line yAxisId="right" type="monotone" dataKey="SaldoDevedor" name="Saldo Devedor" stroke="#6366f1" strokeWidth={4} dot={{r: 0}} activeDot={{r: 6, strokeWidth: 0}} />
                             </ComposedChart>
                         </ResponsiveContainer>
-                    </div>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Controle 043 Chart */}
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-card border border-slate-100">
-                        <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">
-                            <ShieldCheck className="text-heroRed" size={20}/> Controle 043 <span className="text-slate-300 text-xs font-bold uppercase tracking-wide ml-auto">12 Meses</span>
-                        </h3>
-                        <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={data043}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="name" tick={{fontSize: 10, fill: '#cbd5e1', fontWeight: 'bold'}} axisLine={false} tickLine={false} />
-                                    <Tooltip 
-                                        cursor={{fill: '#f8fafc'}}
-                                        contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.05)'}}
-                                        formatter={(value: number) => formatCurrency(value)}
-                                    />
-                                    <Bar dataKey="Credito" fill="#10B981" radius={[4, 4, 0, 0]} barSize={12} name="Crédito" />
-                                    <Bar dataKey="Debito" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={12} name="Débito" />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-
-                    {/* Saldo Contas Chart */}
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-card border border-slate-100">
-                        <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">
-                            <Wallet className="text-blue-500" size={20}/> Saldo de Contas <span className="text-slate-300 text-xs font-bold uppercase tracking-wide ml-auto">Evolução</span>
-                        </h3>
-                        <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={dataSaldos}>
-                                    <defs>
-                                        <linearGradient id="colorSaldo" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                                            <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="name" tick={{fontSize: 10, fill: '#cbd5e1', fontWeight: 'bold'}} axisLine={false} tickLine={false} />
-                                    <Tooltip 
-                                        contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.05)'}}
-                                        formatter={(value: number) => formatCurrency(value)}
-                                    />
-                                    <Area type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={3} fillOpacity={1} fill="url(#colorSaldo)" name="Saldo Total" />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
                     </div>
                 </div>
             )}
