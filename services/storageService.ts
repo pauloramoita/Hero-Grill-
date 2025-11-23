@@ -3,7 +3,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { 
     AppData, Order, Transaction043, AccountBalance, FinancialRecord, 
-    DailyTransaction, FinancialAccount, MeatInventoryLog, MeatStockAdjustment, User, SystemMessage 
+    DailyTransaction, FinancialAccount, MeatInventoryLog, MeatStockAdjustment, User, SystemMessage, LoanTransaction 
 } from '../types';
 
 // --- SAFE INITIALIZATION ---
@@ -384,7 +384,7 @@ export const deleteMeatAdjustment = async (id: string) => {
     if (error) throw new Error(error.message);
 };
 
-// --- OTHERS ---
+// --- TRANSACTIONS 043 ---
 
 export const getTransactions043 = async (): Promise<Transaction043[]> => {
     const { data } = await supabase
@@ -405,7 +405,7 @@ export const updateTransaction043 = async (t: Transaction043) => {
 export const deleteTransaction043 = async (id: string) => {
     await supabase.from('transactions_043').delete().eq('id', id);
 };
-export const exportTransactionsToXML = (data: Transaction043[], filename: string) => { 
+export const exportTransactionsToXML = (data: Transaction043[] | LoanTransaction[], filename: string) => { 
     let csvContent = "data:text/csv;charset=utf-8,Data,Loja,Tipo,Valor,Descricao\n";
     data.forEach(row => {
         csvContent += `${row.date},${row.store},${row.type},${safeNumber(row.value)},${row.description}\n`;
@@ -418,6 +418,38 @@ export const exportTransactionsToXML = (data: Transaction043[], filename: string
     link.click();
     document.body.removeChild(link);
 };
+
+// --- LOAN TRANSACTIONS (EMPRÉSTIMOS) ---
+
+export const getLoanTransactions = async (): Promise<LoanTransaction[]> => {
+    const { data, error } = await supabase
+        .from('loan_transactions')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(3000);
+    
+    if (error) {
+        console.warn("Error fetching loan transactions (table might not exist yet):", error.message);
+        return [];
+    }
+    return (data || []).map((t: any) => ({ ...t, value: safeNumber(t.value) }));
+};
+export const saveLoanTransaction = async (t: LoanTransaction) => {
+    const { id, ...rest } = t;
+    const { error } = await supabase.from('loan_transactions').insert([rest]);
+    if (error) throw new Error(error.message);
+};
+export const updateLoanTransaction = async (t: LoanTransaction) => {
+    const { id, ...rest } = t;
+    const { error } = await supabase.from('loan_transactions').update(rest).eq('id', id);
+    if (error) throw new Error(error.message);
+};
+export const deleteLoanTransaction = async (id: string) => {
+    const { error } = await supabase.from('loan_transactions').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+};
+
+// --- ACCOUNT BALANCES ---
 
 export const getAccountBalances = async (): Promise<AccountBalance[]> => {
     const { data, error } = await supabase.from('account_balances').select('*');
@@ -833,7 +865,7 @@ export const changeUserPassword = async (userId: string, current: string, newPas
 };
 
 export const createBackup = async () => {
-    const [appData, orders, users, logs, adjustments, trans043, balances, finRecords, finAccounts, dailyTrans] = await Promise.all([
+    const [appData, orders, users, logs, adjustments, trans043, balances, finRecords, finAccounts, dailyTrans, loans] = await Promise.all([
         getAppData(),
         getOrders(),
         getUsers(),
@@ -843,7 +875,8 @@ export const createBackup = async () => {
         getAccountBalances(),
         getFinancialRecords(),
         getFinancialAccounts(),
-        getDailyTransactions()
+        getDailyTransactions(),
+        getLoanTransactions() // Include loans in backup
     ]);
 
     const backup = {
@@ -857,7 +890,8 @@ export const createBackup = async () => {
         balances,
         finRecords,
         finAccounts,
-        dailyTrans
+        dailyTrans,
+        loans
     };
 
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
@@ -894,11 +928,9 @@ export const restoreBackup = async (file: File): Promise<{ success: boolean, mes
                         await supabase.from('orders').insert(batch);
                     }
                 }
-                if (json.logs && json.logs.length) {
-                    await supabase.from('meat_inventory_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-                    await supabase.from('meat_inventory_logs').insert(json.logs.map((l: any) => ({
-                        date: l.date, store: l.store, product: l.product, quantity_consumed: safeNumber(l.quantity_consumed), created_at: l.created_at
-                    })));
+                if (json.loans && json.loans.length) {
+                    await supabase.from('loan_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    await supabase.from('loan_transactions').insert(json.loans);
                 }
                 
                 resolve({ success: true, message: 'Backup restaurado com sucesso!' });
@@ -985,6 +1017,15 @@ create table if not exists meat_stock_adjustments (
 );
 
 create table if not exists transactions_043 (
+  id uuid primary key default gen_random_uuid(),
+  date date,
+  store text,
+  type text,
+  value numeric,
+  description text
+);
+
+create table if not exists loan_transactions (
   id uuid primary key default gen_random_uuid(),
   date date,
   store text,

@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect } from 'react';
 import { User, AppData } from '../../types';
 import { getUsers, saveUser, deleteUser, getAppData } from '../../services/storageService';
@@ -26,6 +28,7 @@ export const UserManagement: React.FC = () => {
         { id: 'estoque', label: '🥩 Estoque de Carnes' },
         { id: 'config_campos', label: '⚙️ Config. Produtos (Campos!)' },
         { id: 'controle043', label: 'Controle 043' },
+        { id: 'emprestimos', label: '💸 Controle Empréstimos' },
         { id: 'saldo', label: 'Saldo Contas' },
         { id: 'financeiro', label: 'Entradas e Saídas (Antigo)' },
         { id: 'novo_financeiro', label: 'Financeiro (Caixa/Lançamentos)' },
@@ -89,7 +92,7 @@ export const UserManagement: React.FC = () => {
             setSelectedModules([
                 'dashboard',
                 'pedidos', 'config_campos', 'estoque',
-                'controle043', 
+                'controle043', 'emprestimos',
                 'saldo', 
                 'financeiro', 
                 'novo_financeiro', 'config_financeiro_campos', 'view_balances'

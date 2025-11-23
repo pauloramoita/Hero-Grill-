@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
@@ -8,6 +9,7 @@ import { SaldoModule } from './components/saldo/SaldoModule';
 import { FinanceiroModule } from './components/financeiro/FinanceiroModule'; // Old Financeiro
 import { NovoFinanceiroModule } from './components/novo_financeiro/NovoFinanceiroModule'; // New Financeiro
 import { EstoqueModule } from './components/estoque/EstoqueModule'; // New Estoque
+import { EmprestimosModule } from './components/emprestimos/EmprestimosModule'; // New Emprestimos
 import { DashboardModule } from './components/dashboard/DashboardModule';
 import { AdminModule } from './components/admin/AdminModule';
 import { LoginScreen } from './components/LoginScreen';
@@ -187,6 +189,7 @@ const App: React.FC = () => {
         { id: 'estoque', label: 'Estoque Carnes', icon: <Beef size={28} />, bgClass: 'bg-[#333333]', textClass: 'text-white', borderClass: 'border-slate-600', description: 'Controle de churrasco', requiredPerm: 'estoque' },
         { id: 'novo_financeiro', label: 'Financeiro', icon: <Landmark size={28} />, bgClass: 'bg-[#A93226]', textClass: 'text-white', borderClass: 'border-red-900', description: 'Fluxo de caixa e lançamentos', requiredPerm: 'novo_financeiro' },
         { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={28} />, bgClass: 'bg-slate-700', textClass: 'text-white', borderClass: 'border-slate-600', description: 'Gestão de conta 043', requiredPerm: 'controle043' },
+        { id: 'emprestimos', label: 'Empréstimos', icon: <Landmark size={28} />, bgClass: 'bg-indigo-700', textClass: 'text-white', borderClass: 'border-indigo-900', description: 'Controle de Empréstimos', requiredPerm: 'emprestimos' },
         { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={28} />, bgClass: 'bg-[#E74C3C]', textClass: 'text-white', borderClass: 'border-red-400', description: 'Balanço mensal consolidado', requiredPerm: 'saldo' },
         { id: 'financeiro', label: 'Entradas/Saídas', icon: <DollarSign size={28} />, bgClass: 'bg-gray-500', textClass: 'text-white', borderClass: 'border-gray-600', description: 'Registro consolidado (Legado)', requiredPerm: 'financeiro' },
         { id: 'admin', label: 'Admin & Dados', icon: <Settings size={28} />, bgClass: 'bg-gray-200', textClass: 'text-slate-800', borderClass: 'border-gray-300', description: 'Usuários, Backup e SQL', requiredPerm: 'admin' },
@@ -275,6 +278,7 @@ const App: React.FC = () => {
                         {currentView === 'pedidos' && <PedidosModule user={user} />}
                         {currentView === 'estoque' && <EstoqueModule user={user} />}
                         {currentView === 'controle043' && <Controle043Module user={user} />}
+                        {currentView === 'emprestimos' && <EmprestimosModule user={user} />}
                         {currentView === 'saldo' && <SaldoModule user={user} />}
                         {currentView === 'financeiro' && <FinanceiroModule user={user} />}
                         {currentView === 'novo_financeiro' && <NovoFinanceiroModule user={user} />}

@@ -36,6 +36,15 @@ export interface Transaction043 {
     description: string; // Max 50 chars
 }
 
+export interface LoanTransaction {
+    id: string;
+    date: string; // YYYY-MM-DD
+    store: string; // The Lender (Empresa que emprestou)
+    type: 'DEBIT' | 'CREDIT'; // CREDIT = Entrada (Empréstimo), DEBIT = Saída (Pagamento)
+    value: number;
+    description: string;
+}
+
 export interface AccountBalance {
     id: string;
     store: string;
@@ -143,7 +152,7 @@ export interface SystemMessage {
 }
 
 export interface UserPermissions {
-    modules: string[]; // 'dashboard', 'pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro', 'estoque', etc
+    modules: string[]; // 'dashboard', 'pedidos', 'controle043', 'saldo', 'financeiro', 'backup', 'admin', 'novo_financeiro', 'estoque', 'emprestimos'
     stores: string[]; // Lista de lojas permitidas
 }
 
@@ -156,10 +165,11 @@ export interface User {
     isMaster?: boolean; // Identifica o admin hardcoded
 }
 
-export type View = 'home' | 'pedidos' | 'controle043' | 'financeiro' | 'novo_financeiro' | 'saldo' | 'backup' | 'admin' | 'dashboard' | 'estoque';
+export type View = 'home' | 'pedidos' | 'controle043' | 'financeiro' | 'novo_financeiro' | 'saldo' | 'backup' | 'admin' | 'dashboard' | 'estoque' | 'emprestimos';
 
 export type PedidosSubView = 'cadastrar' | 'consulta' | 'relatorios' | 'campos';
 export type Controle043SubView = 'cadastrar' | 'consulta' | 'relatorios';
+export type EmprestimosSubView = 'cadastrar' | 'consulta' | 'relatorios';
 export type SaldoSubView = 'lancamentos' | 'consulta' | 'relatorios';
 export type FinanceiroSubView = 'lancamentos' | 'consulta' | 'relatorios';
 export type NovoFinanceiroSubView = 'lancamentos' | 'consulta' | 'relatorios' | 'campos';
