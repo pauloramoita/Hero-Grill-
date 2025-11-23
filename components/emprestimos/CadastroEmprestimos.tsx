@@ -30,20 +30,15 @@ export const CadastroEmprestimos: React.FC<CadastroEmprestimosProps> = ({ user }
         load();
     }, []);
 
-    // Filter available stores (Representing Lender Companies)
-    const availableStores = useMemo(() => {
-        if (user.isMaster) return data.stores;
-        if (user.permissions.stores && user.permissions.stores.length > 0) {
-            return data.stores.filter(s => user.permissions.stores.includes(s));
-        }
-        return data.stores;
-    }, [data.stores, user]);
+    // For Loans, we list ALL stores as potential creditors, ignoring user permissions
+    const availableStores = data.stores;
 
     useEffect(() => {
-        if (availableStores.length === 1) {
+        // Only auto-select if there's exactly one store in the system
+        if (availableStores.length === 1 && !store) {
             setStore(availableStores[0]);
         }
-    }, [availableStores]);
+    }, [availableStores, store]);
 
     const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawValue = e.target.value.replace(/\D/g, '');
@@ -94,7 +89,6 @@ export const CadastroEmprestimos: React.FC<CadastroEmprestimosProps> = ({ user }
                         value={store} 
                         onChange={(e) => setStore(e.target.value)} 
                         className={`w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all font-bold text-slate-700 ${availableStores.length === 1 ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
-                        disabled={availableStores.length === 1}
                     >
                         <option value="">Selecione a Empresa...</option>
                         {availableStores.map(s => <option key={s} value={s}>{s}</option>)}

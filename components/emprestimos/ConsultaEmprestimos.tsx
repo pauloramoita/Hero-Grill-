@@ -47,34 +47,16 @@ export const ConsultaEmprestimos: React.FC<ConsultaEmprestimosProps> = ({ user }
         load();
     }, []);
 
-    // Determine available stores based on user permissions
-    const availableStores = useMemo(() => {
-        if (user.isMaster) return appData.stores;
-        if (user.permissions.stores && user.permissions.stores.length > 0) {
-            return appData.stores.filter(s => user.permissions.stores.includes(s));
-        }
-        return appData.stores;
-    }, [appData.stores, user]);
-
-    // Auto-select if only one store available
-    useEffect(() => {
-        if (availableStores.length === 1) {
-            setStoreFilter(availableStores[0]);
-        }
-    }, [availableStores]);
+    // For loans, we show all stores as potential creditors
+    const availableStores = appData.stores;
 
     useEffect(() => {
         let result = transactions.filter(t => t.date.startsWith(dateValue));
         
         if (storeFilter) result = result.filter(t => t.store === storeFilter);
 
-        // Permissions check
-        if (!user.isMaster && user.permissions.stores && user.permissions.stores.length > 0) {
-            result = result.filter(t => user.permissions.stores.includes(t.store));
-        }
-
         setFilteredTransactions(result.sort((a, b) => a.date.localeCompare(b.date)));
-    }, [transactions, storeFilter, dateValue, user]);
+    }, [transactions, storeFilter, dateValue]);
 
     const handleDelete = async (id: string) => {
         if (window.confirm('Deseja excluir esta transação?')) {
@@ -92,8 +74,6 @@ export const ConsultaEmprestimos: React.FC<ConsultaEmprestimosProps> = ({ user }
     const totalDebit = filteredTransactions.filter(t => t.type === 'DEBIT').reduce((acc, t) => acc + t.value, 0); // Pagamentos
     const totalCredit = filteredTransactions.filter(t => t.type === 'CREDIT').reduce((acc, t) => acc + t.value, 0); // Recebimentos
     
-    // Saldo = Recebido - Pago. Se positivo, ainda deve. Se negativo, pagou a mais? (Neste contexto, Saldo = Dívida Atual com a Loja filtrada no mês?)
-    // Geralmente em empréstimo: Recebi 10k (Credito). Paguei 2k (Debito). Saldo em Mãos = 8k.
     const balance = totalCredit - totalDebit;
 
     if (loading) return <Loader2 className="animate-spin mx-auto mt-10 text-indigo-600" size={40}/>;
@@ -107,9 +87,8 @@ export const ConsultaEmprestimos: React.FC<ConsultaEmprestimosProps> = ({ user }
                         value={storeFilter} 
                         onChange={e => setStoreFilter(e.target.value)} 
                         className={`w-full border p-2.5 rounded-lg font-bold outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 ${availableStores.length === 1 ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
-                        disabled={availableStores.length === 1}
                     >
-                        {availableStores.length !== 1 && <option value="">Todas as Empresas</option>}
+                        <option value="">Todas as Empresas</option>
                         {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>

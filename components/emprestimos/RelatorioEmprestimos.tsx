@@ -49,26 +49,14 @@ export const RelatorioEmprestimos: React.FC<RelatorioEmprestimosProps> = ({ user
         load();
     }, []);
 
-    const availableStores = useMemo(() => {
-        if (user.isMaster) return appData.stores;
-        if (user.permissions.stores && user.permissions.stores.length > 0) {
-            return appData.stores.filter(s => user.permissions.stores.includes(s));
-        }
-        return appData.stores;
-    }, [appData.stores, user]);
+    // For loans, we use all stores as possible creditors
+    const availableStores = appData.stores;
 
     const generateReport = () => {
         const filtered = transactions.filter(t => {
             const dateMatch = t.date >= startDate && t.date <= endDate;
             const storeMatch = storeFilter === '' || t.store === storeFilter;
-            
-            // Permission Check
-            let allowed = true;
-            if (!user.isMaster && availableStores.length > 0) {
-                 allowed = availableStores.includes(t.store);
-            }
-
-            return dateMatch && storeMatch && allowed;
+            return dateMatch && storeMatch;
         }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
         setFilteredTransactions(filtered);
