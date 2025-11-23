@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { getAppData, saveOrder, getLastOrderForProduct, formatCurrency, getTodayLocalISO } from '../../services/storageService';
 import { AppData, User } from '../../types';
-import { AlertCircle, CheckCircle, Loader2, Save, ShoppingCart, Calendar, Box, Info, DollarSign } from 'lucide-react';
+import { AlertCircle, CheckCircle, Loader2, Save, ShoppingCart, Calendar, Box, Tag, Truck, DollarSign, Hash, Ruler } from 'lucide-react';
 
 interface CadastroPedidoProps {
     user: User;
@@ -163,176 +164,260 @@ export const CadastroPedido: React.FC<CadastroPedidoProps> = ({ user }) => {
 
     if (loadingData) return <div className="text-center p-10"><Loader2 className="animate-spin mx-auto text-heroRed" size={32}/></div>;
 
-    const labelClass = "block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1";
-    const inputClass = (hasError: boolean, disabled: boolean = false) => 
-        `w-full px-4 py-3.5 rounded-xl outline-none transition-all duration-200 font-bold text-sm border-2
-        ${disabled 
-            ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-100' 
-            : hasError 
-                ? 'bg-red-50 border-red-200 text-red-900 focus:ring-4 focus:ring-red-50 placeholder:text-red-300' 
-                : 'bg-white border-slate-100 text-slate-700 focus:border-heroRed focus:ring-4 focus:ring-red-50 shadow-sm'
-        }`;
+    // UI Components - Nova Linguagem de Design
+    const InputField = ({ label, icon: Icon, error, ...props }: any) => (
+        <div className="relative group">
+            <div className="flex items-center gap-2 mb-1.5">
+                {Icon && <Icon size={14} className={`transition-colors ${error ? 'text-red-500' : 'text-slate-400 group-focus-within:text-heroRed'}`} />}
+                <label className={`text-[11px] font-bold uppercase tracking-wider transition-colors ${error ? 'text-red-500' : 'text-slate-500 group-focus-within:text-heroRed'}`}>
+                    {label}
+                </label>
+            </div>
+            <input 
+                className={`w-full px-4 py-3.5 rounded-xl bg-slate-50 border-2 transition-all duration-300 font-bold text-slate-700 outline-none
+                ${error 
+                    ? 'border-red-100 bg-red-50 text-red-900 focus:border-red-300 focus:ring-4 focus:ring-red-100' 
+                    : 'border-transparent hover:border-slate-200 focus:border-heroRed focus:bg-white focus:shadow-input-focus'
+                }`}
+                {...props} 
+            />
+        </div>
+    );
+
+    const SelectField = ({ label, icon: Icon, error, children, ...props }: any) => (
+        <div className="relative group">
+            <div className="flex items-center gap-2 mb-1.5">
+                {Icon && <Icon size={14} className={`transition-colors ${error ? 'text-red-500' : 'text-slate-400 group-focus-within:text-heroRed'}`} />}
+                <label className={`text-[11px] font-bold uppercase tracking-wider transition-colors ${error ? 'text-red-500' : 'text-slate-500 group-focus-within:text-heroRed'}`}>
+                    {label}
+                </label>
+            </div>
+            <div className="relative">
+                <select 
+                    className={`w-full px-4 py-3.5 rounded-xl bg-slate-50 border-2 transition-all duration-300 font-bold text-slate-700 outline-none appearance-none cursor-pointer
+                    ${error 
+                        ? 'border-red-100 bg-red-50 text-red-900 focus:border-red-300 focus:ring-4 focus:ring-red-100' 
+                        : 'border-transparent hover:border-slate-200 focus:border-heroRed focus:bg-white focus:shadow-input-focus'
+                    } ${props.disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    {...props}
+                >
+                    {children}
+                </select>
+                {/* Custom Arrow */}
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-focus-within:text-heroRed transition-colors">
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    );
+
+    const CardSection = ({ title, icon: Icon, children, accentColor = "heroRed" }: any) => (
+        <div className="bg-white rounded-3xl p-6 shadow-card border border-slate-100 relative overflow-hidden group hover:shadow-card-hover transition-all duration-500">
+            <div className={`absolute top-0 left-0 w-1 h-full bg-${accentColor} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
+            <div className="flex items-center gap-3 mb-6 border-b border-slate-50 pb-4">
+                <div className={`p-2.5 rounded-xl bg-${accentColor === 'heroRed' ? 'red-50' : 'slate-50'} text-${accentColor === 'heroRed' ? 'heroRed' : 'slate-500'}`}>
+                    {Icon && <Icon size={20} />}
+                </div>
+                <h3 className="font-black text-slate-800 uppercase tracking-tight text-sm">{title}</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
+                {children}
+            </div>
+        </div>
+    );
 
     return (
-        <div className="pb-32 md:pb-0 animate-fadeIn max-w-5xl mx-auto">
-            <form onSubmit={handleSubmit} className="bg-white md:rounded-3xl shadow-card border-y md:border border-slate-200 overflow-hidden">
-                
-                <div className="sticky top-20 z-20 md:static bg-white border-b border-slate-100 px-6 py-6 flex justify-between items-center">
+        <div className="pb-32 md:pb-10 animate-fadeIn max-w-5xl mx-auto space-y-6">
+            
+            {/* Header Floating Card */}
+            <div className="bg-heroBlack text-white rounded-3xl p-8 shadow-floating relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                    <ShoppingCart size={120} />
+                </div>
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
-                        <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 uppercase tracking-tight">
-                            <div className="bg-heroBlack p-2 rounded-lg text-white">
-                                <ShoppingCart size={20} />
-                            </div>
-                            Novo Pedido
-                        </h2>
+                        <h1 className="text-2xl md:text-3xl font-black tracking-tight mb-1">NOVO PEDIDO</h1>
+                        <p className="text-slate-400 font-medium text-sm">Preencha os dados para registrar a compra.</p>
                     </div>
-                    <div className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 flex items-center gap-2 text-xs font-bold text-slate-600">
-                        <Calendar size={14} className="text-heroRed"/> 
-                        {new Date().toLocaleDateString('pt-BR')}
+                    <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 flex items-center gap-3">
+                        <Calendar size={18} className="text-heroRed" />
+                        <span className="font-bold text-sm tracking-wide">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
                     </div>
                 </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
                 
-                <div className="p-6 md:p-8 space-y-8">
-                    {/* Bloco 1: Contexto */}
-                    <section>
-                        <div className="flex items-center gap-2 mb-5 pb-2 border-b border-slate-50">
-                            <Info size={18} className="text-slate-300"/>
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Informações Gerais</h3>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div>
-                                <label className={labelClass}>Data do Pedido</label>
-                                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass(false)}/>
-                            </div>
-
-                            <div>
-                                <label className={labelClass}>Loja {errors.store && <span className="text-heroRed">*</span>}</label>
-                                <select 
-                                    value={store} 
-                                    onChange={(e) => setStore(e.target.value)} 
-                                    className={inputClass(errors.store, availableStores.length === 1)}
-                                    disabled={availableStores.length === 1}
-                                >
-                                    <option value="">Selecione...</option>
-                                    {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className={labelClass}>Vencimento (Opcional)</label>
-                                <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className={inputClass(false)}/>
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* Bloco 2: Produto */}
-                    <section>
-                        <div className="flex items-center gap-2 mb-5 pb-2 border-b border-slate-50">
-                            <Box size={18} className="text-slate-300"/>
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Detalhes do Produto</h3>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="md:col-span-1">
-                                <label className={labelClass}>Categoria {errors.category && <span className="text-heroRed">*</span>}</label>
-                                <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass(errors.category)}>
-                                    <option value="">Selecione...</option>
-                                    {data.categories.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-
-                            <div className="md:col-span-2">
-                                <label className={labelClass}>Produto {errors.product && <span className="text-heroRed">*</span>}</label>
-                                <select value={product} onChange={(e) => setProduct(e.target.value)} className={inputClass(errors.product)}>
-                                    <option value="">Selecione...</option>
-                                    {data.products.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className={labelClass}>Marca</label>
-                                <select value={brand} onChange={(e) => setBrand(e.target.value)} className={inputClass(false)}>
-                                    <option value="">Selecione...</option>
-                                    {data.brands.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-
-                            <div className="md:col-span-2">
-                                <label className={labelClass}>Fornecedor</label>
-                                <select value={supplier} onChange={(e) => setSupplier(e.target.value)} className={inputClass(false)}>
-                                    <option value="">Selecione...</option>
-                                    {data.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* Bloco 3: Valores */}
-                    <section className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                        <div className="flex items-center gap-2 mb-5">
-                            <DollarSign size={18} className="text-slate-300"/>
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Valores e Quantidades</h3>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                            <div>
-                                <label className={labelClass}>Medida {errors.unitMeasure && <span className="text-heroRed">*</span>}</label>
-                                <select value={unitMeasure} onChange={(e) => setUnitMeasure(e.target.value)} className={inputClass(errors.unitMeasure)}>
-                                    <option value="">...</option>
-                                    {data.units.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className={labelClass}>Qtd. {errors.quantity && <span className="text-heroRed">*</span>}</label>
-                                <input type="text" value={quantity} onChange={handleQuantityChange} className={`${inputClass(errors.quantity)} text-right font-black`} placeholder="0,000" inputMode="decimal"/>
-                            </div>
-
-                            <div className="col-span-2 md:col-span-1">
-                                <label className={labelClass}>Vl. Unitário {errors.unitValue && <span className="text-heroRed">*</span>}</label>
-                                <input type="text" value={formatCurrency(unitValue)} onChange={handleCurrencyChange} className={`${inputClass(errors.unitValue)} text-right font-black text-slate-800`} inputMode="numeric"/>
-                            </div>
-                            
-                            <div className="col-span-2 md:col-span-1">
-                                <label className={labelClass}>Tipo (Contábil)</label>
-                                <select value={type} onChange={(e) => setType(e.target.value)} className={inputClass(errors.type)}>
-                                     {data.types.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                        </div>
-                    </section>
-
-                    {submitError && (
-                        <div className="text-heroRed text-sm font-medium flex items-start gap-3 bg-red-50 px-4 py-4 rounded-xl border border-red-100 animate-fadeIn">
-                            <AlertCircle size={20} className="flex-shrink-0 mt-0.5"/> 
-                            <span className="whitespace-pre-line leading-relaxed">{submitError}</span>
-                        </div>
-                    )}
-
-                    {/* Desktop Footer */}
-                    <div className="hidden md:flex justify-end items-center gap-6 pt-4 border-t border-slate-100">
-                        <div className="text-right">
-                            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total do Pedido</span>
-                            <span className="text-3xl font-black text-slate-800">{calculateTotal()}</span>
-                        </div>
-                        <button 
-                            disabled={saving} 
-                            type="submit" 
-                            className="bg-heroRed hover:bg-red-700 text-white font-bold py-4 px-12 rounded-xl shadow-lg hover:shadow-red-200 transition-all flex items-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed active:scale-95"
-                        >
-                            {saving ? <Loader2 className="animate-spin" size={22}/> : <Save size={22}/>}
-                            {saving ? 'Salvando...' : 'REGISTRAR PEDIDO'}
-                        </button>
+                {/* Bloco 1: Contexto */}
+                <CardSection title="Informações Gerais" icon={Box}>
+                    <div className="md:col-span-2">
+                        <InputField 
+                            label="Data do Pedido" 
+                            type="date" 
+                            value={date} 
+                            onChange={(e: any) => setDate(e.target.value)} 
+                        />
                     </div>
+                    <div className="md:col-span-2">
+                        <SelectField 
+                            label="Loja" 
+                            value={store} 
+                            onChange={(e: any) => setStore(e.target.value)} 
+                            error={errors.store}
+                            disabled={availableStores.length === 1}
+                        >
+                            <option value="">Selecione...</option>
+                            {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
+                        </SelectField>
+                    </div>
+                    <div className="md:col-span-2">
+                        <InputField 
+                            label="Vencimento (Opcional)" 
+                            type="date" 
+                            value={deliveryDate} 
+                            onChange={(e: any) => setDeliveryDate(e.target.value)} 
+                        />
+                    </div>
+                </CardSection>
+
+                {/* Bloco 2: Produto */}
+                <CardSection title="Detalhes do Produto" icon={Tag}>
+                    <div className="md:col-span-2">
+                        <SelectField 
+                            label="Categoria" 
+                            value={category} 
+                            onChange={(e: any) => setCategory(e.target.value)} 
+                            error={errors.category}
+                        >
+                            <option value="">Selecione...</option>
+                            {data.categories.map(s => <option key={s} value={s}>{s}</option>)}
+                        </SelectField>
+                    </div>
+                    <div className="md:col-span-4">
+                        <SelectField 
+                            label="Produto" 
+                            value={product} 
+                            onChange={(e: any) => setProduct(e.target.value)} 
+                            error={errors.product}
+                        >
+                            <option value="">Selecione...</option>
+                            {data.products.map(s => <option key={s} value={s}>{s}</option>)}
+                        </SelectField>
+                    </div>
+                    <div className="md:col-span-3">
+                        <SelectField 
+                            label="Marca" 
+                            value={brand} 
+                            onChange={(e: any) => setBrand(e.target.value)}
+                        >
+                            <option value="">Selecione...</option>
+                            {data.brands.map(s => <option key={s} value={s}>{s}</option>)}
+                        </SelectField>
+                    </div>
+                    <div className="md:col-span-3">
+                        <SelectField 
+                            label="Fornecedor" 
+                            icon={Truck}
+                            value={supplier} 
+                            onChange={(e: any) => setSupplier(e.target.value)}
+                        >
+                            <option value="">Selecione...</option>
+                            {data.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+                        </SelectField>
+                    </div>
+                </CardSection>
+
+                {/* Bloco 3: Valores */}
+                <CardSection title="Valores e Quantidades" icon={DollarSign} accentColor="emerald-500">
+                    <div className="md:col-span-2">
+                        <SelectField 
+                            label="Unidade" 
+                            icon={Ruler}
+                            value={unitMeasure} 
+                            onChange={(e: any) => setUnitMeasure(e.target.value)} 
+                            error={errors.unitMeasure}
+                        >
+                            <option value="">...</option>
+                            {data.units.map(s => <option key={s} value={s}>{s}</option>)}
+                        </SelectField>
+                    </div>
+                    <div className="md:col-span-2">
+                        <InputField 
+                            label="Quantidade" 
+                            icon={Hash}
+                            type="text" 
+                            value={quantity} 
+                            onChange={handleQuantityChange} 
+                            error={errors.quantity}
+                            placeholder="0,000" 
+                            inputMode="decimal"
+                            style={{ textAlign: 'right' }}
+                        />
+                    </div>
+                    <div className="md:col-span-2">
+                        <InputField 
+                            label="Valor Unitário" 
+                            icon={DollarSign}
+                            type="text" 
+                            value={formatCurrency(unitValue)} 
+                            onChange={handleCurrencyChange} 
+                            error={errors.unitValue}
+                            inputMode="numeric"
+                            style={{ textAlign: 'right', color: '#059669' }} // Emerald-600
+                        />
+                    </div>
+                    <div className="md:col-span-6">
+                        <SelectField 
+                            label="Classificação Contábil" 
+                            value={type} 
+                            onChange={(e: any) => setType(e.target.value)} 
+                            error={errors.type}
+                        >
+                             {data.types.map(s => <option key={s} value={s}>{s}</option>)}
+                        </SelectField>
+                    </div>
+                </CardSection>
+
+                {submitError && (
+                    <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3 animate-fadeIn">
+                        <div className="bg-red-100 p-2 rounded-full text-red-600">
+                            <AlertCircle size={20} />
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-red-800 text-sm uppercase">Atenção</h4>
+                            <p className="text-red-600 text-sm mt-1 leading-relaxed">{submitError}</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Footer Action */}
+                <div className="hidden md:flex justify-end items-center gap-8 pt-6 border-t border-slate-200">
+                    <div className="text-right">
+                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Estimado</span>
+                        <span className="text-4xl font-black text-slate-800 tracking-tight">{calculateTotal()}</span>
+                    </div>
+                    <button 
+                        disabled={saving} 
+                        type="submit" 
+                        className="group relative bg-heroBlack hover:bg-slate-800 text-white font-bold py-5 px-12 rounded-2xl shadow-xl hover:shadow-2xl transition-all flex items-center gap-4 disabled:opacity-70 disabled:cursor-not-allowed active:scale-95"
+                    >
+                        {saving ? <Loader2 className="animate-spin" size={24}/> : <Save size={24} className="group-hover:scale-110 transition-transform"/>}
+                        <span className="text-lg tracking-wide">FINALIZAR PEDIDO</span>
+                    </button>
                 </div>
 
                 {/* Mobile Sticky Footer */}
-                <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 flex justify-between items-center gap-4 safe-area-pb">
+                <div className="md:hidden fixed bottom-0 left-0 w-full bg-white/90 backdrop-blur-xl border-t border-slate-200 p-4 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-40 flex justify-between items-center gap-4 safe-area-pb">
                     <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total Estimado</span>
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">TOTAL</span>
                         <span className="text-2xl font-black text-slate-800 leading-none">{calculateTotal()}</span>
                     </div>
                     <button 
                         disabled={saving} 
                         type="submit" 
-                        className="flex-1 bg-heroRed text-white font-bold py-3.5 px-4 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+                        className="flex-1 bg-heroRed text-white font-bold py-4 px-4 rounded-2xl shadow-lg shadow-heroRed/30 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
                     >
                         {saving ? <Loader2 className="animate-spin" size={20}/> : <Save size={20}/>}
                         SALVAR
