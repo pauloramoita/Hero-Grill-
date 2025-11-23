@@ -14,7 +14,7 @@ import {
     formatDateBr
 } from '../../services/storageService';
 import { MeatInventoryLog, Order, MeatStockAdjustment, AppData, User } from '../../types';
-import { Save, Loader2, PenTool, X, RefreshCw, Beef } from 'lucide-react';
+import { Save, Loader2, PenTool, X, RefreshCw, Beef, ArrowRight, Scale } from 'lucide-react';
 
 interface ControleCarnesProps {
     user?: User;
@@ -308,42 +308,58 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                     </div>
                 </div>
 
-                {/* --- DESKTOP VIEW (Clean Table) --- */}
+                {/* --- DESKTOP VIEW (Clean Table with Highlights) --- */}
                 <div className="hidden md:block overflow-x-auto">
                     <table className="min-w-full">
-                        <thead className="bg-white">
+                        <thead className="bg-white border-b border-slate-100">
                             <tr>
                                 <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400 w-1/3">Corte</th>
-                                <th className="px-8 py-6 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">Início (KG)</th>
-                                <th className="px-8 py-6 text-center text-[10px] font-black uppercase tracking-widest text-yellow-600 bg-yellow-50 w-1/4">Consumo Hoje</th>
-                                <th className="px-8 py-6 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">Final (KG)</th>
+                                <th className="px-8 py-6 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">Estoque Inicial</th>
+                                {/* Coluna de destaque para o Input */}
+                                <th className="px-8 py-6 text-center text-xs font-black uppercase tracking-widest text-yellow-700 bg-yellow-50 border-x border-yellow-100 w-1/4 shadow-inner">
+                                    CONSUMO HOJE
+                                </th>
+                                <th className="px-8 py-6 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">Estoque Final</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-50">
+                        <tbody className="divide-y divide-slate-100">
                             {inventoryData.map((item, idx) => (
                                 <tr key={item.name} className="hover:bg-slate-50/50 transition-colors group">
-                                    <td className="px-8 py-5 text-sm font-bold text-slate-800">
-                                        {item.name}
+                                    <td className="px-8 py-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-slate-100 rounded-lg text-slate-400 group-hover:text-heroRed transition-colors">
+                                                <Beef size={20} />
+                                            </div>
+                                            <span className="text-sm font-black text-slate-700 uppercase tracking-wide">{item.name}</span>
+                                        </div>
                                     </td>
                                     <td className="px-8 py-5 text-center">
-                                        <span className="font-mono font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg">
-                                            {formatWeight(item.initialStock)}
-                                        </span>
+                                        <div className="inline-flex items-center gap-1 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
+                                            <span className="font-mono font-bold text-slate-600">{formatWeight(item.initialStock)}</span>
+                                            <span className="text-[9px] font-bold text-slate-400">KG</span>
+                                        </div>
                                     </td>
-                                    <td className="px-6 py-3 text-center bg-yellow-50/30">
-                                        <input 
-                                            type="text" 
-                                            value={item.todayConsumptionStr}
-                                            onChange={(e) => handleConsumptionChange(idx, e.target.value)}
-                                            className="w-32 text-center p-2 bg-white border-2 border-transparent hover:border-yellow-200 focus:border-yellow-400 rounded-xl font-black text-slate-800 outline-none font-mono text-lg transition-all placeholder-slate-300 shadow-sm focus:shadow-md"
-                                            placeholder="0,000"
-                                            inputMode="decimal"
-                                        />
+                                    {/* Célula de Input Destacada */}
+                                    <td className="px-6 py-4 text-center bg-yellow-50/30 border-x border-yellow-100/50">
+                                        <div className="relative group/input">
+                                            <input 
+                                                type="text" 
+                                                value={item.todayConsumptionStr}
+                                                onChange={(e) => handleConsumptionChange(idx, e.target.value)}
+                                                className="w-full text-center p-3 bg-white border-2 border-yellow-200 focus:border-yellow-500 rounded-xl font-black text-slate-800 outline-none font-mono text-lg transition-all placeholder-slate-300 shadow-sm focus:shadow-md focus:scale-105"
+                                                placeholder="0,000"
+                                                inputMode="decimal"
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-300 group-focus-within/input:text-yellow-500 transition-colors pointer-events-none">KG</span>
+                                        </div>
                                     </td>
                                     <td className="px-8 py-5 text-center">
-                                        <span className={`font-mono font-black text-lg ${item.finalStock < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                                            {formatWeight(item.finalStock)}
-                                        </span>
+                                        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border ${item.finalStock < 0 ? 'bg-red-50 border-red-100 text-red-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                                            <Scale size={14} />
+                                            <span className="font-mono font-black text-lg">
+                                                {formatWeight(item.finalStock)}
+                                            </span>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -355,43 +371,50 @@ export const ControleCarnes: React.FC<ControleCarnesProps> = ({ user }) => {
                 <div className="md:hidden bg-slate-50 p-4 space-y-4">
                     {inventoryData.map((item, idx) => (
                         <div key={item.name} className="bg-white rounded-[2rem] p-6 shadow-card border border-slate-100 relative overflow-hidden">
-                            <div className="flex justify-between items-start mb-6">
-                                <span className="font-black text-slate-800 text-lg uppercase tracking-tight">{item.name}</span>
-                                <div className="text-right bg-slate-50 px-3 py-1.5 rounded-xl">
+                            <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-50">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-slate-50 rounded-lg text-heroRed">
+                                        <Beef size={20} />
+                                    </div>
+                                    <span className="font-black text-slate-800 text-lg uppercase tracking-tight">{item.name}</span>
+                                </div>
+                                <div className="text-right">
                                     <span className="text-[9px] text-slate-400 font-bold uppercase block tracking-wider">Início</span>
-                                    <span className="font-mono font-bold text-slate-600">{formatWeight(item.initialStock)}</span>
+                                    <span className="font-mono font-bold text-slate-600 text-sm">{formatWeight(item.initialStock)}</span>
                                 </div>
                             </div>
                             
-                            <div className="mb-6">
-                                <label className="block text-[10px] font-bold text-yellow-600 uppercase mb-2 text-center tracking-widest">Consumo Hoje</label>
+                            <div className="mb-6 bg-yellow-50 p-4 rounded-2xl border border-yellow-100">
+                                <label className="block text-[10px] font-black text-yellow-700 uppercase mb-2 text-center tracking-widest">DIGITE O CONSUMO</label>
                                 <div className="relative">
                                     <input 
                                         type="text" 
                                         value={item.todayConsumptionStr}
                                         onChange={(e) => handleConsumptionChange(idx, e.target.value)}
-                                        className="w-full text-center py-4 bg-yellow-50 border-2 border-yellow-200 rounded-2xl font-black text-slate-900 focus:bg-white focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 outline-none font-mono text-3xl transition-all shadow-inner"
+                                        className="w-full text-center py-4 bg-white border-2 border-yellow-300 rounded-xl font-black text-slate-900 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-200 outline-none font-mono text-3xl transition-all shadow-sm"
                                         placeholder="0,000"
                                         inputMode="decimal"
                                     />
                                     {item.todayConsumptionVal > 0 && (
                                         <button 
                                             onClick={() => handleConsumptionChange(idx, '')} 
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 p-2 hover:text-red-500 transition-colors"
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 p-2 hover:text-red-500 transition-colors bg-white rounded-full shadow-sm border border-slate-100"
                                         >
-                                            <X size={24} />
+                                            <X size={18} />
                                         </button>
                                     )}
                                 </div>
                             </div>
 
-                            <div className="flex justify-between items-center pt-4 border-t border-slate-50">
-                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Final</span>
-                                <div className="flex items-baseline gap-1">
-                                    <span className={`font-mono font-black text-2xl ${item.finalStock < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                            <div className="flex justify-between items-center pt-2">
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                    <Scale size={14}/> Estoque Final
+                                </span>
+                                <div className={`flex items-baseline gap-1 px-4 py-2 rounded-xl ${item.finalStock < 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                    <span className="font-mono font-black text-xl">
                                         {formatWeight(item.finalStock)}
                                     </span>
-                                    <span className="text-[10px] font-bold text-slate-300">KG</span>
+                                    <span className="text-[10px] font-bold opacity-60">KG</span>
                                 </div>
                             </div>
                         </div>
