@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Header } from './components/Header';
 import { PedidosModule } from './components/pedidos/PedidosModule';
@@ -17,7 +15,7 @@ import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { SystemMessages } from './components/SystemMessages';
 import { View, User, SystemMessage } from './types';
 import { getSystemMessages } from './services/storageService';
-import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard, Beef, ArrowRight } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, DollarSign, Wallet, Database, Settings, KeyRound, Landmark, LayoutDashboard, Beef, ArrowRight, TrendingUp } from 'lucide-react';
 
 // Constantes para persistência e timeout
 const SESSION_KEY = 'hero_grill_user_session';
@@ -183,16 +181,16 @@ const App: React.FC = () => {
         return user.permissions.modules.includes(moduleId);
     };
 
-    const menuItems: { id: View, label: string, icon: React.ReactNode, bgClass: string, textClass: string, borderClass: string, description: string, requiredPerm: string }[] = [
-        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={28} />, bgClass: 'bg-[#1A1A1A]', textClass: 'text-white', borderClass: 'border-slate-800', description: 'Visão geral e indicadores', requiredPerm: 'dashboard' },
-        { id: 'pedidos', label: 'Pedidos', icon: <ShoppingCart size={28} />, bgClass: 'bg-[#C0392B]', textClass: 'text-white', borderClass: 'border-red-800', description: 'Cadastro e gestão de compras', requiredPerm: 'pedidos' },
-        { id: 'estoque', label: 'Estoque Carnes', icon: <Beef size={28} />, bgClass: 'bg-[#333333]', textClass: 'text-white', borderClass: 'border-slate-600', description: 'Controle de churrasco', requiredPerm: 'estoque' },
-        { id: 'novo_financeiro', label: 'Financeiro', icon: <Landmark size={28} />, bgClass: 'bg-[#A93226]', textClass: 'text-white', borderClass: 'border-red-900', description: 'Fluxo de caixa e lançamentos', requiredPerm: 'novo_financeiro' },
-        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={28} />, bgClass: 'bg-slate-700', textClass: 'text-white', borderClass: 'border-slate-600', description: 'Gestão de conta 043', requiredPerm: 'controle043' },
-        { id: 'emprestimos', label: 'Empréstimos', icon: <Landmark size={28} />, bgClass: 'bg-indigo-700', textClass: 'text-white', borderClass: 'border-indigo-900', description: 'Controle de Empréstimos', requiredPerm: 'emprestimos' },
-        { id: 'saldo', label: 'Saldo Contas', icon: <Wallet size={28} />, bgClass: 'bg-[#E74C3C]', textClass: 'text-white', borderClass: 'border-red-400', description: 'Balanço mensal consolidado', requiredPerm: 'saldo' },
-        { id: 'financeiro', label: 'Entradas/Saídas', icon: <DollarSign size={28} />, bgClass: 'bg-gray-500', textClass: 'text-white', borderClass: 'border-gray-600', description: 'Registro consolidado (Legado)', requiredPerm: 'financeiro' },
-        { id: 'admin', label: 'Admin & Dados', icon: <Settings size={28} />, bgClass: 'bg-gray-200', textClass: 'text-slate-800', borderClass: 'border-gray-300', description: 'Usuários, Backup e SQL', requiredPerm: 'admin' },
+    const menuItems = [
+        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={24} />, bgClass: 'bg-slate-900', accentColor: 'text-slate-900', description: 'Visão geral e indicadores estratégicos.', requiredPerm: 'dashboard' },
+        { id: 'pedidos', label: 'Pedidos de Compra', icon: <ShoppingCart size={24} />, bgClass: 'bg-heroRed', accentColor: 'text-heroRed', description: 'Lançamento de compras e fornecedores.', requiredPerm: 'pedidos' },
+        { id: 'estoque', label: 'Estoque de Carnes', icon: <Beef size={24} />, bgClass: 'bg-amber-600', accentColor: 'text-amber-600', description: 'Controle de consumo diário e perdas.', requiredPerm: 'estoque' },
+        { id: 'novo_financeiro', label: 'Fluxo de Caixa', icon: <Landmark size={24} />, bgClass: 'bg-emerald-600', accentColor: 'text-emerald-600', description: 'Contas a pagar, receber e transferências.', requiredPerm: 'novo_financeiro' },
+        { id: 'controle043', label: 'Controle 043', icon: <ShieldCheck size={24} />, bgClass: 'bg-blue-600', accentColor: 'text-blue-600', description: 'Gestão exclusiva da conta 043.', requiredPerm: 'controle043' },
+        { id: 'emprestimos', label: 'Empréstimos', icon: <TrendingUp size={24} />, bgClass: 'bg-indigo-600', accentColor: 'text-indigo-600', description: 'Controle de mútuos Hero Centro.', requiredPerm: 'emprestimos' },
+        { id: 'saldo', label: 'Saldos Mensais', icon: <Wallet size={24} />, bgClass: 'bg-cyan-600', accentColor: 'text-cyan-600', description: 'Fechamento e consolidação de saldos.', requiredPerm: 'saldo' },
+        { id: 'financeiro', label: 'Financeiro (Legado)', icon: <DollarSign size={24} />, bgClass: 'bg-slate-500', accentColor: 'text-slate-500', description: 'Registro de entradas e saídas antigo.', requiredPerm: 'financeiro' },
+        { id: 'admin', label: 'Administração', icon: <Settings size={24} />, bgClass: 'bg-slate-800', accentColor: 'text-slate-800', description: 'Usuários, backups e configurações.', requiredPerm: 'admin' },
     ];
 
     // Filter for notifications intended for the user and not read
@@ -224,10 +222,12 @@ const App: React.FC = () => {
             <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
                 {currentView === 'home' && !isDashboardOnly ? (
                     <div className="py-10 animate-fadeIn">
-                        <div className="mb-8">
-                            <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Painel Principal</h1>
-                            <p className="text-slate-500 font-medium">
-                                Selecione um módulo abaixo para iniciar.
+                        <div className="mb-10 text-center md:text-left">
+                            <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-2">
+                                Bem-vindo, {user.name.split(' ')[0]}
+                            </h1>
+                            <p className="text-slate-500 font-medium text-sm">
+                                Selecione um módulo para começar suas atividades de hoje.
                             </p>
                         </div>
                         
@@ -235,21 +235,28 @@ const App: React.FC = () => {
                             {menuItems.filter(item => hasPermission(item.requiredPerm)).map(item => (
                                 <button
                                     key={item.id}
-                                    onClick={() => setCurrentView(item.id)}
-                                    className="group relative bg-white rounded-3xl p-6 shadow-card hover:shadow-card-hover transition-all duration-300 border border-slate-100 text-left flex flex-col h-full overflow-hidden active:scale-[0.99]"
+                                    onClick={() => setCurrentView(item.id as View)}
+                                    className="group relative bg-white rounded-[2rem] p-6 shadow-card hover:shadow-card-hover transition-all duration-300 border border-slate-100 text-left flex flex-col h-full overflow-hidden hover:-translate-y-1"
                                 >
-                                    <div className="flex items-start justify-between mb-6">
-                                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg ${item.bgClass} ${item.textClass} border-b-4 ${item.borderClass} transform transition-transform group-hover:rotate-3`}>
+                                    {/* Background Hover Effect */}
+                                    <div className={`absolute inset-0 opacity-0 group-hover:opacity-[0.03] transition-opacity duration-300 ${item.bgClass.replace('bg-', 'bg-current ')}`}></div>
+
+                                    <div className="flex items-start justify-between mb-8">
+                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${item.bgClass} text-white transform transition-transform group-hover:rotate-6 group-hover:scale-110`}>
                                             {item.icon}
                                         </div>
-                                        <div className="bg-slate-50 p-2 rounded-full opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all">
-                                            <ArrowRight size={20} className="text-heroRed" />
+                                        <div className={`bg-slate-50 p-2 rounded-full opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all duration-300 ${item.accentColor}`}>
+                                            <ArrowRight size={20} />
                                         </div>
                                     </div>
                                     
                                     <div className="mt-auto">
-                                        <h3 className="text-xl font-black text-slate-800 group-hover:text-heroRed transition-colors">{item.label}</h3>
-                                        <p className="text-sm text-slate-500 mt-2 leading-relaxed font-medium">{item.description}</p>
+                                        <h3 className="text-lg font-black text-slate-800 group-hover:text-heroRed transition-colors leading-tight mb-2">
+                                            {item.label}
+                                        </h3>
+                                        <p className="text-xs text-slate-400 font-medium leading-relaxed group-hover:text-slate-500 transition-colors">
+                                            {item.description}
+                                        </p>
                                     </div>
                                 </button>
                             ))}
@@ -258,17 +265,20 @@ const App: React.FC = () => {
                                 <div className="col-span-full text-center p-16 bg-white rounded-3xl border-2 border-dashed border-slate-200">
                                     <ShieldCheck size={48} className="mx-auto text-slate-300 mb-4" />
                                     <p className="text-slate-500 font-medium text-lg">Nenhum módulo liberado para seu perfil.</p>
-                                    <p className="text-sm text-slate-400 mt-2">Contate o administrador.</p>
+                                    <p className="text-sm text-slate-400 mt-2">Contate o administrador do sistema.</p>
                                 </div>
                             )}
                         </div>
 
-                         <div className="mt-12 flex justify-center">
+                         <div className="mt-16 flex justify-center">
                             <button 
                                 onClick={() => setShowPasswordModal(true)}
-                                className="text-slate-400 hover:text-heroRed flex items-center gap-2 text-xs font-bold py-3 px-6 rounded-full bg-white border border-slate-100 hover:border-red-100 hover:bg-red-50 transition-all shadow-sm"
+                                className="group flex items-center gap-3 text-xs font-bold py-3 px-6 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-heroRed hover:border-heroRed/30 hover:bg-red-50/50 transition-all shadow-sm"
                             >
-                                <KeyRound size={14} /> Alterar Minha Senha
+                                <div className="p-1.5 bg-slate-100 rounded-full group-hover:bg-white transition-colors">
+                                    <KeyRound size={14} />
+                                </div>
+                                Gerenciar Segurança da Conta
                             </button>
                         </div>
                     </div>
@@ -288,10 +298,10 @@ const App: React.FC = () => {
             </main>
 
             {/* Footer */}
-            <footer className="bg-white border-t border-slate-100 py-8 text-center no-print mt-auto">
+            <footer className="py-8 text-center no-print mt-auto">
                 <div className="max-w-7xl mx-auto px-4">
-                    <p className="text-slate-300 text-[10px] font-black tracking-[0.2em] uppercase">
-                        Hero Grill Self-service &copy; {new Date().getFullYear()}
+                    <p className="text-slate-300 text-[10px] font-black tracking-[0.2em] uppercase hover:text-slate-400 transition-colors cursor-default">
+                        Hero Grill System &copy; {new Date().getFullYear()}
                     </p>
                 </div>
             </footer>

@@ -13,17 +13,11 @@ import {
 import { AppData, Order, DailyTransaction, FinancialAccount, Transaction043, AccountBalance, LoanTransaction, User } from '../../types';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    Cell, ComposedChart, Line, Area
+    Cell, ComposedChart, Line, Area, AreaChart
 } from 'recharts';
 import { 
-    Loader2,
-    Lock,
-    Hammer,
-    AlertCircle,
-    Layers,
-    TrendingUp,
-    TrendingDown,
-    Wallet
+    Loader2, Lock, Hammer, AlertCircle, Layers, TrendingUp, TrendingDown, Wallet, 
+    DollarSign, PieChart, Activity, Building2, ArrowUpRight, ArrowDownRight, LayoutDashboard, ShieldCheck
 } from 'lucide-react';
 
 interface DashboardModuleProps {
@@ -45,58 +39,44 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
 
     const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
     
-    // Sorting State
+    // Sorting & Grouping
     const [sortFixed, setSortFixed] = useState<'alpha' | 'value'>('value');
     const [sortVariable, setSortVariable] = useState<'alpha' | 'value'>('value');
-
-    // Grouping State
     const [groupFixed, setGroupFixed] = useState<'desc' | 'cat' | 'sup'>('desc');
     const [groupVar, setGroupVar] = useState<'prod' | 'cat' | 'sup'>('prod');
 
-    // Determine available stores based on user permissions
+    // Store Selection
     const availableStores = useMemo(() => {
         const allStores = appData?.stores || [];
-        
         if (user.isMaster) return allStores;
-        
-        // Se o usuário tem lojas especificadas, respeita o filtro.
         if (user.permissions?.stores && user.permissions.stores.length > 0) {
             return allStores.filter(s => user.permissions.stores.includes(s));
         }
-        
-        // IMPORTANTE: Para Investidores/Observadores (permissão dashboard apenas),
-        // se a lista de lojas for vazia, assumimos que ele pode ver o CONSOLIDADO (Todas as lojas).
-        return allStores; 
+        return allStores; // Investor/Observer sees all if no restriction
     }, [appData.stores, user]);
 
-    // Initial State for Store Selection
     const [selectedStore, setSelectedStore] = useState('');
 
     useEffect(() => {
         loadData();
     }, []);
 
-    // Força seleção se houver apenas uma loja disponível
     useEffect(() => {
-        if (availableStores.length === 1) {
-            setSelectedStore(availableStores[0]);
-        }
+        if (availableStores.length === 1) setSelectedStore(availableStores[0]);
     }, [availableStores]);
 
     const loadData = async () => {
         setLoading(true);
-        setErrorMsg(null);
         try {
-            const [d, o, acc] = await Promise.all([
+            const [d, o, acc, t, t043, loanData, ab] = await Promise.all([
                 getAppData(),
-                getOrders().catch(e => { console.error('Orders load error', e); return []; }),
-                getFinancialAccounts().catch(e => { console.error('Acc load error', e); return []; }),
+                getOrders().catch(() => []),
+                getFinancialAccounts().catch(() => []),
+                getDailyTransactions().catch(() => []),
+                getTransactions043().catch(() => []),
+                getLoanTransactions().catch(() => []),
+                getAccountBalances().catch(() => [])
             ]);
-            
-            const t = await getDailyTransactions().catch(e => { console.error('Trans load error', e); return []; });
-            const t043 = await getTransactions043().catch(e => { console.error('043 load error', e); return []; });
-            const loanData = await getLoanTransactions().catch(e => { console.error('Loans load error', e); return []; });
-            const ab = await getAccountBalances().catch(e => { console.error('Balances load error', e); return []; });
 
             setAppData(d);
             setOrders(o);
@@ -106,8 +86,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
             setLoans(loanData);
             setAccountBalances(ab);
         } catch (error: any) {
-            console.error("Critical Dashboard Error", error);
-            setErrorMsg(error.message || 'Erro desconhecido ao carregar dados.');
+            setErrorMsg(error.message || 'Erro ao carregar dados.');
         } finally {
             setLoading(false);
         }
@@ -115,42 +94,14 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
 
     const filterStore = (storeName: string | null | undefined) => !selectedStore || storeName === selectedStore;
 
-    const toggleFixedGroup = () => {
-        const modes: ('desc' | 'cat' | 'sup')[] = ['desc', 'cat', 'sup'];
-        const next = modes[(modes.indexOf(groupFixed) + 1) % modes.length];
-        setGroupFixed(next);
-    };
-
-    const toggleVarGroup = () => {
-        const modes: ('prod' | 'cat' | 'sup')[] = ['prod', 'cat', 'sup'];
-        const next = modes[(modes.indexOf(groupVar) + 1) % modes.length];
-        setGroupVar(next);
-    };
-
-    const getGroupLabel = (mode: string) => {
-        switch(mode) {
-            case 'desc': return 'Descrição';
-            case 'prod': return 'Produto';
-            case 'cat': return 'Categoria';
-            case 'sup': return 'Fornecedor';
-            default: return 'Item';
-        }
-    };
-
-    // --- KPIs Calculations ---
-
-    const calculateFinancialMetrics = () => {
-        // Safety check
+    const calculateMetrics = () => {
         if (!transactions || !orders) return { totalRevenues: 0, totalFixed: 0, totalVariable: 0, netResult: 0 };
 
         const periodTransactions = transactions.filter(t => 
-            t.date && t.date.startsWith(currentMonth) && 
-            filterStore(t.store)
+            t.date && t.date.startsWith(currentMonth) && filterStore(t.store)
         );
-        
         const periodOrders = orders.filter(o => 
-            o.date && o.date.startsWith(currentMonth) && 
-            filterStore(o.store)
+            o.date && o.date.startsWith(currentMonth) && filterStore(o.store)
         );
 
         const totalRevenues = periodTransactions
@@ -165,34 +116,23 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
             .filter(t => t.type === 'Despesa' && t.classification !== 'Fixa' && t.classification !== 'Fixo')
             .reduce((acc, t) => acc + (t.value || 0), 0);
             
-        const variableOrders = periodOrders
-            .reduce((acc, o) => acc + (o.totalValue || 0), 0);
+        const variableOrders = periodOrders.reduce((acc, o) => acc + (o.totalValue || 0), 0);
 
         const totalVariable = variableTrans + variableOrders;
         const netResult = totalRevenues - (totalFixed + totalVariable);
 
-        return {
-            totalRevenues,
-            totalFixed,
-            totalVariable,
-            netResult
-        };
+        return { totalRevenues, totalFixed, totalVariable, netResult };
     };
 
     const calculateTotalBalance = () => {
-        if (!accounts) return 0;
         let total = 0;
-        // Only sum accounts that match the store filter
         const accountsToSum = accounts.filter(a => filterStore(a.store));
-
         accountsToSum.forEach(acc => {
             let bal = acc.initialBalance || 0;
-            const accTrans = transactions.filter(t => t.status === 'Pago');
-            accTrans.forEach(t => {
+            transactions.filter(t => t.status === 'Pago').forEach(t => {
                 if (t.accountId === acc.id) {
                     if (t.type === 'Receita') bal += t.value;
-                    else if (t.type === 'Despesa') bal -= t.value;
-                    else if (t.type === 'Transferência') bal -= t.value;
+                    else if (t.type === 'Despesa' || t.type === 'Transferência') bal -= t.value;
                 }
                 if (t.type === 'Transferência' && t.destinationAccountId === acc.id) {
                     bal += t.value;
@@ -203,177 +143,10 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
         return total;
     };
 
-    const getStorePerformance = () => {
-        const storeStats: Record<string, { sales: number, expenses: number }> = {};
-        
-        // Init stores
-        availableStores.forEach(s => {
-            storeStats[s] = { sales: 0, expenses: 0 };
-        });
-
-        // Se nenhuma loja estiver disponível (caso raro de erro), evita crash
-        if (availableStores.length === 0 && selectedStore) {
-             storeStats[selectedStore] = { sales: 0, expenses: 0 };
-        }
-
-        transactions
-            .filter(t => t.date && t.date.startsWith(currentMonth) && t.type === 'Receita' && filterStore(t.store))
-            .forEach(t => {
-                if (!storeStats[t.store]) storeStats[t.store] = { sales: 0, expenses: 0 };
-                storeStats[t.store].sales += (t.value || 0);
-            });
-
-        transactions
-            .filter(t => t.date && t.date.startsWith(currentMonth) && t.type === 'Despesa' && filterStore(t.store))
-            .forEach(t => {
-                if (!storeStats[t.store]) storeStats[t.store] = { sales: 0, expenses: 0 };
-                storeStats[t.store].expenses += (t.value || 0);
-            });
-
-        orders
-            .filter(o => o.date && o.date.startsWith(currentMonth) && filterStore(o.store))
-            .forEach(o => {
-                if (!storeStats[o.store]) storeStats[o.store] = { sales: 0, expenses: 0 };
-                storeStats[o.store].expenses += (o.totalValue || 0);
-            });
-
-        return Object.entries(storeStats)
-            .map(([store, stats]) => ({
-                store,
-                sales: stats.sales,
-                expenses: stats.expenses,
-                result: stats.sales - stats.expenses
-            }))
-            .sort((a, b) => b.sales - a.sales);
-    };
-
-    const getExpenseLists = () => {
-        const periodTransactions = transactions.filter(t => 
-            t.date && t.date.startsWith(currentMonth) && 
-            filterStore(t.store) &&
-            t.type === 'Despesa'
-        );
-        
-        const periodOrders = orders.filter(o => 
-            o.date && o.date.startsWith(currentMonth) && 
-            filterStore(o.store)
-        );
-
-        // --- FIXED EXPENSES ---
-        const fixedList = periodTransactions
-            .filter(t => t.classification === 'Fixa' || t.classification === 'Fixo')
-            .map(t => {
-                let name = 'N/D';
-                if (groupFixed === 'cat') name = t.category || 'Sem Categoria';
-                else if (groupFixed === 'sup') name = t.supplier || 'Sem Fornecedor';
-                else name = t.description || t.category || 'Sem Descrição';
-                
-                return { name, value: t.value || 0 };
-            });
-
-        // --- VARIABLE EXPENSES ---
-        // 1. From Transactions
-        const variableTransList = periodTransactions
-            .filter(t => t.classification !== 'Fixa' && t.classification !== 'Fixo')
-            .map(t => {
-                let name = 'N/D';
-                if (groupVar === 'cat') name = t.category || 'Sem Categoria';
-                else if (groupVar === 'sup') name = t.supplier || 'Sem Fornecedor';
-                else name = t.product || t.description || t.category || 'Sem Descrição';
-
-                return { name, value: t.value || 0 };
-            });
-
-        // 2. From Orders (Implicitly Variable)
-        const variableOrdersList = periodOrders
-            .map(o => {
-                let name = 'N/D';
-                if (groupVar === 'cat') name = o.category || 'Sem Categoria';
-                else if (groupVar === 'sup') name = o.supplier || 'Sem Fornecedor';
-                else name = o.product || 'Produto Sem Nome';
-
-                return { name, value: o.totalValue || 0 };
-            });
-
-        const fullVariableList = [...variableTransList, ...variableOrdersList];
-
-        // Grouping Function
-        const groupAndSum = (list: any[]) => {
-            const grouped: Record<string, number> = {};
-            list.forEach(item => {
-                grouped[item.name] = (grouped[item.name] || 0) + item.value;
-            });
-            return Object.entries(grouped).map(([name, value]) => ({ name, value }));
-        };
-
-        const groupedFixed = groupAndSum(fixedList);
-        const groupedVariable = groupAndSum(fullVariableList);
-
-        // Sort Function
-        const sortFn = (type: 'alpha' | 'value') => (a: any, b: any) => {
-            if (type === 'value') return b.value - a.value;
-            return a.name.localeCompare(b.name);
-        };
-
-        return {
-            fixed: groupedFixed.sort(sortFn(sortFixed)),
-            variable: groupedVariable.sort(sortFn(sortVariable))
-        };
-    };
-
-    const get043History = () => {
-        const relevant = transactions043.filter(t => 
-            filterStore(t.store) && t.date.slice(0, 7) <= currentMonth
-        );
-        const grouped: Record<string, { credit: number, debit: number }> = {};
-        
-        relevant.forEach(t => {
-            const key = t.date.slice(0, 7);
-            if (!grouped[key]) grouped[key] = { credit: 0, debit: 0 };
-            if (t.type === 'CREDIT') grouped[key].credit += t.value;
-            if (t.type === 'DEBIT') grouped[key].debit += t.value;
-        });
-
-        const sortedKeys = Object.keys(grouped).sort();
-        const last12Keys = sortedKeys.slice(-12);
-
-        return last12Keys.map(key => {
-            const [y, m] = key.split('-');
-            return { name: `${m}/${y}`, Credito: grouped[key].credit, Debito: grouped[key].debit };
-        });
-    };
-
-    const getSaldosHistory = () => {
-        const relevant = accountBalances.filter(b => {
-            const key = `${b.year}-${b.month}`;
-            return filterStore(b.store) && key <= currentMonth;
-        });
-        const grouped: Record<string, number> = {};
-        relevant.forEach(b => {
-            const key = `${b.year}-${b.month}`;
-            if (!grouped[key]) grouped[key] = 0;
-            grouped[key] += b.totalBalance;
-        });
-
-        const sortedKeys = Object.keys(grouped).sort();
-        const last12Keys = sortedKeys.slice(-12);
-
-        return last12Keys.map(key => {
-            const [y, m] = key.split('-');
-            return { name: `${m}/${y}`, value: grouped[key] };
-        });
-    };
-
-    // New Chart Logic for Hero Centro Loans
     const getLoansHistory = () => {
-        // All loans are implicitly for Hero Centro in the context of this module
-        // Filter loans that happened ON or BEFORE the currentMonth
         const relevant = loans.filter(l => l.date.slice(0, 7) <= currentMonth);
-        
-        // Generate range of last 12 months [Oldest ... Newest]
         const dates = [];
         const d = new Date(currentMonth + '-01');
-        // Adjust timezone to ensure we don't skip a month due to UTC conversion
         d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
         
         for (let i = 0; i < 12; i++) {
@@ -383,311 +156,287 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ user }) => {
             d.setMonth(d.getMonth() - 1);
         }
         
-        // rangeKeys contains ["2024-12", "2025-01", ..., "2025-11"] (Oldest to Newest)
-        const rangeKeys = dates; 
-        const startDate = rangeKeys[0]; // The oldest month in our chart
-
-        // 1. Calculate Cumulative Balance EXISTING *BEFORE* the start date of the chart.
-        // CREDIT (Entrada/Recebimento) increases Debt (Money owed to Hero Centro increases)
-        // DEBIT (Saída/Pagamento) decreases Debt (Money paid back to Hero Centro)
-        // *Based on User feedback: "Saldo Devedor de Empréstimo"*
+        const startDate = dates[0];
         let cumulativeBalance = relevant
             .filter(l => l.date.slice(0, 7) < startDate)
-            .reduce((acc, l) => {
-                if (l.type === 'CREDIT') return acc + l.value;
-                if (l.type === 'DEBIT') return acc - l.value;
-                return acc;
-            }, 0);
+            .reduce((acc, l) => l.type === 'CREDIT' ? acc + l.value : acc - l.value, 0);
 
-        // 2. Iterate forward through the months to build the chart data
-        const data = rangeKeys.map(key => {
+        return dates.map(key => {
             const monthLoans = relevant.filter(l => l.date.slice(0, 7) === key);
+            const credit = monthLoans.filter(l => l.type === 'CREDIT').reduce((acc, l) => acc + l.value, 0);
+            const debit = monthLoans.filter(l => l.type === 'DEBIT').reduce((acc, l) => acc + l.value, 0);
             
-            const monthlyCredit = monthLoans.filter(l => l.type === 'CREDIT').reduce((acc, l) => acc + l.value, 0);
-            const monthlyDebit = monthLoans.filter(l => l.type === 'DEBIT').reduce((acc, l) => acc + l.value, 0);
-            
-            // Update running balance
-            cumulativeBalance = cumulativeBalance + monthlyCredit - monthlyDebit;
-
+            cumulativeBalance = cumulativeBalance + credit - debit;
             const [y, m] = key.split('-');
-            return {
-                name: `${m}/${y}`,
-                Entrada: monthlyCredit,
-                Saida: monthlyDebit,
-                SaldoDevedor: cumulativeBalance
-            };
+            return { name: `${m}/${y}`, Entrada: credit, Saida: debit, SaldoDevedor: cumulativeBalance };
         });
-
-        return data;
     };
 
-    const metrics = calculateFinancialMetrics();
+    const get043History = () => {
+        const relevant = transactions043.filter(t => filterStore(t.store) && t.date.slice(0, 7) <= currentMonth);
+        const grouped: Record<string, { credit: number, debit: number }> = {};
+        relevant.forEach(t => {
+            const key = t.date.slice(0, 7);
+            if (!grouped[key]) grouped[key] = { credit: 0, debit: 0 };
+            if (t.type === 'CREDIT') grouped[key].credit += t.value;
+            if (t.type === 'DEBIT') grouped[key].debit += t.value;
+        });
+        return Object.keys(grouped).sort().slice(-12).map(key => {
+            const [y, m] = key.split('-');
+            return { name: `${m}/${y}`, Credito: grouped[key].credit, Debito: grouped[key].debit };
+        });
+    };
+
+    const getSaldosHistory = () => {
+        const relevant = accountBalances.filter(b => filterStore(b.store) && `${b.year}-${b.month}` <= currentMonth);
+        const grouped: Record<string, number> = {};
+        relevant.forEach(b => {
+            const key = `${b.year}-${b.month}`;
+            grouped[key] = (grouped[key] || 0) + b.totalBalance;
+        });
+        return Object.keys(grouped).sort().slice(-12).map(key => {
+            const [y, m] = key.split('-');
+            return { name: `${m}/${y}`, value: grouped[key] };
+        });
+    };
+
+    const getStorePerformance = () => {
+        const stats: Record<string, { sales: number, expenses: number }> = {};
+        availableStores.forEach(s => stats[s] = { sales: 0, expenses: 0 });
+        if (availableStores.length === 0 && selectedStore) stats[selectedStore] = { sales: 0, expenses: 0 };
+
+        const filter = (t: any) => t.date && t.date.startsWith(currentMonth) && filterStore(t.store);
+        
+        transactions.filter(t => filter(t) && t.type === 'Receita').forEach(t => stats[t.store].sales += t.value);
+        transactions.filter(t => filter(t) && t.type === 'Despesa').forEach(t => stats[t.store].expenses += t.value);
+        orders.filter(o => filter(o)).forEach(o => stats[o.store].expenses += o.totalValue);
+
+        return Object.entries(stats).map(([store, s]) => ({
+            store, sales: s.sales, expenses: s.expenses, result: s.sales - s.expenses
+        })).sort((a, b) => b.sales - a.sales);
+    };
+
+    const metrics = calculateMetrics();
     const totalBalance = calculateTotalBalance();
-    const storePerformance = getStorePerformance();
-    const expenseLists = getExpenseLists();
+    const dataLoans = getLoansHistory();
     const data043 = get043History();
     const dataSaldos = getSaldosHistory();
-    const dataLoans = getLoansHistory();
+    const storePerf = getStorePerformance();
 
-    const tabs = [
-        { id: 'geral', label: 'GERAL', disabled: false },
-        { id: 'vendas', label: 'VENDAS', disabled: true, subtitle: 'Em Construção' },
-        { id: 'compras', label: 'COMPRAS', disabled: true, subtitle: 'Em Construção' },
-        { id: 'comparativo', label: 'COMPARATIVO', disabled: true, subtitle: 'Em Construção' },
-        { id: 'fechamento', label: 'FECHAMENTO MÊS', disabled: true, subtitle: 'Em Construção' },
-    ];
+    if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-heroRed" size={48}/></div>;
 
-    if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin w-12 h-12 text-heroRed"/></div>;
-    if (errorMsg) return <div className="p-8 text-center text-red-600 font-bold"><AlertCircle className="mx-auto mb-2"/>{errorMsg}</div>;
+    // --- Components ---
+    
+    const KpiCard = ({ title, value, colorClass, icon: Icon, trend }: any) => (
+        <div className="bg-white rounded-3xl p-6 shadow-card border border-slate-100 flex flex-col justify-between h-36 hover:shadow-card-hover transition-all duration-300 group">
+            <div className="flex justify-between items-start">
+                <div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">{title}</p>
+                    <h3 className={`text-2xl font-black tracking-tight ${colorClass} break-all`}>{value}</h3>
+                </div>
+                <div className={`p-3 rounded-2xl ${colorClass.includes('green') ? 'bg-green-50 text-green-600' : colorClass.includes('red') ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-600'} group-hover:scale-110 transition-transform`}>
+                    <Icon size={24} />
+                </div>
+            </div>
+            {trend && (
+                <div className="flex items-center gap-1 text-xs font-bold mt-2">
+                    {trend === 'up' ? <ArrowUpRight className="text-green-500" size={16}/> : <ArrowDownRight className="text-red-500" size={16}/>}
+                    <span className="text-slate-400">vs mês anterior</span>
+                </div>
+            )}
+        </div>
+    );
 
     return (
-        <div className="max-w-7xl mx-auto p-4 space-y-6 animate-fadeIn">
-             <div className="flex items-center justify-center mb-6">
-                <h1 className="text-2xl font-black text-gray-700 uppercase">DASHBOARD GERENCIAL</h1>
-            </div>
-
-            {/* Tabs Navigation */}
-            <div className="flex flex-wrap justify-center gap-3 mb-8 border-b border-gray-200 pb-4">
-                {tabs.map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => !tab.disabled && setActiveTab(tab.id)}
-                        disabled={tab.disabled}
-                        className={`relative px-6 py-3 rounded-lg font-bold text-sm transition-all uppercase tracking-wide flex flex-col items-center min-w-[140px] ${
-                            activeTab === tab.id 
-                            ? 'bg-heroBlack text-white shadow-lg transform scale-105 z-10' 
-                            : tab.disabled 
-                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
-                                : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200 hover:shadow-sm'
-                        }`}
-                    >
-                        <div className="flex items-center gap-2">
-                            {tab.disabled && <Lock size={12} className="text-gray-400"/>}
-                            {tab.label}
-                        </div>
-                        {tab.disabled && (
-                            <span className="text-[8px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full mt-1 font-black tracking-wider flex items-center gap-1">
-                                <Hammer size={8} /> EM CONSTRUÇÃO
-                            </span>
-                        )}
-                    </button>
-                ))}
-            </div>
-
-            {/* Content - GERAL */}
-            {activeTab === 'geral' && (
-                <div className="animate-fadeIn">
-                    {/* Top Filters */}
-                    <div className="flex justify-end gap-4 mb-6 bg-white p-3 rounded-lg shadow-sm border border-gray-100">
+        <div className="max-w-7xl mx-auto p-2 sm:p-4 space-y-8 animate-fadeIn pb-20">
+            {/* Header & Filters */}
+            <div className="flex flex-col md:flex-row justify-between items-center gap-6 bg-white p-6 rounded-[2rem] shadow-card border border-slate-100">
+                <div className="text-center md:text-left">
+                    <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-3">
+                        <LayoutDashboard className="text-heroRed" /> Dashboard Gerencial
+                    </h1>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Visão Estratégica do Negócio</p>
+                </div>
+                <div className="flex flex-wrap gap-3 justify-center">
+                    <div className="relative group">
+                        <Building2 size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-heroRed transition-colors" />
                         <select 
                             value={selectedStore} 
                             onChange={(e) => setSelectedStore(e.target.value)}
-                            className={`bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-heroRed focus:border-heroRed block p-2.5 ${availableStores.length === 1 ? 'cursor-not-allowed bg-gray-100 text-gray-500' : ''}`}
+                            className="pl-10 pr-10 py-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-slate-700 focus:ring-2 focus:ring-heroRed/20 cursor-pointer hover:bg-slate-100 transition-all appearance-none"
                             disabled={availableStores.length === 1}
                         >
-                             {availableStores.length !== 1 && <option value="">Todas as Lojas</option>}
+                            {availableStores.length !== 1 && <option value="">Todas as Lojas</option>}
                             {availableStores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
-                        <input 
-                            type="month" 
-                            value={currentMonth}
-                            onChange={(e) => setCurrentMonth(e.target.value)}
-                            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-heroRed focus:border-heroRed block p-2.5"
-                        />
                     </div>
+                    <input 
+                        type="month" 
+                        value={currentMonth}
+                        onChange={(e) => setCurrentMonth(e.target.value)}
+                        className="py-3 px-4 bg-slate-50 border-none rounded-xl font-bold text-sm text-slate-700 focus:ring-2 focus:ring-heroRed/20 cursor-pointer hover:bg-slate-100 transition-all outline-none"
+                    />
+                </div>
+            </div>
 
-                    {/* 1. KPI Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-                        <div className="bg-[#1A1A1A] text-white p-4 rounded-lg shadow-lg flex flex-col justify-center h-32">
-                            <p className="text-xs font-bold uppercase opacity-70">SALDO TOTAL (ACUMULADO)</p>
-                            <h3 className="text-2xl font-black mt-1 break-words">{formatCurrency(totalBalance)}</h3>
-                        </div>
-                        <div className="bg-[#C0392B] text-white p-4 rounded-lg shadow-lg flex flex-col justify-center h-32">
-                            <p className="text-xs font-bold uppercase opacity-70">VENDAS MÊS</p>
-                            <h3 className="text-2xl font-black mt-1 break-words">{formatCurrency(metrics.totalRevenues)}</h3>
-                        </div>
-                        <div className="bg-white text-gray-800 p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-center h-32">
-                            <p className="text-xs font-bold text-gray-500 uppercase">DESPESAS FIXAS</p>
-                            <h3 className="text-2xl font-black mt-1 text-heroBlack break-words">{formatCurrency(metrics.totalFixed)}</h3>
-                        </div>
-                        <div className="bg-white text-gray-800 p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-center h-32">
-                            <p className="text-xs font-bold text-gray-500 uppercase">DESP. VARIÁVEIS</p>
-                            <h3 className="text-2xl font-black mt-1 text-heroBlack break-words">{formatCurrency(metrics.totalVariable)}</h3>
-                        </div>
-                        <div className="bg-white p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-center h-32">
-                            <p className="text-xs font-bold text-gray-500 uppercase">LUCRO LÍQUIDO</p>
-                            <h3 className={`text-2xl font-black mt-1 break-words ${metrics.netResult >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {formatCurrency(metrics.netResult)}
+            {/* KPI Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                <KpiCard 
+                    title="Saldo Acumulado" 
+                    value={formatCurrency(totalBalance)} 
+                    colorClass={totalBalance >= 0 ? "text-emerald-600" : "text-red-600"} 
+                    icon={Wallet} 
+                />
+                <KpiCard 
+                    title="Vendas do Mês" 
+                    value={formatCurrency(metrics.totalRevenues)} 
+                    colorClass="text-blue-600" 
+                    icon={TrendingUp} 
+                />
+                <KpiCard 
+                    title="Despesas Fixas" 
+                    value={formatCurrency(metrics.totalFixed)} 
+                    colorClass="text-slate-700" 
+                    icon={Lock} 
+                />
+                <KpiCard 
+                    title="Desp. Variáveis" 
+                    value={formatCurrency(metrics.totalVariable)} 
+                    colorClass="text-amber-600" 
+                    icon={Activity} 
+                />
+                <div className={`bg-gradient-to-br ${metrics.netResult >= 0 ? 'from-emerald-500 to-teal-600' : 'from-red-500 to-rose-600'} rounded-3xl p-6 shadow-lg text-white flex flex-col justify-between h-36 relative overflow-hidden group`}>
+                    <div className="absolute top-0 right-0 p-4 opacity-20 transform group-hover:scale-110 transition-transform">
+                        <DollarSign size={64} />
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Lucro Líquido</p>
+                        <h3 className="text-3xl font-black mt-1 tracking-tight">{formatCurrency(metrics.netResult)}</h3>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-bold bg-white/20 w-fit px-3 py-1 rounded-full backdrop-blur-sm">
+                        {metrics.netResult >= 0 ? 'Lucro' : 'Prejuízo'} Operacional
+                    </div>
+                </div>
+            </div>
+
+            {/* Store Performance Table */}
+            <div className="bg-white rounded-3xl shadow-card border border-slate-100 overflow-hidden">
+                <div className="p-6 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+                    <h3 className="font-black text-slate-700 uppercase text-sm tracking-wider flex items-center gap-2">
+                        <Layers size={18} className="text-heroRed"/> Desempenho por Loja
+                    </h3>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                        <thead>
+                            <tr className="bg-white border-b border-slate-100">
+                                <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Unidade</th>
+                                <th className="px-6 py-4 text-right text-[10px] font-black text-emerald-600 uppercase tracking-widest">Vendas</th>
+                                <th className="px-6 py-4 text-right text-[10px] font-black text-red-600 uppercase tracking-widest">Despesas</th>
+                                <th className="px-6 py-4 text-right text-[10px] font-black text-blue-600 uppercase tracking-widest">Resultado</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {storePerf.map((item) => (
+                                <tr key={item.store} className="hover:bg-slate-50/80 transition-colors group">
+                                    <td className="px-6 py-4 text-sm font-bold text-slate-700 group-hover:text-heroBlack transition-colors">{item.store}</td>
+                                    <td className="px-6 py-4 text-sm text-right font-mono font-medium text-emerald-600 bg-emerald-50/30">{formatCurrency(item.sales)}</td>
+                                    <td className="px-6 py-4 text-sm text-right font-mono font-medium text-red-600 bg-red-50/30">{formatCurrency(item.expenses)}</td>
+                                    <td className={`px-6 py-4 text-sm text-right font-mono font-black ${item.result >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                                        {formatCurrency(item.result)}
+                                    </td>
+                                </tr>
+                            ))}
+                            {storePerf.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-slate-400 text-sm font-medium">Sem dados para o período.</td></tr>}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Charts Section */}
+            {selectedStore === 'Hero Centro' ? (
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-card border border-indigo-100 relative overflow-hidden">
+                    <div className="flex justify-between items-center mb-8 relative z-10">
+                        <div>
+                            <h3 className="text-xl font-black text-indigo-900 flex items-center gap-2">
+                                <Wallet className="text-indigo-600"/> Evolução de Empréstimos
                             </h3>
+                            <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest mt-1">Hero Centro &bull; Últimos 12 Meses</p>
+                        </div>
+                    </div>
+                    <div className="h-80 w-full relative z-10">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={dataLoans} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="colorCredit" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
+                                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="name" tick={{fontSize: 10, fontWeight: 'bold', fill: '#94a3b8'}} axisLine={false} tickLine={false} dy={10} />
+                                <YAxis yAxisId="left" tickFormatter={(v) => `${v/1000}k`} tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
+                                <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${v/1000}k`} tick={{fontSize: 10, fill: '#6366f1'}} axisLine={false} tickLine={false} />
+                                <Tooltip 
+                                    contentStyle={{backgroundColor: '#fff', borderRadius: '16px', border: 'none', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.1)'}}
+                                    itemStyle={{fontWeight: 'bold', fontSize: '12px'}}
+                                    formatter={(value: number) => formatCurrency(value)}
+                                />
+                                <Legend iconType="circle" />
+                                <Bar yAxisId="left" dataKey="Entrada" name="Novos Empréstimos" fill="url(#colorCredit)" barSize={20} radius={[6, 6, 0, 0]} />
+                                <Bar yAxisId="left" dataKey="Saida" name="Pagamentos" fill="#EF4444" barSize={20} radius={[6, 6, 0, 0]} />
+                                <Line yAxisId="right" type="monotone" dataKey="SaldoDevedor" name="Saldo Devedor" stroke="#6366f1" strokeWidth={4} dot={{r: 0}} activeDot={{r: 6, strokeWidth: 0}} />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Controle 043 Chart */}
+                    <div className="bg-white p-8 rounded-[2.5rem] shadow-card border border-slate-100">
+                        <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">
+                            <ShieldCheck className="text-heroRed" size={20}/> Controle 043 <span className="text-slate-300 text-xs font-bold uppercase tracking-wide ml-auto">12 Meses</span>
+                        </h3>
+                        <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={data043}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="name" tick={{fontSize: 10, fill: '#cbd5e1', fontWeight: 'bold'}} axisLine={false} tickLine={false} />
+                                    <Tooltip 
+                                        cursor={{fill: '#f8fafc'}}
+                                        contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.05)'}}
+                                        formatter={(value: number) => formatCurrency(value)}
+                                    />
+                                    <Bar dataKey="Credito" fill="#10B981" radius={[4, 4, 0, 0]} barSize={12} name="Crédito" />
+                                    <Bar dataKey="Debito" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={12} name="Débito" />
+                                </BarChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
 
-                    {/* 2. Desempenho por Loja */}
-                    <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden mb-6">
-                        <div className="p-4 bg-gray-50 border-b border-gray-200">
-                            <h3 className="text-gray-700 font-bold uppercase text-sm">DESEMPENHO POR LOJA (Mês Atual)</h3>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-white">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">LOJA</th>
-                                        <th className="px-6 py-3 text-right text-xs font-bold text-green-600 uppercase">VENDAS</th>
-                                        <th className="px-6 py-3 text-right text-xs font-bold text-red-600 uppercase">DESPESAS</th>
-                                        <th className="px-6 py-3 text-right text-xs font-bold text-blue-600 uppercase">RESULTADO</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {storePerformance.map((item) => (
-                                        <tr key={item.store} className="hover:bg-gray-50">
-                                            <td className="px-6 py-3 text-sm font-bold text-gray-800">{item.store}</td>
-                                            <td className="px-6 py-3 text-sm text-right font-mono text-green-700">{formatCurrency(item.sales)}</td>
-                                            <td className="px-6 py-3 text-sm text-right font-mono text-red-700">{formatCurrency(item.expenses)}</td>
-                                            <td className={`px-6 py-3 text-sm text-right font-mono font-bold ${item.result >= 0 ? 'text-blue-800' : 'text-red-800'}`}>
-                                                {formatCurrency(item.result)}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {storePerformance.length === 0 && <tr><td colSpan={4} className="p-4 text-center text-gray-500">Sem dados para o período.</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {/* 3. Charts Section (Last 12 Months) */}
-                    {selectedStore === 'Hero Centro' ? (
-                        // Hero Centro Special Loan Chart
-                        <div className="bg-white p-6 rounded-lg shadow border border-indigo-100 mb-6">
-                            <h3 className="text-indigo-900 font-bold uppercase text-sm mb-4 border-b pb-2 border-indigo-50 flex items-center gap-2">
-                                <Wallet size={18} className="text-indigo-600"/> EVOLUÇÃO DE EMPRÉSTIMOS (HERO CENTRO)
-                            </h3>
-                            <div className="h-80 w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <ComposedChart data={dataLoans} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
-                                        <XAxis dataKey="name" tick={{fontSize: 10}} />
-                                        <YAxis 
-                                            yAxisId="left"
-                                            tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)} 
-                                            tick={{fontSize: 11}}
-                                        />
-                                        <YAxis 
-                                            yAxisId="right" 
-                                            orientation="right"
-                                            tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)}
-                                            tick={{fontSize: 11, fill: '#4f46e5'}}
-                                        />
-                                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                                        <Legend wrapperStyle={{ paddingTop: '10px' }} />
-                                        
-                                        <Bar yAxisId="left" dataKey="Entrada" name="Novos Empréstimos" fill="#10B981" barSize={15} radius={[4, 4, 0, 0]} />
-                                        <Bar yAxisId="left" dataKey="Saida" name="Pagamentos" fill="#EF4444" barSize={15} radius={[4, 4, 0, 0]} />
-                                        <Line yAxisId="right" type="monotone" dataKey="SaldoDevedor" name="Saldo Devedor Total" stroke="#4f46e5" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
-                                    </ComposedChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-                    ) : (
-                        // Standard Charts for Other Stores
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                            {/* Controle 043 */}
-                            <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                                <h3 className="text-heroBlack font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">CONTROLE 043 (Últimos 12 Meses)</h3>
-                                <div className="h-64 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={data043}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                            <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} />
-                                            <YAxis 
-                                                tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)} 
-                                                tick={{fontSize: 11}}
-                                            />
-                                            <Tooltip 
-                                                formatter={(value: number) => formatCurrency(value)}
-                                                cursor={{fill: 'transparent'}} 
-                                            />
-                                            <Legend />
-                                            <Bar dataKey="Credito" name="Crédito" fill="#2ECC71" barSize={20} radius={[4, 4, 0, 0]} />
-                                            <Bar dataKey="Debito" name="Débito" fill="#C0392B" barSize={20} radius={[4, 4, 0, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-
-                            {/* Saldo de Contas */}
-                            <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                                <h3 className="text-heroBlack font-bold uppercase text-sm mb-4 border-b pb-2 border-gray-100">SALDO DE CONTAS (Últimos 12 Meses)</h3>
-                                <div className="h-64 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={dataSaldos}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                            <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} />
-                                            <YAxis 
-                                                tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)} 
-                                                tick={{fontSize: 11}}
-                                            />
-                                            <Tooltip 
-                                                formatter={(value: number) => formatCurrency(value)}
-                                                cursor={{fill: 'rgba(0,0,0,0.05)'}} 
-                                            />
-                                            <Bar dataKey="value" name="Saldo Total" barSize={40} radius={[4, 4, 0, 0]}>
-                                                {dataSaldos.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.value >= 0 ? '#1A1A1A' : '#C0392B'} />
-                                                ))}
-                                            </Bar>
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 4. Detailed Tables */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Despesas Fixas List */}
-                        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-gray-600 font-bold uppercase text-sm">DESPESAS FIXAS (Mês Atual)</h3>
-                                <div className="flex gap-2">
-                                    <button onClick={toggleFixedGroup} className="text-xs border px-2 py-1 rounded hover:bg-gray-50 flex items-center gap-1" title="Agrupar Por">
-                                        <Layers size={12} /> {getGroupLabel(groupFixed)}
-                                    </button>
-                                    <button onClick={() => setSortFixed(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded hover:bg-gray-50">
-                                        {sortFixed === 'value' ? 'Ordenar: Valor' : 'Ordenar: A-Z'}
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="max-h-64 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-                                {expenseLists.fixed.length > 0 ? expenseLists.fixed.map((item, idx) => (
-                                    <div key={idx} className="flex justify-between text-sm border-b border-gray-50 pb-1 hover:bg-gray-50">
-                                        <span className="text-gray-600 truncate flex-1 mr-2">{item.name}</span>
-                                        <span className="font-bold text-gray-800">{formatCurrency(item.value)}</span>
-                                    </div>
-                                )) : <p className="text-center text-gray-400 text-xs py-4">Nenhuma despesa fixa no período.</p>}
-                            </div>
-                        </div>
-
-                        {/* Despesas Variáveis List */}
-                        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-gray-600 font-bold uppercase text-sm">DESPESAS VARIÁVEIS (Mês Atual)</h3>
-                                <div className="flex gap-2">
-                                    <button onClick={toggleVarGroup} className="text-xs border px-2 py-1 rounded hover:bg-gray-50 flex items-center gap-1" title="Agrupar Por">
-                                        <Layers size={12} /> {getGroupLabel(groupVar)}
-                                    </button>
-                                    <button onClick={() => setSortVariable(prev => prev === 'value' ? 'alpha' : 'value')} className="text-xs border px-2 py-1 rounded hover:bg-gray-50">
-                                        {sortVariable === 'value' ? 'Ordenar: Valor' : 'Ordenar: A-Z'}
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="max-h-64 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-                                {expenseLists.variable.length > 0 ? expenseLists.variable.map((item, idx) => (
-                                    <div key={idx} className="flex justify-between text-sm border-b border-gray-50 pb-1 hover:bg-gray-50">
-                                        <span className="text-gray-600 truncate flex-1 mr-2">{item.name}</span>
-                                        <span className="font-bold text-gray-800">{formatCurrency(item.value)}</span>
-                                    </div>
-                                )) : <p className="text-center text-gray-400 text-xs py-4">Nenhuma despesa variável no período.</p>}
-                            </div>
+                    {/* Saldo Contas Chart */}
+                    <div className="bg-white p-8 rounded-[2.5rem] shadow-card border border-slate-100">
+                        <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">
+                            <Wallet className="text-blue-500" size={20}/> Saldo de Contas <span className="text-slate-300 text-xs font-bold uppercase tracking-wide ml-auto">Evolução</span>
+                        </h3>
+                        <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={dataSaldos}>
+                                    <defs>
+                                        <linearGradient id="colorSaldo" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
+                                            <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="name" tick={{fontSize: 10, fill: '#cbd5e1', fontWeight: 'bold'}} axisLine={false} tickLine={false} />
+                                    <Tooltip 
+                                        contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.05)'}}
+                                        formatter={(value: number) => formatCurrency(value)}
+                                    />
+                                    <Area type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={3} fillOpacity={1} fill="url(#colorSaldo)" name="Saldo Total" />
+                                </AreaChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
                 </div>
